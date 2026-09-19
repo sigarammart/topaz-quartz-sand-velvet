@@ -2,8 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
 import { ListingCard } from "@/components/listing-card";
 import { Button } from "@/components/ui/button";
-import { getListing } from "@/data/listings";
 import { useHydrated } from "@/lib/use-hydrated";
+import { resolveListing, useCatalog } from "@/store/catalog";
 import { useTrip } from "@/store/trip";
 
 export const Route = createFileRoute("/saved")({ component: SavedPage });
@@ -11,7 +11,10 @@ export const Route = createFileRoute("/saved")({ component: SavedPage });
 function SavedPage() {
   const hydrated = useHydrated();
   const saved = useTrip((s) => s.saved);
-  const listings = hydrated ? saved.map(getListing).filter((l) => l != null) : [];
+  const items = useCatalog((s) => s.items);
+  const listings = hydrated
+    ? saved.map((slug) => resolveListing(slug, items)).filter((l) => l != null)
+    : [];
 
   return (
     <div>

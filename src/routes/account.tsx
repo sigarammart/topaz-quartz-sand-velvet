@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { LogOut } from "lucide-react";
-import { useEffect } from "react";
+import { ExternalLink, LogOut, RefreshCw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { ListingCard } from "@/components/listing-card";
 import { Button } from "@/components/ui/button";
+import { fetchWpAuthorContent } from "@/lib/wp-api";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useSession } from "@/store/session";
 
@@ -13,8 +15,11 @@ function AccountPage() {
   const navigate = useNavigate();
   const user = useSession((s) => s.user);
   const myListings = useSession((s) => s.myListings);
+  const myTrips = useSession((s) => s.myTrips);
   const method = useSession((s) => s.method);
+  const setSession = useSession((s) => s.setSession);
   const clearSession = useSession((s) => s.clearSession);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (hydrated && !user) void navigate({ to: "/login" });
@@ -24,6 +29,25 @@ function AccountPage() {
     return (
       <div className="py-16 text-center text-sm text-muted-foreground">Loading account…</div>
     );
+  }
+
+  async function refresh() {
+    if (!user) return;
+    setRefreshing(true);
+    try {
+      const result = await fetchWpAuthorContent({ data: { authorId: user.id } });
+      setSession({
+        user,
+        myListings: result.myListings,
+        myTrips: result.myTrips,
+        method: method ?? "application-password",
+      });
+      toast.success("Account updated from WordPress");
+    } catch {
+      toast.error("Could not refresh from WordPress");
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   return (
@@ -51,24 +75,32 @@ function AccountPage() {
             )}
           </div>
         </div>
-        <Button
-          variant="outline"
-          onClick={() => {
-            clearSession();
-            void navigate({ to: "/" });
-          }}
-        >
-          <LogOut />
-          Sign out
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => void refresh()} disabled={refreshing}>
+            <RefreshCw className={refreshing ? "animate-spin" : ""} />
+            Refresh
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              clearSession();
+              void navigate({ to: "/" });
+            }}
+          >
+            <LogOut />
+            Sign out
+          </Button>
+        </div>
       </div>
 
       <div className="mt-8 rounded-xl bg-card p-5 ring-1 ring-border/70">
         <h2 className="font-display text-lg font-semibold">Connected to xplorepondy.com</h2>
         <p className="mt-1 text-sm text-muted-foreground">
           Signed in with{" "}
-          {method === "application-password" ? "an application password" : "your WordPress login"}.
-          Credentials are not kept in this app after the check.
+          {method === "application-password"
+            ? "an application password"
+            : "your WordPress login"}
+          . The password is not kept in this app after the check.
         </p>
       </div>
 
@@ -85,6 +117,34 @@ function AccountPage() {
               <ListingCard key={l.slug} listing={l} />
             ))}
           </div>
+        )}
+      </section>
+
+      <section className="mt-10">
+        <h2 className="font-display text-2xl font-semibold">Your WordPress trips</h2>
+        {myTrips.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            No trips on the website yet. Build one here, or on xplorepondy.com.
+          </p>
+        ) : (
+          <ul className="mt-4 space-y-2">
+            {myTrips.map((t) => (
+              <li key={t.slug}>
+                <a
+                  href={t.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 ring-1 ring-border/70 hover:bg-muted"
+                >
+                  <span>
+                    <span className="block font-medium">{t.title}</span>
+                    {t.date && <span className="text-xs text-muted-foreground">{t.date}</span>}
+                  </span>
+                  <ExternalLink className="size-4 shrink-0 text-primary" />
+                </a>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

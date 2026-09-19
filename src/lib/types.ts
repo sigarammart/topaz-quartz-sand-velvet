@@ -1,6 +1,44 @@
 export const CATEGORIES = ["places", "activities", "food", "stay"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
+export type ListingTaxTerm = {
+  name: string;
+  slug: string;
+};
+
+export type ListingTaxGroup = {
+  key: string;
+  label: string;
+  terms: ListingTaxTerm[];
+};
+
+export type ListingStop = {
+  time?: string;
+  day?: string;
+  title: string;
+  description?: string;
+};
+
+export type ListingFaq = {
+  question: string;
+  answer: string;
+};
+
+export type ListingMetaItem = {
+  label: string;
+  included?: boolean;
+};
+
+export type ListingMetaGroup = {
+  title: string;
+  items: ListingMetaItem[];
+};
+
+export type DayHours = {
+  day: string;
+  slots: string[];
+};
+
 export type Listing = {
   slug: string;
   name: string;
@@ -12,6 +50,8 @@ export type Listing = {
   area: string;
   distance: string;
   hours: string;
+  openNow?: boolean;
+  weeklyHours?: DayHours[];
   description: string;
   tags: string[];
   bestFor: string[];
@@ -24,6 +64,19 @@ export type Listing = {
   duration?: string;
   entry?: string;
   featured?: boolean;
+  phone?: string;
+  address?: string;
+  cafeTypes?: string[];
+  accessibility?: string[];
+  tripDays?: string;
+  groupSize?: string;
+  taxonomies?: ListingTaxGroup[];
+  itinerary?: ListingStop[];
+  faqs?: ListingFaq[];
+  menuImages?: string[];
+  metaGroups?: ListingMetaGroup[];
+  metaFacets?: ListingTaxGroup[];
+  gallery?: string[];
 };
 
 export type GuideSection = {

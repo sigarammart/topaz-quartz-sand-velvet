@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useCatalog } from "@/store/catalog";
+import { useGeo } from "@/store/geo";
 import { useSession } from "@/store/session";
 import { useTrip } from "@/store/trip";
 
@@ -39,10 +40,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const tripBadge = hydrated ? tripCount : 0;
   const user = useSession((s) => s.user);
   const ensureCatalog = useCatalog((s) => s.ensure);
+  const hydrateGeo = useGeo((s) => s.hydrate);
 
   useEffect(() => {
     void ensureCatalog();
   }, [ensureCatalog]);
+
+  useEffect(() => {
+    hydrateGeo();
+  }, [hydrateGeo]);
 
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">

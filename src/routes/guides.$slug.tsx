@@ -1,6 +1,10 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
-import { getGuide, guides } from "@/data/guides";
+import { useEffect, useState } from "react";
+import { getGuide } from "@/data/guides";
+import type { Guide } from "@/lib/types";
+import { fetchWpGuide } from "@/lib/wp-api";
+import { catalogGuide, useCatalog } from "@/store/catalog";
 
 export const Route = createFileRoute("/guides/$slug")({
   component: GuidePage,
@@ -8,8 +12,32 @@ export const Route = createFileRoute("/guides/$slug")({
 
 function GuidePage() {
   const { slug } = Route.useParams();
-  const guide = getGuide(slug);
-  if (!guide) throw notFound();
+  const guides = useCatalog((s) => s.guides);
+  const status = useCatalog((s) => s.status);
+  const catalogHit = catalogGuide(slug, guides) ?? getGuide(slug);
+  const [fetched, setFetched] = useState<Guide | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (catalogHit) {
+      setFetched(null);
+      return;
+    }
+    void fetchWpGuide({ data: { slug } }).then((row) => {
+      if (!cancelled) setFetched(row);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, catalogHit]);
+
+  const guide = catalogHit ?? fetched;
+  if (!guide) {
+    if (status === "loading" || status === "idle") {
+      return <p className="py-16 text-center text-sm text-muted-foreground">Loading guide…</p>;
+    }
+    throw notFound();
+  }
   const others = guides.filter((g) => g.slug !== slug).slice(0, 3);
 
   return (
@@ -38,7 +66,9 @@ function GuidePage() {
             {s.heading && (
               <h2 className="font-display text-xl font-semibold">{s.heading}</h2>
             )}
-            <p className="mt-2 text-base leading-relaxed text-foreground/90">{s.body}</p>
+            <p className="mt-2 whitespace-pre-line text-base leading-relaxed text-foreground/90">
+              {s.body}
+            </p>
           </section>
         ))}
       </div>

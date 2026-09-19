@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/explore?cat=food",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Xplore Pondy",
+      "hasCanvas": false,
+      "bodyTextLen": 1471,
+      "bodyTextHash": "3f4b568cff952246c3bf3193374807c3fcc4df863ef71007b8d3798f2739e2fe",
+      "bodyTextPrefix": "XP Xplore Pondy Home Explore Guides Trip Saved Events Plan a tri",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/explore-filters.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Xplore Pondy",
+      "hasCanvas": false,
+      "bodyTextLen": 1352,
+      "bodyTextHash": "f9b089b651d91fae42c46ac9fbd57e553284934d11fad739e78efdbb50ae05e1",
+      "bodyTextPrefix": "XP Xplore Pondy EXPLORE Eat & drink French bakeries, filter coff",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/explore-filters-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/explore-filters.json"
+}

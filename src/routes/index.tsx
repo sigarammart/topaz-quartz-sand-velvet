@@ -12,7 +12,6 @@ import {
 import { ListingCard } from "@/components/listing-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { guides } from "@/data/guides";
 import { events } from "@/data/events";
 import { CATEGORY_META, type Category } from "@/lib/types";
 import { catalogFeatured, useCatalog } from "@/store/catalog";
@@ -58,8 +57,10 @@ function Home() {
   const items = useCatalog((s) => s.items);
   const source = useCatalog((s) => s.source);
   const total = useCatalog((s) => s.total);
+  const liveGuides = useCatalog((s) => s.guides);
   const user = useSession((s) => s.user);
   const featured = catalogFeatured(items);
+  const homeGuides = liveGuides.slice(0, 3);
 
   function onSearch(e: FormEvent) {
     e.preventDefault();
@@ -204,7 +205,7 @@ function Home() {
           </Link>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
-          {guides.slice(0, 3).map((g) => (
+          {homeGuides.map((g) => (
             <Link
               key={g.slug}
               to="/guides/$slug"

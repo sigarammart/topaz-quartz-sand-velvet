@@ -1,21 +1,62 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Search } from "lucide-react";
+import { LayoutGrid, LayoutList, LocateFixed, Map as MapIcon, Search } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ListingCard } from "@/components/listing-card";
+import { ListingMap } from "@/components/listing-map";
+import { SmartFiltersBar } from "@/components/smart-filters";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { emptyFilterSearch, filtersFromSearch, type FilterParam } from "@/lib/filters";
+import { listingDistanceKm, type LatLng } from "@/lib/geo";
+import { listingPinNumbers } from "@/lib/pins";
 import { CATEGORIES, CATEGORY_META, type Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { catalogSearch, useCatalog } from "@/store/catalog";
+import { useGeo } from "@/store/geo";
+
+type ArchiveView = "list" | "grid" | "map";
 
 type ExploreSearch = {
   q?: string;
   cat?: string;
-};
+  view?: ArchiveView;
+  here?: string;
+} & Partial<Record<FilterParam, string>>;
+
+const PAGE_SIZE = 24;
+
+function parseView(value: unknown): ArchiveView | undefined {
+  if (value === "list" || value === "grid" || value === "map") return value;
+  return undefined;
+}
+
+function parseHere(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const [lat, lng] = value.split(",").map(Number);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return undefined;
+  return `${lat},${lng}`;
+}
+
+function hereToLatLng(value?: string): LatLng | null {
+  if (!value) return null;
+  const [lat, lng] = value.split(",").map(Number);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng };
+}
 
 export const Route = createFileRoute("/explore")({
-  validateSearch: (search: Record<string, unknown>): ExploreSearch => ({
-    q: typeof search.q === "string" ? search.q : "",
-    cat: typeof search.cat === "string" ? search.cat : "all",
-  }),
+  validateSearch: (search: Record<string, unknown>): ExploreSearch => {
+    const next: ExploreSearch = {
+      q: typeof search.q === "string" ? search.q : "",
+      cat: typeof search.cat === "string" ? search.cat : "all",
+      view: parseView(search.view),
+      here: parseHere(search.here),
+    };
+    for (const key of Object.keys(emptyFilterSearch()) as FilterParam[]) {
+      if (typeof search[key] === "string" && search[key]) next[key] = search[key] as string;
+    }
+    return next;
+  },
   component: Explore,
 });
 
@@ -24,15 +65,77 @@ function isCategory(v: string | undefined): v is Category {
 }
 
 function Explore() {
-  const { q = "", cat = "all" } = Route.useSearch();
+  const search = Route.useSearch();
+  const { q = "", cat = "all" } = search;
   const navigate = Route.useNavigate();
   const items = useCatalog((s) => s.items);
   const source = useCatalog((s) => s.source);
   const status = useCatalog((s) => s.status);
   const total = useCatalog((s) => s.total);
   const category: Category | "all" = isCategory(cat) ? cat : "all";
-  const results = catalogSearch(items, q, category);
+  const filters = useMemo(() => filtersFromSearch(search), [search]);
+  const origin = useGeo((s) => s.origin);
+  const geoSource = useGeo((s) => s.source);
+  const geoStatus = useGeo((s) => s.status);
+  const locate = useGeo((s) => s.locate);
+  const clearGeo = useGeo((s) => s.clear);
+  const usingGps = geoSource === "gps";
+  const scoped = useMemo(
+    () => items.filter((l) => (category === "all" ? true : l.category === category)),
+    [items, category],
+  );
+  const results = useMemo(() => {
+    const rows = catalogSearch(items, q, category, filters);
+    if (!origin) return rows;
+    return [...rows].sort((a, b) => {
+      const da = listingDistanceKm(origin, a);
+      const db = listingDistanceKm(origin, b);
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return da - db;
+    });
+  }, [items, q, category, filters, origin]);
   const meta = isCategory(category) ? CATEGORY_META[category] : null;
+  const [visible, setVisible] = useState(PAGE_SIZE);
+  const [selected, setSelected] = useState<string | undefined>();
+  const view: ArchiveView = search.view ?? "list";
+  const hoverLock = useRef(0);
+
+  useEffect(() => {
+    const fromUrl = hereToLatLng(search.here);
+    if (fromUrl) useGeo.setState({ origin: fromUrl, source: "gps", status: "ready" });
+  }, [search.here]);
+
+  const shown = view === "map" ? results : results.slice(0, visible);
+  const mappedCount = results.filter((l) => l.lat != null && l.lng != null).length;
+  const pinNumbers = useMemo(() => listingPinNumbers(results), [results]);
+  const mapList = useMemo(() => {
+    const rows = results.filter((l) => l.lat != null && l.lng != null);
+    if (selected && !rows.slice(0, 80).some((l) => l.slug === selected)) {
+      const extra = rows.find((l) => l.slug === selected);
+      return extra ? [extra, ...rows.slice(0, 79)] : rows.slice(0, 80);
+    }
+    return rows.slice(0, 80);
+  }, [results, selected]);
+
+  useEffect(() => {
+    setVisible(PAGE_SIZE);
+    setSelected(undefined);
+  }, [q, category, items.length, search.type, search.feat, search.amen, search.open]);
+
+  useEffect(() => {
+    if (!selected) return;
+    hoverLock.current = Date.now();
+    const el = document.getElementById(`listing-card-${selected}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [selected]);
+
+  function setView(next: ArchiveView) {
+    void navigate({
+      search: (prev) => ({ ...prev, view: next === "list" ? undefined : next }),
+    });
+  }
 
   return (
     <div>
@@ -78,7 +181,11 @@ function Explore() {
             <button
               key={key}
               type="button"
-              onClick={() => void navigate({ search: (prev) => ({ ...prev, cat: key }) })}
+              onClick={() =>
+                void navigate({
+                  search: (prev) => ({ ...prev, ...emptyFilterSearch(), cat: key }),
+                })
+              }
               className={cn(
                 "h-10 shrink-0 rounded-full px-4 text-sm font-medium ring-1 ring-border transition-colors",
                 active
@@ -92,22 +199,125 @@ function Explore() {
         })}
       </div>
 
-      <p className="mt-5 text-sm text-muted-foreground tabular-nums">
-        {results.length} {results.length === 1 ? "place" : "places"}
-      </p>
+      <SmartFiltersBar
+        items={scoped}
+        category={category}
+        filters={filters}
+        onChange={(patch) =>
+          void navigate({
+            search: (prev) => ({ ...prev, ...patch }),
+          })
+        }
+      />
+
+      <div className="mt-5 flex items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground tabular-nums">
+          {results.length} {results.length === 1 ? "place" : "places"}
+          {" · nearest first"}
+          {view === "map" && mappedCount > 0 ? ` · ${mappedCount} on the map` : ""}
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => (usingGps ? clearGeo() : locate())}
+            className={cn(
+              "flex h-10 items-center gap-1.5 rounded-full px-3 text-sm ring-1 transition-colors",
+              usingGps
+                ? "bg-primary text-primary-foreground ring-primary"
+                : "bg-card text-foreground ring-border hover:bg-muted",
+            )}
+          >
+            <LocateFixed className="size-4" />
+            <span className="hidden sm:inline">
+              {geoStatus === "asking" ? "Locating…" : usingGps ? "Near me" : geoStatus === "denied" ? "Location off" : "Near me"}
+            </span>
+          </button>
+          <div className="flex overflow-hidden rounded-full ring-1 ring-border">
+            {(
+              [
+                ["list", LayoutList, "List"],
+                ["grid", LayoutGrid, "Grid"],
+                ["map", MapIcon, "Map"],
+              ] as const
+            ).map(([key, Icon, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setView(key)}
+                className={cn(
+                  "flex h-10 items-center gap-1.5 px-3 text-sm transition-colors",
+                  view === key ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground",
+                )}
+                aria-pressed={view === key}
+                aria-label={label}
+              >
+                <Icon className="size-4" />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
 
       {results.length === 0 ? (
         <p className="mt-10 text-center text-sm text-muted-foreground">
           {status === "loading"
             ? "Fetching listings…"
-            : "Nothing matches. Try a broader word — beach, café, temple."}
+            : "Nothing matches. Clear a filter or try a broader word."}
         </p>
-      ) : (
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {results.map((l) => (
-            <ListingCard key={l.slug} listing={l} />
-          ))}
+      ) : view === "map" ? (
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+          <ListingMap listings={results} selected={selected} onSelect={setSelected} />
+          <div className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto pr-1">
+            {mapList.map((l) => (
+              <div
+                key={l.slug}
+                onMouseEnter={() => {
+                  if (Date.now() - hoverLock.current < 600) return;
+                  setSelected(l.slug);
+                }}
+              >
+                <ListingCard
+                  listing={l}
+                  layout="row"
+                  active={selected === l.slug}
+                  pin={pinNumbers.get(l.slug)}
+                  cardId={`listing-card-${l.slug}`}
+                />
+              </div>
+            ))}
+          </div>
         </div>
+      ) : view === "grid" ? (
+        <>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {shown.map((l) => (
+              <ListingCard key={l.slug} listing={l} layout="grid" pin={pinNumbers.get(l.slug)} />
+            ))}
+          </div>
+          {visible < results.length && (
+            <div className="mt-8 flex justify-center">
+              <Button variant="outline" onClick={() => setVisible((v) => v + PAGE_SIZE)}>
+                Load more · {results.length - visible} left
+              </Button>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="mt-4 flex flex-col gap-2">
+            {shown.map((l) => (
+              <ListingCard key={l.slug} listing={l} layout="row" pin={pinNumbers.get(l.slug)} />
+            ))}
+          </div>
+          {visible < results.length && (
+            <div className="mt-8 flex justify-center">
+              <Button variant="outline" onClick={() => setVisible((v) => v + PAGE_SIZE)}>
+                Load more · {results.length - visible} left
+              </Button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
