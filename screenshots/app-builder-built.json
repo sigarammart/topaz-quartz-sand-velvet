@@ -1,0 +1,38 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Xplore Pondy",
+      "hasCanvas": false,
+      "bodyTextLen": 2213,
+      "bodyTextHash": "e8bd6975965989f938d2f5093f2315273abefd79339fcec6d18c427afb1c1795",
+      "bodyTextPrefix": "XP Xplore Pondy Home Explore Guides Trip Saved Events Plan a tri",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Xplore Pondy",
+      "hasCanvas": false,
+      "bodyTextLen": 2102,
+      "bodyTextHash": "897b41abb63d1e7d36b42e2427dc67e7ac2dcbcf715d172b87d8db284bbccbc0",
+      "bodyTextPrefix": "XP Xplore Pondy PONDICHERRY TRAVEL PLANNER Explore Puducherry li",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-built-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-built.json",
+  "divergesFromBaseline": false,
+  "baselineReasons": []
+}

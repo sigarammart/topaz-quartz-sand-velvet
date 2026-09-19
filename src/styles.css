@@ -1,0 +1,90 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Fraunces", "Iowan Old Style", "Palatino Linotype", serif;
+
+  --color-background: #f3eee4;
+  --color-foreground: #1c1914;
+  --color-card: #fffbf5;
+  --color-card-fg: #1c1914;
+  --color-muted: #ebe4d6;
+  --color-muted-foreground: #6b645a;
+  --color-primary: #1a5f66;
+  --color-primary-foreground: #f7f4ec;
+  --color-secondary: #e7dfd0;
+  --color-secondary-foreground: #1c1914;
+  --color-accent: #dfe9e8;
+  --color-accent-foreground: #154e54;
+  --color-border: #d9d0c2;
+  --color-ring: #1a5f66;
+  --color-input: #d9d0c2;
+  --color-destructive: #9b3d2f;
+  --color-hero: #f7f4ec;
+  --color-hero-muted: #d8d0c4;
+  --color-overlay: #14110e;
+  --color-star: #1a5f66;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-2xl: 2rem;
+  --radius: 0.75rem;
+
+  --shadow-soft: 0 1px 2px rgb(28 25 20 / 0.04), 0 8px 24px rgb(28 25 20 / 0.06);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html,
+  body,
+  #app {
+    min-height: 100%;
+    background: var(--color-background);
+    color: var(--color-foreground);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    line-height: 1.5;
+  }
+
+  h1,
+  h2,
+  h3,
+  .font-display {
+    font-family: var(--font-display);
+    text-wrap: balance;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--color-primary) 22%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
