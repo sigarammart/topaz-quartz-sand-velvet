@@ -59,7 +59,11 @@ function TripPage() {
   const itinerary = useTrip((s) => s.itinerary);
   const itineraryPolished = useTrip((s) => s.itineraryPolished);
   const setItinerary = useTrip((s) => s.setItinerary);
-  const origin = useGeo((s) => s.origin) ?? ANNA_SALAI;
+  const originGps = useGeo((s) => s.origin) ?? ANNA_SALAI;
+  const fromLat = useTrip((s) => s.fromLat);
+  const fromLng = useTrip((s) => s.fromLng);
+  const origin =
+    fromLat != null && fromLng != null ? { lat: fromLat, lng: fromLng } : originGps;
   const [busy, setBusy] = useState<"generate" | "ai" | null>(null);
   const [day, setDay] = useState(1);
   const [tab, setTab] = useState<TripTab>(tabParam ?? "interests");

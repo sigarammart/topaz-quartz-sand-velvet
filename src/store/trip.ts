@@ -30,6 +30,8 @@ type TripState = {
   wpUrl?: string;
   locations: string[];
   fromPlace: string;
+  fromLat?: number;
+  fromLng?: number;
   budget: string;
   tripType: string;
   datesKnown: boolean;
@@ -64,6 +66,8 @@ type TripState = {
   applyPlan: (plan: {
     locations: string[];
     fromPlace: string;
+    fromLat?: number;
+    fromLng?: number;
     budget: string;
     tripType: string;
     datesKnown: boolean;
@@ -89,6 +93,8 @@ const empty = {
   wpUrl: undefined as string | undefined,
   locations: [] as string[],
   fromPlace: "",
+  fromLat: undefined as number | undefined,
+  fromLng: undefined as number | undefined,
   budget: "",
   tripType: "",
   datesKnown: true,

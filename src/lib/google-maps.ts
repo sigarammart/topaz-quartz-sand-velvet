@@ -169,3 +169,45 @@ export const GOOGLE_MAP_LIGHT = [
   { featureType: "transit", stylers: [{ visibility: "off" }] },
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#c5dce0" }] },
 ];
+
+export type GooglePlacesLib = {
+  AutocompleteService?: new () => {
+    getPlacePredictions: (
+      req: Record<string, unknown>,
+      cb: (preds: Array<{ description: string; place_id: string }> | null) => void,
+    ) => void;
+  };
+  PlacesService?: new (el: HTMLElement) => {
+    getDetails: (
+      req: Record<string, unknown>,
+      cb: (place: { formatted_address?: string; name?: string; geometry?: { location?: { lat: () => number; lng: () => number } } } | null) => void,
+    ) => void;
+  };
+  AutocompleteSuggestion?: {
+    fetchAutocompleteSuggestions: (req: Record<string, unknown>) => Promise<{
+      suggestions: Array<{
+        placePrediction?: { text?: { text?: string }; placeId?: string };
+      }>;
+    }>;
+  };
+};
+
+let placesLib: GooglePlacesLib | null = null;
+
+export async function loadGooglePlaces(): Promise<GooglePlacesLib | null> {
+  if (typeof window === "undefined" || authFailed) return null;
+  if (placesLib?.AutocompleteService || placesLib?.AutocompleteSuggestion) return placesLib;
+  await loadGoogleMaps();
+  const bootstrap = window.google?.maps;
+  if (!bootstrap) return null;
+  try {
+    if (typeof bootstrap.importLibrary === "function") {
+      placesLib = (await bootstrap.importLibrary("places")) as GooglePlacesLib;
+    } else {
+      placesLib = (bootstrap as { places?: GooglePlacesLib }).places ?? null;
+    }
+  } catch {
+    placesLib = (window.google?.maps as { places?: GooglePlacesLib } | undefined)?.places ?? null;
+  }
+  return placesLib;
+}

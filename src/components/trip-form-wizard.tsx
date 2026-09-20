@@ -17,7 +17,8 @@ import {
   seedFromWpTitle,
   todayISO,
 } from "@/lib/trip-form";
-import { fetchWpUserTrips, WP_ORIGIN, type WpTrip } from "@/lib/wp-api";
+import { LocationAutocomplete } from "@/components/location-autocomplete";
+import { fetchWpUserTrips, type WpTrip } from "@/lib/wp-api";
 import { useTrip } from "@/store/trip";
 
 function Choice({
@@ -60,6 +61,8 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
   const current = useTrip((s) => s);
   const [step, setStep] = useState(0);
   const [fromPlace, setFromPlace] = useState(current.started ? current.fromPlace : "");
+  const [fromLat, setFromLat] = useState<number | undefined>(current.started ? current.fromLat : undefined);
+  const [fromLng, setFromLng] = useState<number | undefined>(current.started ? current.fromLng : undefined);
   const [locations, setLocations] = useState<string[]>(current.started ? current.locations : []);
   const [budget, setBudget] = useState(current.started ? current.budget : "");
   const [datesKnown, setDatesKnown] = useState(current.datesKnown);
@@ -93,6 +96,8 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
   function save() {
     applyPlan({
       fromPlace,
+      fromLat,
+      fromLng,
       locations,
       budget,
       tripType,
@@ -179,12 +184,15 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
                 <Label htmlFor="user_location">
                   Going from <span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  id="user_location"
-                  name="user_location"
+                <LocationAutocomplete
                   value={fromPlace}
-                  onChange={(e) => setFromPlace(e.target.value)}
-                  placeholder="Enter a location"
+                  lat={fromLat}
+                  lng={fromLng}
+                  onChange={(next) => {
+                    setFromPlace(next.label);
+                    setFromLat(next.lat);
+                    setFromLng(next.lng);
+                  }}
                 />
               </div>
               <fieldset>
