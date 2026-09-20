@@ -386,30 +386,34 @@ function TripPage() {
           role="tabpanel"
           aria-labelledby="trip-pane-itinerary"
           className={cn(
-            "min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl bg-card p-3 ring-1 ring-border/70 sm:p-4 lg:max-h-[calc(100dvh-10rem)]",
-            pane === "itinerary" ? "flex" : "hidden lg:flex",
+            "min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl bg-card p-3 ring-1 ring-border/70 sm:p-4",
+            "max-h-[calc(100dvh-11rem)] lg:max-h-[calc(100dvh-10rem)]",
+            pane === "itinerary" ? "flex max-lg:min-h-[min(70dvh,calc(100dvh-11rem))]" : "hidden lg:flex",
           )}
         >
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="font-display text-lg font-semibold">Itinerary</h2>
-            <div className="flex gap-1">
-              {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setDay(d)}
-                  className={cn(
-                    "flex size-8 items-center justify-center rounded-full text-xs font-semibold ring-1",
-                    day === d ? "bg-primary text-primary-foreground ring-primary" : "ring-border",
-                  )}
-                >
-                  {d}
-                </button>
-              ))}
+          <div className="shrink-0">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-lg font-semibold">Itinerary</h2>
+              <div className="flex gap-1">
+                {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setDay(d)}
+                    className={cn(
+                      "flex size-8 items-center justify-center rounded-full text-xs font-semibold ring-1",
+                      day === d ? "bg-primary text-primary-foreground ring-primary" : "ring-border",
+                    )}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
             </div>
+            <p className="mt-1 text-xs text-muted-foreground">Selected listings — drag to reorder by preference</p>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">Selected listings — drag to reorder by preference</p>
-          <ol className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+          <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+          <ol className="space-y-2">
             {dayListings.map((listing, index) => {
               if (!listing) return null;
               const prev = dayListings[index - 1];
@@ -542,6 +546,7 @@ function TripPage() {
               Open on {WP_ORIGIN.replace("https://", "")}
             </a>
           ) : null}
+          </div>
         </section>
 
         <section
