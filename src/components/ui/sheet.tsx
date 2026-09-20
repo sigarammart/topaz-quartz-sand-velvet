@@ -14,7 +14,7 @@ export function SheetContent({
   title,
   ...props
 }: React.ComponentProps<typeof Dialog.Content> & {
-  side?: "bottom" | "right";
+  side?: "bottom" | "right" | "center";
   title: string;
 }) {
   return (
@@ -27,6 +27,8 @@ export function SheetContent({
             "inset-x-0 bottom-0 max-h-[85vh] rounded-t-2xl border-t border-border p-5 pb-8",
           side === "right" &&
             "inset-y-0 right-0 h-full w-[min(100%,22rem)] border-l border-border p-5",
+          side === "center" &&
+            "left-1/2 top-1/2 w-[min(100%-1.5rem,26rem)] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-border p-5",
           className,
         )}
         {...props}

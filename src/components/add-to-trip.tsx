@@ -5,7 +5,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useHydrated } from "@/lib/use-hydrated";
+import { useAuthModal } from "@/store/auth-modal";
 import { useCatalog } from "@/store/catalog";
+import { useSession } from "@/store/session";
 import { useTrip } from "@/store/trip";
 
 export function AddToTrip({
@@ -28,16 +30,24 @@ export function AddToTrip({
   const catalogId = useCatalog((s) => s.items.find((l) => l.slug === slug)?.wpId);
   const mappedId = useTrip((s) => s.wpIdsBySlug?.[slug]);
   const active = hydrated && on;
+  const wpUser = useSession((s) => s.user);
+  const showLogin = useAuthModal((s) => s.show);
+  const loggedIn = Boolean(wpUser);
+  const postId = wpId ?? catalogId ?? mappedId;
 
   function onClick(e?: MouseEvent) {
     e?.preventDefault();
     e?.stopPropagation();
-    const added = toggle(slug, wpId ?? catalogId ?? mappedId);
+    if (!loggedIn) {
+      showLogin({ reason: "add-trip", slug, name, wpId: postId, next: "/trip" });
+      return;
+    }
+    const added = toggle(slug, postId);
     if (added) {
       toast.success(`Saved ${name} for your trip`, {
-        description: "It’s in Trip → Saved. Tap Add there to put it on a day.",
+        description: "It’s in Trip. Tap Add there to put it on a day.",
         action: {
-          label: "Open Saved",
+          label: "Open Trip",
           onClick: () => {
             void navigate({ to: "/trip", search: { tab: "saved" } });
           },

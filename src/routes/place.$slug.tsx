@@ -183,7 +183,7 @@ function PlacePage() {
           </Link>
           <div className="mt-1 flex items-start justify-between gap-3">
             <h1 className="font-display text-2xl font-semibold leading-tight sm:text-[1.7rem]">{listing.name}</h1>
-            <SaveButton slug={listing.slug} name={listing.name} className="shrink-0 lg:hidden" />
+            <SaveButton slug={listing.slug} name={listing.name} wpId={listing.wpId} className="shrink-0 lg:hidden" />
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {listing.rating > 0 && (
@@ -438,7 +438,7 @@ function PlacePage() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Plan this stop</p>
                 <p className="mt-0.5 text-sm font-semibold">{listing.name}</p>
               </div>
-              <SaveButton slug={listing.slug} name={listing.name} />
+              <SaveButton slug={listing.slug} name={listing.name} wpId={listing.wpId} />
             </div>
             <div className="mt-3 flex flex-col gap-2">
               <AddToTrip slug={listing.slug} name={listing.name} wpId={listing.wpId} />

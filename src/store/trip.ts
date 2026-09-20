@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { buildTripTitle, daysBetween, newTripCode } from "@/lib/trip-form";
 import type { ItineraryDay } from "@/lib/itinerary";
-import { jetTempIds, jetTempWriteAll } from "@/lib/jet-store";
+import { jetBookmarkIds, jetBookmarkWriteAll, jetTempIds, jetTempWriteAll } from "@/lib/jet-store";
 import type { Listing } from "@/lib/types";
 
 export type TripItem = {
@@ -56,12 +56,13 @@ type TripState = {
   setItinerary: (days: ItineraryDay[], items: TripItem[], polished: boolean) => void;
   clearTrip: () => void;
   loadTemplate: (title: string, days: number, items: TripItem[]) => void;
-  toggleSaved: (slug: string) => void;
+  toggleSaved: (slug: string, wpId?: number) => boolean;
   isSaved: (slug: string) => boolean;
   toggleTempTrip: (slug: string, wpId?: number) => boolean;
   removeTempTrip: (slug: string) => void;
   isInTempTrip: (slug: string) => boolean;
   syncJetTemp: (listings: Listing[]) => void;
+  syncBookmarks: (listings: Listing[], extraIds?: number[]) => void;
   addInquiry: (inquiry: Inquiry) => void;
   applyPlan: (plan: {
     locations: string[];
@@ -113,6 +114,11 @@ function writeJetFrom(slugs: string[], map: Record<string, number>) {
   jetTempWriteAll(ids);
 }
 
+function writeBookmarksFrom(slugs: string[], map: Record<string, number>) {
+  const ids = slugs.map((slug) => map[slug]).filter((id): id is number => typeof id === "number");
+  jetBookmarkWriteAll(ids);
+}
+
 export const useTrip = create<TripState>()(
   persist(
     (set, get) => ({
@@ -150,10 +156,15 @@ export const useTrip = create<TripState>()(
       setItinerary: (itinerary, items, itineraryPolished) => set({ itinerary, items, itineraryPolished }),
       clearTrip: () => set({ ...empty, code: "", items: [] }),
       loadTemplate: (title, days, items) => set({ title, days, items, started: true }),
-      toggleSaved: (slug) =>
-        set((s) => ({
-          saved: s.saved.includes(slug) ? s.saved.filter((x) => x !== slug) : [...s.saved, slug],
-        })),
+      toggleSaved: (slug, wpId) => {
+        const map = { ...(get().wpIdsBySlug ?? {}) };
+        if (typeof wpId === "number") map[slug] = wpId;
+        const on = get().saved.includes(slug);
+        const next = on ? get().saved.filter((x) => x !== slug) : [...get().saved, slug];
+        set({ saved: next, wpIdsBySlug: map });
+        writeBookmarksFrom(next, map);
+        return !on;
+      },
       isSaved: (slug) => get().saved.includes(slug),
       isInTempTrip: (slug) => get().tempTrip.includes(slug),
       toggleTempTrip: (slug, wpId) => {
@@ -188,6 +199,23 @@ export const useTrip = create<TripState>()(
         const sameMap = JSON.stringify(slim) === JSON.stringify(get().wpIdsBySlug ?? {});
         if (!sameTrip || !sameMap) set({ tempTrip: merged, wpIdsBySlug: slim });
         writeJetFrom(merged, map);
+      },
+      syncBookmarks: (listings, extraIds = []) => {
+        const map = { ...(get().wpIdsBySlug ?? {}) };
+        for (const listing of listings) {
+          if (typeof listing.wpId === "number") map[listing.slug] = listing.wpId;
+        }
+        const byId = new Map(Object.entries(map).map(([slug, id]) => [String(id), slug]));
+        const fromStore = [...new Set([...jetBookmarkIds(), ...extraIds.map(String)])]
+          .map((id) => byId.get(id))
+          .filter((s): s is string => !!s);
+        const merged = [...new Set([...get().saved, ...fromStore])];
+        const slim: Record<string, number> = { ...(get().wpIdsBySlug ?? {}) };
+        for (const slug of merged) {
+          if (typeof map[slug] === "number") slim[slug] = map[slug];
+        }
+        set({ saved: merged, wpIdsBySlug: slim });
+        writeBookmarksFrom(merged, slim);
       },
       addInquiry: (inquiry) => set((s) => ({ inquiries: [inquiry, ...s.inquiries] })),
       applyPlan: (plan) => {

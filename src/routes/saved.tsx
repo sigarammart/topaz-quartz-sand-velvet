@@ -1,9 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Heart } from "lucide-react";
+import { Bookmark } from "lucide-react";
 import { ListingCard } from "@/components/listing-card";
 import { Button } from "@/components/ui/button";
 import { useHydrated } from "@/lib/use-hydrated";
 import { resolveListing, useCatalog } from "@/store/catalog";
+import { useAuthModal } from "@/store/auth-modal";
+import { useSession } from "@/store/session";
 import { useTrip } from "@/store/trip";
 
 export const Route = createFileRoute("/saved")({ component: SavedPage });
@@ -11,22 +13,54 @@ export const Route = createFileRoute("/saved")({ component: SavedPage });
 function SavedPage() {
   const hydrated = useHydrated();
   const saved = useTrip((s) => s.saved);
+  const wpIds = useTrip((s) => s.wpIdsBySlug);
   const items = useCatalog((s) => s.items);
+  const wpUser = useSession((s) => s.user);
+  const bookmarkIds = useSession((s) => s.bookmarkIds);
+  const showLogin = useAuthModal((s) => s.show);
+  const loggedIn = Boolean(wpUser);
   const listings = hydrated
-    ? saved.map((slug) => resolveListing(slug, items)).filter((l) => l != null)
+    ? saved
+        .map((slug) => {
+          const hit = resolveListing(slug, items);
+          if (hit) return hit;
+          const id = wpIds?.[slug];
+          return id ? items.find((row) => row.wpId === id) : undefined;
+        })
+        .filter((l): l is NonNullable<typeof l> => l != null)
     : [];
+
+  const extraFromMeta =
+    hydrated && loggedIn
+      ? bookmarkIds
+          .map((id) => items.find((row) => row.wpId === id))
+          .filter((l): l is NonNullable<typeof l> => !!l && !listings.some((row) => row.slug === l.slug))
+      : [];
+  const shown = [...listings, ...extraFromMeta];
 
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Saved</p>
-      <h1 className="mt-1 font-display text-3xl font-semibold">Your Pondy shortlist</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Kept on this device. Add them to a trip whenever you’re ready.</p>
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Bookmark</p>
+      <h1 className="mt-1 font-display text-3xl font-semibold">Your Pondy bookmarks</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Places you bookmark here are the same JetEngine save-bookmark list as xplorepondy.com.
+      </p>
 
-      {listings.length === 0 ? (
+      {!loggedIn ? (
         <div className="mt-16 flex flex-col items-center text-center">
-          <Heart className="size-8 text-primary" />
+          <Bookmark className="size-8 text-primary" />
           <p className="mt-3 max-w-sm text-sm text-muted-foreground">
-            Nothing saved yet. Tap the heart on a place, café, or stay while you browse.
+            Sign in with your xplorepondy.com account to see and add bookmarks.
+          </p>
+          <Button className="mt-5" onClick={() => showLogin({ reason: "bookmark", next: "/saved" })}>
+            Sign in to bookmark
+          </Button>
+        </div>
+      ) : shown.length === 0 ? (
+        <div className="mt-16 flex flex-col items-center text-center">
+          <Bookmark className="size-8 text-primary" />
+          <p className="mt-3 max-w-sm text-sm text-muted-foreground">
+            Nothing bookmarked yet. Tap the bookmark icon on a place, café, or stay.
           </p>
           <Button asChild className="mt-5">
             <Link to="/explore">Start exploring</Link>
@@ -34,7 +68,7 @@ function SavedPage() {
         </div>
       ) : (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {listings.map((l) => (
+          {shown.map((l) => (
             <ListingCard key={l.slug} listing={l} />
           ))}
         </div>

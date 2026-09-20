@@ -7,6 +7,7 @@ type SessionState = {
   user: WpUser | null;
   myListings: Listing[];
   myTrips: WpTrip[];
+  bookmarkIds: number[];
   method: string | null;
   lastUsername: string;
   setSession: (payload: {
@@ -14,6 +15,7 @@ type SessionState = {
     myListings: Listing[];
     myTrips: WpTrip[];
     method: string;
+    bookmarkIds?: number[];
   }) => void;
   setLastUsername: (username: string) => void;
   clearSession: () => void;
@@ -25,18 +27,20 @@ export const useSession = create<SessionState>()(
       user: null,
       myListings: [],
       myTrips: [],
+      bookmarkIds: [],
       method: null,
       lastUsername: "",
-      setSession: ({ user, myListings, myTrips, method }) =>
+      setSession: ({ user, myListings, myTrips, method, bookmarkIds }) =>
         set({
           user,
           myListings,
           myTrips,
           method,
+          bookmarkIds: bookmarkIds ?? [],
           lastUsername: user.slug || user.name,
         }),
       setLastUsername: (lastUsername) => set({ lastUsername }),
-      clearSession: () => set({ user: null, myListings: [], myTrips: [], method: null }),
+      clearSession: () => set({ user: null, myListings: [], myTrips: [], bookmarkIds: [], method: null }),
     }),
     {
       name: "xplore-pondy-wp",
@@ -44,6 +48,7 @@ export const useSession = create<SessionState>()(
         user: s.user,
         myListings: s.myListings,
         myTrips: s.myTrips,
+        bookmarkIds: s.bookmarkIds,
         method: s.method,
         lastUsername: s.lastUsername,
       }),
@@ -54,6 +59,7 @@ export const useSession = create<SessionState>()(
           ...p,
           myListings: p.myListings ?? [],
           myTrips: p.myTrips ?? [],
+          bookmarkIds: p.bookmarkIds ?? [],
           lastUsername: p.lastUsername ?? "",
         };
       },

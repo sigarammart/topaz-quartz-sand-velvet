@@ -73,6 +73,7 @@ function LoginPage() {
         myListings: result.myListings,
         myTrips: result.myTrips,
         method: result.method,
+        bookmarkIds: result.bookmarkIds,
       });
       toast.success(`Signed in as ${result.user.name}`);
       void navigate({ to: "/account" });

@@ -4,6 +4,7 @@ import { guides as localGuides } from "@/data/guides";
 import { listings as localListings } from "@/data/listings";
 import type { Category, Guide, GuideBlock, GuideSection, Listing, ListingFaq, ListingMetaGroup, ListingMetaItem, ListingStop, ListingTaxGroup, ListingTaxTerm } from "@/lib/types";
 import { parseOpenHoursHtml } from "@/lib/hours";
+import { bookmarkIdsFromUserMeta } from "@/lib/jet-store";
 import { ARCHIVE_SLUGS, categoryFromKindName } from "@/lib/listing-categories";
 import { loadJetArchiveMeta, loadOpenNowSnapshot, type JetArchiveHit } from "@/lib/jet-archive";
 import { loadListeoGeo, type ListeoGeo } from "@/lib/listeo-geo";
@@ -96,6 +97,7 @@ type WpMe = {
   email?: string;
   roles?: string[];
   avatar_urls?: Record<string, string>;
+  meta?: Record<string, unknown>;
 };
 type WpUserTrip = {
   id?: number;
@@ -1000,7 +1002,11 @@ async function wpGet<T>(path: string, headers: HeadersInit = {}, timeout = 20000
 }
 
 async function fetchMe(headers: HeadersInit) {
-  const { data, ok } = await wpGet<WpMe>("/wp-json/wp/v2/users/me?context=edit", headers, 15000);
+  const { data, ok } = await wpGet<WpMe>(
+    "/wp-json/wp/v2/users/me?context=edit&_fields=id,name,slug,email,roles,avatar_urls,meta",
+    headers,
+    15000,
+  );
   if (!ok || !data?.id) return null;
   return data;
 }
@@ -1547,5 +1553,6 @@ export const wpLogin = createServerFn({ method: "POST" })
 
     const user = mapUser(me);
     const { myListings, myTrips } = await loadAuthorContent(user.id, authHeaders);
-    return { ok: true as const, user, myListings, myTrips, method };
+    const bookmarkIds = bookmarkIdsFromUserMeta(me.meta);
+    return { ok: true as const, user, myListings, myTrips, bookmarkIds, method };
   });

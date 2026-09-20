@@ -25,6 +25,8 @@ import { cn } from "@/lib/utils";
 import { useGeo } from "@/store/geo";
 import { resolveListing, useCatalog } from "@/store/catalog";
 import { useHydrated } from "@/lib/use-hydrated";
+import { useAuthModal } from "@/store/auth-modal";
+import { useSession } from "@/store/session";
 import { useTrip } from "@/store/trip";
 
 type TripTab = "interests" | "saved" | "all";
@@ -38,6 +40,8 @@ export const Route = createFileRoute("/trip")({
 
 function TripPage() {
   const hydrated = useHydrated();
+  const wpUser = useSession((s) => s.user);
+  const showLogin = useAuthModal((s) => s.show);
   const { tab: tabParam } = Route.useSearch();
   const catalog = useCatalog((s) => s.items);
   const started = useTrip((s) => s.started);
@@ -203,6 +207,21 @@ function TripPage() {
   }
 
   if (!hydrated) return <p className="py-16 text-center text-sm text-muted-foreground">Loading trip…</p>;
+
+  if (!wpUser) {
+    return (
+      <div className="mx-auto max-w-md py-16 text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Trip</p>
+        <h1 className="mt-1 font-display text-3xl font-semibold">Sign in to plan a trip</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Add places from listings and keep your itinerary with your xplorepondy.com account.
+        </p>
+        <Button className="mt-5" onClick={() => showLogin({ reason: "trip", next: "/trip" })}>
+          Sign in
+        </Button>
+      </div>
+    );
+  }
 
   if (!started && items.length === 0 && tempTrip.length === 0) {
     return <TripFormWizard />;

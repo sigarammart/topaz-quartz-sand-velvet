@@ -5,6 +5,7 @@ import { formatDistance, listingDistanceKm } from "@/lib/geo";
 import { listingCover } from "@/lib/media";
 import { AddToTrip } from "@/components/add-to-trip";
 import { OpenNowBadge } from "@/components/open-now-badge";
+import { SaveButton } from "@/components/save-button";
 import { Stars } from "@/components/stars";
 import { Badge } from "@/components/ui/badge";
 import { cn, decodeEntities } from "@/lib/utils";
@@ -89,7 +90,7 @@ export function ListingCard({
             <Cover listing={listing} className="size-full" />
             {pin != null && <PinMark n={pin} active={active} className="left-1 top-1" />}
           </div>
-          <div className="min-w-0 flex-1 py-0.5 pr-9">
+          <div className="min-w-0 flex-1 py-0.5 pr-12">
             <p className="truncate text-[11px] font-medium uppercase tracking-wide text-primary">
               {listing.featured ? "Featured · " : ""}
               {kindLabel(listing)}
@@ -107,13 +108,21 @@ export function ListingCard({
             </div>
           </div>
         </Link>
-        <AddToTrip
-          slug={listing.slug}
-          name={listing.name}
-          wpId={listing.wpId}
-          variant="icon"
-          className="absolute right-1.5 top-1/2 z-10 size-8 -translate-y-1/2"
-        />
+        <div className="absolute right-1.5 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1">
+          <SaveButton
+            slug={listing.slug}
+            name={listing.name}
+            wpId={listing.wpId}
+            className="size-8 shadow-none"
+          />
+          <AddToTrip
+            slug={listing.slug}
+            name={listing.name}
+            wpId={listing.wpId}
+            variant="icon"
+            className="size-8 shadow-none"
+          />
+        </div>
       </article>
     );
   }
@@ -155,6 +164,12 @@ export function ListingCard({
           </div>
         </div>
       </Link>
+      <SaveButton
+        slug={listing.slug}
+        name={listing.name}
+        wpId={listing.wpId}
+        className={cn("absolute z-10", compact ? "bottom-2 right-11 size-8" : "bottom-2.5 right-12 size-9")}
+      />
       <AddToTrip
         slug={listing.slug}
         name={listing.name}
