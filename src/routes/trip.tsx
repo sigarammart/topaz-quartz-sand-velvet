@@ -8,6 +8,7 @@ import { AddDayModal, useAddDayModal } from "@/components/add-day-modal";
 import { TripPaneBar, type TripPane } from "@/components/trip-pane-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { WP_ORIGIN } from "@/lib/wp-api";
 import { generateAiItinerary } from "@/lib/ai-itinerary";
 import {
@@ -22,6 +23,7 @@ import {
 import { attachTravel, buildTripItinerary, travelLabel } from "@/lib/itinerary";
 import { ANNA_SALAI } from "@/lib/geo";
 import { cn } from "@/lib/utils";
+import type { Listing } from "@/lib/types";
 import { useGeo } from "@/store/geo";
 import { resolveListing, useCatalog } from "@/store/catalog";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -60,6 +62,7 @@ function TripPage() {
   const addToDay = useTrip((s) => s.addToDay);
   const removeItem = useTrip((s) => s.removeItem);
   const reorderDay = useTrip((s) => s.reorderDay);
+  const reorderSelected = useTrip((s) => s.reorderSelected);
   const itinerary = useTrip((s) => s.itinerary);
   const itineraryPolished = useTrip((s) => s.itineraryPolished);
   const setItinerary = useTrip((s) => s.setItinerary);
@@ -76,6 +79,7 @@ function TripPage() {
   const [selectedSlug, setSelectedSlug] = useState<string | undefined>();
   const [drag, setDrag] = useState<string | null>(null);
   const [pane, setPane] = useState<TripPane>("locations");
+  const [editSelection, setEditSelection] = useState(false);
   const addDay = useAddDayModal();
   const seeded = useRef(false);
   const tabSeeded = useRef(false);
@@ -238,7 +242,7 @@ function TripPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/40 to-transparent" />
         <div className="absolute right-3 top-3 z-10">
           <Button variant="outline" size="sm" asChild className="bg-card/95 shadow-soft">
-            <Link to="/plan">Edit selection</Link>
+            <Link to="/plan">Edit trip details</Link>
           </Button>
         </div>
         <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
@@ -404,7 +408,7 @@ function TripPage() {
               ))}
             </div>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">Day {day} · drag to reorder</p>
+          <p className="mt-1 text-xs text-muted-foreground">Selected listings — drag to reorder by preference</p>
           <ol className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {dayListings.map((listing, index) => {
               if (!listing) return null;
@@ -472,8 +476,15 @@ function TripPage() {
             <p className="mt-8 text-center text-sm text-muted-foreground">Add listings from Saved for Day {day}.</p>
           )}
           <div className="mt-5 flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/plan">Edit selection</Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setPane("itinerary");
+                setEditSelection(true);
+              }}
+            >
+              Edit selection
             </Button>
             <Button size="sm" disabled={busy != null} onClick={() => void runItinerary(false)}>
               <Wand2 className="size-3.5" />
@@ -552,6 +563,23 @@ function TripPage() {
       </div>
 
       <TripPaneBar pane={pane} onChange={setPane} badge={items.length} />
+      <SelectedListingsSheet
+        open={editSelection}
+        onOpenChange={setEditSelection}
+        catalog={catalog}
+        items={items}
+        tempTrip={tempTrip}
+        days={days}
+        onReorder={reorderSelected}
+        onRemove={(slug) => {
+          removeItem(slug);
+          useTrip.getState().removeTempTrip(slug);
+        }}
+        onMoveDay={(slug, nextDay) => {
+          addToDay(slug, nextDay);
+          setDay(nextDay);
+        }}
+      />
       <AddDayModal
         pending={addDay.pending}
         days={days}
@@ -565,6 +593,114 @@ function TripPage() {
         }}
       />
     </div>
+  );
+}
+
+function selectedSlugs(items: { slug: string; day: number }[], tempTrip: string[]) {
+  return [...new Set([...items.map((i) => i.slug), ...tempTrip])];
+}
+
+function SelectedListingsSheet({
+  open,
+  onOpenChange,
+  catalog,
+  items,
+  tempTrip,
+  days,
+  onReorder,
+  onRemove,
+  onMoveDay,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  catalog: Listing[];
+  items: { slug: string; day: number }[];
+  tempTrip: string[];
+  days: number;
+  onReorder: (slugs: string[]) => void;
+  onRemove: (slug: string) => void;
+  onMoveDay: (slug: string, day: number) => void;
+}) {
+  const [drag, setDrag] = useState<string | null>(null);
+  const slugs = selectedSlugs(items, tempTrip);
+  const bySlug = new Map(items.map((i) => [i.slug, i.day]));
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" title="Selected listings" className="max-h-[88vh]">
+        <p className="-mt-2 mb-3 text-sm text-muted-foreground">Drag to reorder by preference, or remove a place.</p>
+        {slugs.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">No listings added yet. Add places from Locations.</p>
+        ) : (
+          <ol className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
+            {slugs.map((slug, index) => {
+              const listing = resolveListing(slug, catalog);
+              if (!listing) return null;
+              const assignedDay = bySlug.get(slug);
+              return (
+                <li key={slug}>
+                  <div
+                    draggable
+                    onDragStart={() => setDrag(slug)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => {
+                      if (!drag || drag === slug) return;
+                      const next = [...slugs];
+                      const from = next.indexOf(drag);
+                      const to = next.indexOf(slug);
+                      if (from < 0 || to < 0) return;
+                      next.splice(from, 1);
+                      next.splice(to, 0, drag);
+                      onReorder(next);
+                      setDrag(null);
+                    }}
+                    className={cn(
+                      "flex cursor-grab items-center gap-2 rounded-xl bg-background p-2 ring-1 ring-border/70 active:cursor-grabbing",
+                      drag === slug && "opacity-60",
+                    )}
+                  >
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                      {index + 1}
+                    </span>
+                    <img src={listing.image} alt="" className="size-12 rounded-lg object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold">{listing.name}</p>
+                      <p className="truncate text-[11px] text-muted-foreground">
+                        {listing.kind}
+                        {assignedDay ? ` · Day ${assignedDay}` : " · not on a day yet"}
+                      </p>
+                    </div>
+                    {assignedDay ? (
+                      <select
+                        aria-label={`Day for ${listing.name}`}
+                        value={assignedDay}
+                        onChange={(e) => onMoveDay(slug, Number(e.target.value))}
+                        className="h-8 rounded-md bg-muted px-1.5 text-[11px] font-semibold"
+                      >
+                        {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
+                          <option key={d} value={d}>
+                            Day {d}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
+                    <GripVertical className="size-4 shrink-0 text-muted-foreground" />
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => onRemove(slug)}
+                      aria-label={`Remove ${listing.name}`}
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 

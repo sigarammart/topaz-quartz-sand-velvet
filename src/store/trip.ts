@@ -53,6 +53,7 @@ type TripState = {
   removeItem: (slug: string, day?: number) => void;
   moveItem: (slug: string, from: number, to: number) => void;
   reorderDay: (day: number, slugs: string[]) => void;
+  reorderSelected: (slugs: string[]) => void;
   setItinerary: (days: ItineraryDay[], items: TripItem[], polished: boolean) => void;
   clearTrip: () => void;
   loadTemplate: (title: string, days: number, items: TripItem[]) => void;
@@ -152,6 +153,17 @@ export const useTrip = create<TripState>()(
         set((s) => {
           const others = s.items.filter((i) => i.day !== day);
           return { items: [...others, ...slugs.map((slug) => ({ slug, day }))] };
+        }),
+      reorderSelected: (slugs) =>
+        set((s) => {
+          const itemMap = new Map(s.items.map((i) => [i.slug, i]));
+          const nextItems = slugs.map((slug) => itemMap.get(slug)).filter((i): i is TripItem => !!i);
+          const leftoverItems = s.items.filter((i) => !slugs.includes(i.slug));
+          const nextTemp = slugs.filter((slug) => s.tempTrip.includes(slug));
+          const leftoverTemp = s.tempTrip.filter((slug) => !slugs.includes(slug));
+          const tempTrip = [...nextTemp, ...leftoverTemp];
+          writeJetFrom(tempTrip, s.wpIdsBySlug ?? {});
+          return { items: [...nextItems, ...leftoverItems], tempTrip };
         }),
       setItinerary: (itinerary, items, itineraryPolished) => set({ itinerary, items, itineraryPolished }),
       clearTrip: () => set({ ...empty, code: "", items: [] }),
