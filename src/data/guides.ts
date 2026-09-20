@@ -31,25 +31,116 @@ export const guides: Guide[] = [
   },
   {
     slug: "shopping-in-pondicherry",
-    title: "Shopping in Pondicherry",
+    title: "Shopping in Pondicherry: Best Markets, Street Shopping & Places to Shop",
     excerpt:
-      "Markets, handmade paper, Auroville crafts, and the Sunday rhythm of the French Quarter.",
+      "Traditional markets, terracotta streets, Mission Street boutiques, MG Road bargains, White Town design shops and Auroville crafts — a walking guide to where to actually shop.",
     date: "August 2026",
-    readTime: "6 min",
+    readTime: "12 min",
     image: "/images/french-quarter.jpg",
     topic: "Shopping",
+    siteUrl: "https://xplorepondy.com/guide/shopping-in-pondicherry/",
     sections: [
       {
-        heading: "What is actually worth packing",
-        body: "Pondy shopping is not a mall crawl. The good things are handmade paper from Auroville, incense and ashram goods, Tamil cotton, ceramic, and the odd antique on Rue Romain Rolland. Bargain gently; many of the better rooms have fixed prices.",
+        body: "Shopping in Pondicherry is much more than visiting boutiques and souvenir stores. The city offers a fascinating mix of **traditional markets, colourful street shops, handicrafts, terracotta, textiles, jewellery, Auroville products and modern boutiques**. From the busy streets around **MG Road and Chinnakadai** to the terracotta shops near **H.M. Kassim Salai and Manakula Vinayagar Temple**, each shopping area has its own character.",
+        blocks: [
+          {
+            type: "p",
+            text: "Shopping in Pondicherry is much more than visiting boutiques and souvenir stores. The city offers a fascinating mix of **traditional markets, colourful street shops, handicrafts, terracotta, textiles, jewellery, Auroville products and modern boutiques**.",
+          },
+          {
+            type: "p",
+            text: "From the busy streets around **MG Road and Chinnakadai** to the terracotta shops near **H.M. Kassim Salai and Manakula Vinayagar Temple**, each shopping area has its own character. Whether you’re looking for souvenirs, gifts, clothing, handicrafts or simply want to experience local street shopping, these are some of the best places to explore.",
+          },
+        ],
       },
       {
-        heading: "White Town and Goubert Market",
-        body: "Nehru Street and Jawaharlal Nehru Street still hold the city’s everyday shops. Goubert Market is for produce, flowers, and a look at how the town feeds itself. For design-leaning souvenirs, stay in the French Quarter and Auroville visitor centre rather than the first seaside stall.",
+        heading: "Best Places for Shopping in Pondicherry",
+        body: "A quick map of the city’s shopping streets.",
+        blocks: [
+          {
+            type: "table",
+            headers: ["Shopping area", "Best for"],
+            rows: [
+              ["H.M. Kassim Salai & Manakula Vinayagar", "Terracotta, handicrafts, religious souvenirs"],
+              ["Mission Street", "Boutiques, clothing, gifts, handicrafts"],
+              ["Nehru Street", "Everyday clothing, footwear, lifestyle"],
+              ["MG Road & Chinnakadai", "Budget street shopping and bargains"],
+              ["Goubert Market", "Produce, flowers, local atmosphere"],
+              ["White Town", "Design, boutique and lifestyle"],
+              ["Auroville", "Handmade and sustainable products"],
+            ],
+          },
+        ],
       },
       {
-        heading: "Auroville for makers",
-        body: "The visitor centre cluster is the honest craft stop: paper, incense, organic food, and clothes that will survive a suitcase. Give it two hours and a coffee. Sunday mornings in White Town also pull a small design market — check what is on that week.",
+        heading: "1. H.M. Kassim Salai & Manakula Vinayagar Temple Area",
+        body: "Terracotta, handicrafts and inexpensive souvenirs next to the temple.",
+        blocks: [
+          {
+            type: "p",
+            text: "One of the most interesting shopping areas for tourists is the cluster of shops around **H.M. Kassim Salai, Manakula Vinayagar Street and the surrounding streets**. This area is particularly good for **terracotta, handicrafts, religious items and inexpensive souvenirs**.",
+          },
+          { type: "h3", text: "What to look for" },
+          {
+            type: "ul",
+            items: [
+              "Terracotta figurines",
+              "Ganesha idols",
+              "Clay dolls and sculptures",
+              "Diyas and clay lamps",
+              "Inexpensive souvenirs",
+            ],
+          },
+          { type: "tip", label: "Suggested walking route", text: "**Manakula Vinayagar Temple → H.M. Kassim Salai → terracotta shops → Mission Street → Nehru Street.** A strong half-day shopping and sightseeing circuit in central Pondicherry." },
+        ],
+      },
+      {
+        heading: "2. Mission Street – Fashion, Boutiques & Souvenirs",
+        body: "Curated clothing, jewellery and gifts.",
+        blocks: [
+          {
+            type: "p",
+            text: "Mission Street is one of Pondicherry’s most popular shopping streets and offers a combination of traditional shops, boutiques and tourist-oriented stores.",
+          },
+          {
+            type: "ul",
+            items: ["Clothing and casual wear", "Jewellery", "Bags and leather products", "Handicrafts and gifts", "Home décor"],
+          },
+        ],
+      },
+      {
+        heading: "3. MG Road & Chinnakadai – Traditional Street Shopping",
+        body: "Busy, inexpensive, and best walked with a bargain in mind.",
+        blocks: [
+          {
+            type: "p",
+            text: "For a more energetic local shopping experience, head towards **MG Road and Chinnakadai**. This area is packed with shops and street vendors selling inexpensive goods.",
+          },
+          { type: "h3", text: "Popular purchases" },
+          { type: "ul", items: ["Budget clothing", "T-shirts", "Bags", "Footwear", "Accessories"] },
+          { type: "tip", label: "Shopping tip", text: "Don’t buy the first thing you see. Walk the market, compare prices, then bargain. Smaller lanes off the main road hide the better stalls." },
+        ],
+      },
+      {
+        heading: "4. White Town & Auroville",
+        body: "Design shops in the French Quarter; handmade goods at Auroville.",
+        blocks: [
+          {
+            type: "p",
+            text: "**White Town** is the place for premium souvenirs, independent boutiques and lifestyle shopping against mustard villas. **Auroville** is where to look for handmade paper, incense, organic food and clothes that survive a suitcase.",
+          },
+          { type: "tip", label: "Best for", text: "White Town if you want something designed; Auroville if you want something made." },
+        ],
+      },
+      {
+        heading: "Final Word",
+        body: "Walk it in one loop.",
+        blocks: [
+          {
+            type: "p",
+            text: "Pondicherry’s shopping is best discovered on foot. Start with **terracotta around H.M. Kassim Salai and Manakula Vinayagar**, continue through **Mission Street and Nehru Street**, and finish with the markets around **MG Road and Chinnakadai**. For a quieter, more curated hour, peel off into **White Town**; for handmade and sustainable pieces, ride out to **Auroville**.",
+          },
+        ],
       },
     ],
   },
@@ -79,25 +170,88 @@ export const guides: Guide[] = [
   },
   {
     slug: "surfing-in-pondicherry",
-    title: "Surfing in Pondicherry",
+    title: "Surfing in Pondicherry: Best Beaches to go Surfing",
     excerpt:
-      "Serenity, Kottakuppam, and how to book a first lesson without wasting a morning.",
+      "Serenity Beach is the hub. Auroville / Repos for a quieter line-up. Schools, prices and when to paddle out.",
     date: "August 2026",
-    readTime: "13 min",
+    readTime: "14 min",
     image: "/images/surf.jpg",
     topic: "Adventure",
+    siteUrl: "https://xplorepondy.com/guide/surfing-in-pondicherry-best-beaches-to-go-surfing-in-pondicherry/",
     sections: [
       {
-        heading: "Why Serenity",
-        body: "The promenade is for walking. The surf is ten minutes north at Serenity Beach — a fishing village, a sandy beach break, and several schools that run 90-minute first lessons. Winter (November to March) is the most consistent season; monsoon swell is punchier and less beginner-friendly.",
+        body: "Pondicherry is more than French streets, cafés and heritage buildings. Along its Bay of Bengal coastline, a growing surf culture has made it one of the more accessible places in South India to learn surfing.",
+        blocks: [
+          {
+            type: "p",
+            text: "Pondicherry is more than French streets, cafés and heritage buildings. Along its Bay of Bengal coastline, a growing surf culture has made the destination one of the more accessible places in South India to learn surfing.",
+          },
+          {
+            type: "p",
+            text: "For first-time surfers, **Serenity Beach and the surrounding Kottakuppam coastline** are the heart of the scene. Several surf schools operate here, offering everything from a single beginner lesson to private coaching and multi-day courses.",
+          },
+        ],
       },
       {
-        heading: "Your first session",
-        body: "Book the day before. Arrive at 6:30 AM. Schools provide boards and rashguards. You do not need to be a swimmer of great courage — you do need to listen. One lesson is enough to stand up on a small wave; three lessons is when it starts to feel like surfing.",
+        heading: "Where Can You Go Surfing in Pondicherry?",
+        body: "Three beaches, three moods.",
+        blocks: [
+          {
+            type: "table",
+            headers: ["Beach", "Best for"],
+            rows: [
+              ["Serenity Beach", "Beginners, lessons, the main surf hub"],
+              ["Auroville / Repos Beach", "More experienced surfers, quieter line-up"],
+              ["Paradise Beach", "A beach day — not the primary lesson beach"],
+            ],
+          },
+        ],
       },
       {
-        heading: "If you do not surf",
-        body: "Serenity is still worth the scooter. Sunrise is quieter than Rock Beach, the shacks do a decent breakfast, and the ride up the East Coast Road is part of the point.",
+        heading: "1. Serenity Beach",
+        body: "The main surfing hub of Pondicherry.",
+        blocks: [
+          {
+            type: "p",
+            text: "**Serenity Beach** is the main surfing hub, around Kottakuppam / Thandryankuppam, a short drive north of town. Kallialay, Pondicherry Surf School, Mother Ocean, Guru Surf School and Serenity Surf Experience all operate on this stretch.",
+          },
+          { type: "tip", label: "Best for", text: "First lessons, board hire, and a full morning in the water. Book the day before; 6:30 AM arrivals are the calm ones." },
+        ],
+      },
+      {
+        heading: "2. Auroville Beach / Repos Beach",
+        body: "A smaller ecosystem for people who already stand up.",
+        blocks: [
+          {
+            type: "p",
+            text: "Auroville Beach, also called Repos, sits a little further along the same coast. The scene is smaller than Serenity — better if you already surf and want fewer first-timers in the peak.",
+          },
+        ],
+      },
+      {
+        heading: "Best Surf Schools in Pondicherry",
+        body: "What a first lesson actually costs.",
+        blocks: [
+          {
+            type: "p",
+            text: "Most schools run **90-minute group lessons** with a board, leash and rashguard included. Group spots typically ask that you can **swim 50 metres confidently**. Kids under 11 are often steered into private lessons.",
+          },
+          {
+            type: "table",
+            headers: ["Format", "Typical price (2026)"],
+            rows: [
+              ["Group lesson (90 min)", "₹1,000 – ₹1,700"],
+              ["Private lesson", "Ask the school — higher, more coaching"],
+              ["3-day course", "₹4,500 – ₹4,800"],
+            ],
+          },
+          { type: "tip", label: "Best time", text: "**Early morning, 6:00 AM – 10:00 AM** — cooler, softer light, cleaner peaks. Tide and wind still decide the day; the school will say if it’s on." },
+          {
+            type: "callout",
+            label: "Xplore Pondy Verdict",
+            text: "Serenity is the honest first stop. Book a school that actually wants to teach you, not only rent you a board for an hour.",
+          },
+        ],
       },
     ],
   },
@@ -193,5 +347,9 @@ export const guides: Guide[] = [
 ];
 
 export function getGuide(slug: string) {
-  return guides.find((g) => g.slug === slug);
+  return (
+    guides.find((g) => g.slug === slug) ||
+    (slug.startsWith("surfing-in-pondicherry") ? guides.find((g) => g.slug === "surfing-in-pondicherry") : undefined) ||
+    (slug.startsWith("shopping-in-pondicherry") ? guides.find((g) => g.slug === "shopping-in-pondicherry") : undefined)
+  );
 }

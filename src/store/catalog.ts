@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { guides as localGuides } from "@/data/guides";
+import { guides as localGuides, getGuide } from "@/data/guides";
 import {
   listings as localListings,
   nearbyListings as localNearby,
@@ -167,5 +167,11 @@ export function catalogNearby(slug: string, items: Listing[]) {
 }
 
 export function catalogGuide(slug: string, guides: Guide[]) {
-  return guides.find((g) => g.slug === slug);
+  return (
+    guides.find((g) => g.slug === slug) ||
+    (slug.startsWith("surfing-in-pondicherry")
+      ? guides.find((g) => g.slug.startsWith("surfing-in-pondicherry"))
+      : undefined) ||
+    getGuide(slug)
+  );
 }

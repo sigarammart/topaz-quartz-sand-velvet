@@ -81,9 +81,20 @@ export type Listing = {
   gallery?: string[];
 };
 
+export type GuideBlock =
+  | { type: "p"; text: string }
+  | { type: "h3"; text: string }
+  | { type: "ul"; items: string[] }
+  | { type: "ol"; items: string[] }
+  | { type: "table"; headers: string[]; rows: string[][] }
+  | { type: "img"; src: string; alt?: string }
+  | { type: "tip"; label: string; text: string }
+  | { type: "callout"; label: string; text: string };
+
 export type GuideSection = {
   heading?: string;
   body: string;
+  blocks?: GuideBlock[];
 };
 
 export type Guide = {
@@ -94,6 +105,7 @@ export type Guide = {
   readTime: string;
   image: string;
   topic: string;
+  siteUrl?: string;
   sections: GuideSection[];
 };
 

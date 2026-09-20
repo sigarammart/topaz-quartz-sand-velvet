@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { guides as localGuides } from "@/data/guides";
 import { listings as localListings } from "@/data/listings";
-import type { Category, Guide, GuideSection, Listing, ListingFaq, ListingMetaGroup, ListingMetaItem, ListingStop, ListingTaxGroup, ListingTaxTerm } from "@/lib/types";
+import type { Category, Guide, GuideBlock, GuideSection, Listing, ListingFaq, ListingMetaGroup, ListingMetaItem, ListingStop, ListingTaxGroup, ListingTaxTerm } from "@/lib/types";
 import { parseOpenHoursHtml } from "@/lib/hours";
 import { loadJetArchiveMeta, type JetArchiveHit } from "@/lib/jet-archive";
 import { loadListeoGeo, type ListeoGeo } from "@/lib/listeo-geo";
@@ -652,23 +652,279 @@ function mapUser(raw: WpMe): WpUser {
   };
 }
 
+function imageSrcFromTag(tag: string) {
+  const srcset = tag.match(/\ssrcset="([^"]+)"/i)?.[1] ?? "";
+  let best = "";
+  let bestW = 0;
+  for (const part of srcset.split(",")) {
+    const piece = part.trim().match(/(\S+)\s+(\d+)w/);
+    if (piece && Number(piece[2]) >= bestW) {
+      bestW = Number(piece[2]);
+      best = piece[1];
+    }
+  }
+  const src =
+    best ||
+    tag.match(/\s(?:src|data-src|data-lazy-src|data-full-url)="([^"]+)"/i)?.[1] ||
+    "";
+  return uncropImage(src);
+}
+
+function imageBlocks(html: string): GuideBlock[] {
+  const seen = new Set<string>();
+  const blocks: GuideBlock[] = [];
+  for (const match of html.matchAll(/<img\b[^>]*>/gi)) {
+    const src = imageSrcFromTag(match[0]);
+    if (!src || seen.has(src) || /svg|gravatar|emoji|spinner|logo|icon|avatar/i.test(src)) continue;
+    if (!/^https?:\/\//i.test(src)) continue;
+    seen.add(src);
+    const alt = match[0].match(/\salt="([^"]*)"/i)?.[1] ?? "";
+    blocks.push({ type: "img", src, alt: decodeHtml(alt) });
+  }
+  return blocks;
+}
+
+function mergeGuideBlocks(blocks: GuideBlock[]) {
+  const seenImg = new Set<string>();
+  const out: GuideBlock[] = [];
+  for (const block of blocks) {
+    if (block.type === "img") {
+      if (seenImg.has(block.src)) continue;
+      seenImg.add(block.src);
+    }
+    out.push(block);
+  }
+  return out;
+}
+
+function htmlToRichText(html: string) {
+  return decodeHtml(
+    html
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, "\n")
+      .replace(/<(strong|b)[^>]*>/gi, "**")
+      .replace(/<\/(strong|b)>/gi, "**")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/\*\*\s+\*\*/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function cellText(html: string) {
+  return htmlToRichText(html).replace(/\*\*/g, "").replace(/\s+/g, " ").trim();
+}
+
+function listItems(html: string) {
+  return [...html.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)]
+    .map((m) => htmlToRichText(m[1] ?? ""))
+    .filter((item) => item.length > 1);
+}
+
+function parseTable(html: string): GuideBlock | null {
+  const rows = [...html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)].map((row) =>
+    [...row[1].matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((c) => cellText(c[1] ?? "")),
+  );
+  const filled = rows.filter((r) => r.some(Boolean));
+  if (filled.length < 2) return null;
+  const headers = filled[0];
+  const body = filled.slice(1).filter((r) => r.some((c) => c && !headers.includes(c)));
+  if (!body.length) return null;
+  return { type: "table", headers, rows: body };
+}
+
+const SKIP_GUIDE_HEADING =
+  /^(login|register|sign in|travel guide|recent guide|table of contents|view all guides|xplore pondy|discover puducherry|get the latest|need help|related|share|comments?)$/i;
+
+const TIP_LABEL =
+  /^(shopping tip|travel tip|surf tip|tip|best for|what to look for|suggested walking route|best things to shop for|popular purchases|who can learn\??|best time|what to bring|good to know)$/i;
+
+const CALLOUT_LABEL = /^(xplore pondy verdict|verdict|editor.?s note|note)$/i;
+
+function extractGuideArticleHtml(html: string) {
+  let article = html;
+  const start = html.search(/data-widget_type="theme-post-content\.default"/i);
+  if (start >= 0) {
+    const slice = html.slice(start);
+    const inner = slice.match(/<div class="elementor-widget-container">([\s\S]*)/i);
+    if (inner?.[1] && inner[1].length > 400) article = inner[1];
+  } else {
+    const entry = html.match(
+      /<div[^>]+class="[^"]*(?:elementor-widget-theme-post-content|entry-content|post-content)[^"]*"[\s\S]{0,200}?>([\s\S]*)$/i,
+    )?.[1];
+    if (entry && entry.length > 400) article = entry;
+  }
+  const cut = article.search(/<h[1-4][^>]*>[\s\S]{0,80}Recent Guide Articles/i);
+  return cut > 200 ? article.slice(0, cut) : article;
+}
+
+function parseGuideBlocks(html: string): GuideBlock[] {
+  const cleaned = html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ");
+  const pulledTables: GuideBlock[] = [];
+  const withTables = cleaned.replace(/<table\b[\s\S]*?<\/table>/gi, (tableHtml) => {
+    const parsed = parseTable(tableHtml);
+    if (!parsed) return " ";
+    const token = `%%TABLE${pulledTables.length}%%`;
+    pulledTables.push(parsed);
+    return `<p>${token}</p>`;
+  });
+  const tokens = withTables.split(/(?=<h[3-4]\b|<p\b|<ul\b|<ol\b|<img\b)/i);
+  const blocks: GuideBlock[] = [];
+  let pendingLabel: { kind: "tip" | "callout"; label: string } | null = null;
+
+  const pushPending = (text: string) => {
+    if (!pendingLabel || !text) return false;
+    blocks.push({ type: pendingLabel.kind, label: pendingLabel.label, text });
+    pendingLabel = null;
+    return true;
+  };
+
+  for (const raw of tokens) {
+    if (!raw.trim()) continue;
+    const img = raw.match(/^<img\b[^>]*>/i);
+    if (img) {
+      const src = imageSrcFromTag(img[0]);
+      const alt = img[0].match(/\salt="([^"]*)"/i)?.[1] ?? "";
+      if (/^https?:\/\//i.test(src) && !/svg|gravatar|emoji|spinner|logo|icon|avatar/i.test(src)) {
+        blocks.push({ type: "img", src, alt: decodeHtml(alt) });
+      }
+      continue;
+    }
+    const heading = raw.match(/^<h([3-4])\b[^>]*>([\s\S]*?)<\/h\1>/i);
+    if (heading) {
+      const text = htmlToRichText(heading[2] ?? "").replace(/\*\*/g, "");
+      if (text && !SKIP_GUIDE_HEADING.test(text)) blocks.push({ type: "h3", text });
+      pendingLabel = null;
+      continue;
+    }
+    const table = raw.match(/^<table\b[\s\S]*?<\/table>/i);
+    if (table) {
+      const parsed = parseTable(table[0]);
+      if (parsed) blocks.push(parsed);
+      pendingLabel = null;
+      continue;
+    }
+    const list = raw.match(/^<(ul|ol)\b[\s\S]*?<\/\1>/i);
+    if (list) {
+      const items = listItems(list[0]);
+      if (items.length) {
+        if (pendingLabel) {
+          blocks.push({ type: pendingLabel.kind, label: pendingLabel.label, text: items.join(" · ") });
+          pendingLabel = null;
+        } else {
+          blocks.push({ type: list[1].toLowerCase() === "ol" ? "ol" : "ul", items });
+        }
+      }
+      continue;
+    }
+    const para = raw.match(/^<p\b[^>]*>([\s\S]*?)<\/p>/i);
+    if (para) {
+      const inner = para[1] ?? "";
+      const tableToken = inner.match(/%%TABLE(\d+)%%/);
+      if (tableToken) {
+        const pulled = pulledTables[Number(tableToken[1])];
+        if (pulled) blocks.push(pulled);
+        pendingLabel = null;
+        continue;
+      }
+      const text = htmlToRichText(inner);
+      if (!text) continue;
+      const plain = text.replace(/\*\*/g, "").trim();
+      if (TIP_LABEL.test(plain)) {
+        pendingLabel = { kind: "tip", label: plain.replace(/\s+/g, " ") };
+        continue;
+      }
+      if (CALLOUT_LABEL.test(plain)) {
+        pendingLabel = { kind: "callout", label: plain.replace(/\s+/g, " ") };
+        continue;
+      }
+      const labeled = text.match(/^\*\*([^*]{2,40})\*\*\s*[:–—-]?\s*([\s\S]+)$/);
+      if (labeled && TIP_LABEL.test(labeled[1].trim())) {
+        blocks.push({ type: "tip", label: labeled[1].trim(), text: labeled[2].trim() });
+        pendingLabel = null;
+        continue;
+      }
+      if (labeled && CALLOUT_LABEL.test(labeled[1].trim())) {
+        blocks.push({ type: "callout", label: labeled[1].trim(), text: labeled[2].trim() });
+        pendingLabel = null;
+        continue;
+      }
+      if (pushPending(text)) continue;
+      blocks.push({ type: "p", text });
+    }
+  }
+  return mergeGuideBlocks([...imageBlocks(cleaned), ...blocks]).slice(0, 250);
+}
+
 function parseGuideSections(html: string): GuideSection[] {
-  const cleaned = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ");
-  const chunks = cleaned.split(/<h[2-3][^>]*>/i);
+  const article = extractGuideArticleHtml(html);
+  const hits: { index: number; end: number; heading: string; headingHtml: string }[] = [];
+  const headingRe = /<h([2-4])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = headingRe.exec(article))) {
+    const heading = htmlToRichText(match[2] ?? "").replace(/\*\*/g, "");
+    if (!heading || SKIP_GUIDE_HEADING.test(heading)) continue;
+    hits.push({ index: match.index, end: match.index + match[0].length, heading, headingHtml: match[0] });
+  }
+  const aliasRe =
+    /<ol[^>]*start="\d+"[^>]*>\s*<li[^>]*>\s*(?:<strong[^>]*>)?\s*([^<]{4,90})\s*(?:<\/strong>)?\s*<\/li>\s*<\/ol>/gi;
+  while ((match = aliasRe.exec(article))) {
+    const heading = htmlToRichText(match[1] ?? "").replace(/\*\*/g, "");
+    if (!heading || SKIP_GUIDE_HEADING.test(heading)) continue;
+    const nearby = hits.some((h) => Math.abs(h.index - match!.index) < 40);
+    if (nearby) continue;
+    hits.push({ index: match.index, end: match.index + match[0].length, heading, headingHtml: match[0] });
+  }
+  hits.sort((a, b) => a.index - b.index);
+
   const sections: GuideSection[] = [];
-  const intro = decodeHtml(chunks[0] ?? "");
-  if (intro) sections.push({ body: intro.slice(0, 1600) });
-  for (const chunk of chunks.slice(1)) {
-    const close = chunk.search(/<\/h[2-3]>/i);
-    const heading = decodeHtml(close >= 0 ? chunk.slice(0, close) : "");
-    const body = decodeHtml(close >= 0 ? chunk.slice(close) : chunk).slice(0, 2200);
-    if (heading || body) sections.push({ heading: heading || undefined, body });
+  const introHtml = hits.length ? article.slice(0, hits[0].index) : article;
+  const introBlocks = parseGuideBlocks(introHtml);
+  if (introBlocks.length) {
+    sections.push({
+      body: introBlocks
+        .filter((b): b is Extract<GuideBlock, { type: "p" }> => b.type === "p")
+        .map((b) => b.text)
+        .join("\n\n"),
+      blocks: introBlocks,
+    });
+  }
+  for (let i = 0; i < hits.length; i++) {
+    const chunk = article.slice(hits[i].end, hits[i + 1]?.index ?? article.length);
+    const blocks = mergeGuideBlocks([...imageBlocks(hits[i].headingHtml), ...parseGuideBlocks(chunk)]);
+    const body = blocks
+      .map((b) => {
+        if (b.type === "p" || b.type === "h3" || b.type === "tip" || b.type === "callout") return "text" in b ? b.text : "";
+        if (b.type === "ul" || b.type === "ol") return b.items.join(" ");
+        if (b.type === "table") return [...b.headers, ...b.rows.flat()].join(" ");
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n");
+    if (!hits[i].heading && !blocks.length) continue;
+    sections.push({ heading: hits[i].heading, body: body.slice(0, 8000), blocks: blocks.length ? blocks : undefined });
   }
   if (sections.length === 0) {
-    const body = decodeHtml(cleaned);
-    if (body) sections.push({ body: body.slice(0, 2200) });
+    const body = decodeHtml(article).slice(0, 4000);
+    if (body) sections.push({ body, blocks: parseGuideBlocks(article) });
   }
-  return sections.slice(0, 14);
+  return sections.slice(0, 40);
+}
+
+function guideSlugCandidates(slug: string, url?: string) {
+  const fromUrl = url?.match(/\/guide\/([^/?#]+)/i)?.[1];
+  const aliases = localGuides.flatMap((g) => {
+    const siteSlug = g.siteUrl?.match(/\/guide\/([^/?#]+)/i)?.[1];
+    if (g.slug === slug || siteSlug === slug || (siteSlug && slug.startsWith(g.slug)) || g.slug.startsWith(slug)) {
+      return [g.slug, siteSlug];
+    }
+    return [];
+  });
+  return [...new Set([slug, fromUrl, ...aliases].filter((s): s is string => Boolean(s)))];
 }
 
 function mapGuide(raw: WpGuide): Guide {
@@ -678,11 +934,15 @@ function mapGuide(raw: WpGuide): Guide {
     terms.find((t) => t.taxonomy === "guide-category") ||
     terms.find((t) => t.taxonomy === "guide-type");
   const html = raw.content?.rendered ?? "";
-  const words = decodeHtml(html).split(/\s+/).filter(Boolean).length;
+  const sections = parseGuideSections(html);
+  const words = sections
+    .flatMap((s) => [s.heading ?? "", s.body])
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean).length;
   const date = raw.date
     ? new Date(raw.date).toLocaleDateString("en-IN", { month: "long", year: "numeric" })
     : local?.date ?? "";
-  const sections = parseGuideSections(html);
   return {
     slug: raw.slug,
     title: decodeHtml(raw.title?.rendered ?? raw.slug),
@@ -691,7 +951,32 @@ function mapGuide(raw: WpGuide): Guide {
     readTime: `${Math.max(1, Math.round(words / 200) || 6)} min`,
     image: mediaUrl(raw._embedded?.["wp:featuredmedia"]?.[0]) || local?.image || "/images/french-quarter.jpg",
     topic: topicTerm?.name ? decodeHtml(topicTerm.name) : local?.topic ?? "Guide",
+    siteUrl: raw.link ?? `${WP_ORIGIN}/guide/${raw.slug}/`,
     sections: sections.length ? sections : (local?.sections ?? [{ body: "" }]),
+  };
+}
+
+function guideFromHtml(slug: string, url: string, html: string, seed?: Guide | null): Guide {
+  const local = localGuides.find((g) => g.slug === slug) ?? seed ?? null;
+  const sections = parseGuideSections(html);
+  const og = extractOgImage(html);
+  const h1 = htmlToRichText(html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)?.[1] ?? "").replace(/\*\*/g, "");
+  const words = sections
+    .flatMap((s) => [s.heading ?? "", s.body])
+    .join(" ")
+    .split(/\s+/)
+    .filter(Boolean).length;
+  const firstP = sections[0]?.blocks?.find((b) => b.type === "p");
+  return {
+    slug,
+    title: h1 || seed?.title || local?.title || slug,
+    excerpt: (firstP && firstP.type === "p" ? firstP.text.replace(/\*\*/g, "") : local?.excerpt || "").slice(0, 280),
+    date: seed?.date || local?.date || "",
+    readTime: `${Math.max(1, Math.round(words / 200) || Number(String(local?.readTime ?? "6").replace(/\D/g, "")) || 6)} min`,
+    image: pickListingImage(og, seed?.image, local?.image) || local?.image || "/images/french-quarter.jpg",
+    topic: seed?.topic || local?.topic || "Guide",
+    siteUrl: url,
+    sections: sections.length ? sections : (seed?.sections ?? local?.sections ?? [{ body: "" }]),
   };
 }
 
@@ -962,12 +1247,12 @@ export const fetchWpGuides = createServerFn({ method: "GET" }).handler(async () 
   return { guides };
 });
 
-async function loadListingPageHtml(urls: string[]) {
+async function loadListingPageHtml(urls: string[], timeout = 10000) {
   for (const url of urls) {
     try {
       const page = await fetch(url, {
         headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 XplorePondyApp/1.0" },
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(timeout),
       });
       if (!page.ok) continue;
       const html = await page.text();
@@ -1053,15 +1338,51 @@ export const fetchWpUserTrips = createServerFn({ method: "GET" }).handler(async 
 });
 
 export const fetchWpGuide = createServerFn({ method: "GET" })
-  .validator(z.object({ slug: z.string().min(1) }))
+  .validator(z.object({ slug: z.string().min(1), url: z.string().optional() }))
   .handler(async ({ data }) => {
-    const res = await wpGet<WpGuide[]>(
-      `/wp-json/wp/v2/travel_guide?slug=${encodeURIComponent(data.slug)}&_embed=1`,
-      {},
-      15000,
-    );
-    if (!res.ok || !Array.isArray(res.data) || !res.data[0]) return null;
-    return mapGuide(res.data[0]);
+    const slugs = guideSlugCandidates(data.slug, data.url);
+    const urls = [
+      data.url,
+      ...slugs.map((s) => `${WP_ORIGIN}/guide/${s}/`),
+    ].filter((url, i, all): url is string => !!url && all.indexOf(url) === i);
+
+    const [restHits, page] = await Promise.all([
+      Promise.all(
+        slugs.map((s) =>
+          wpGet<WpGuide[]>(
+            `/wp-json/wp/v2/travel_guide?slug=${encodeURIComponent(s)}&_embed=1`,
+            {},
+            15000,
+          ).catch(() => null),
+        ),
+      ),
+      loadListingPageHtml(urls, 20000),
+    ]);
+
+    const restRow = restHits
+      .map((res) => (res?.ok && Array.isArray(res.data) ? res.data[0] : undefined))
+      .find(Boolean);
+
+    let mapped: Guide | null = restRow ? mapGuide(restRow) : null;
+    const local =
+      localGuides.find((g) => slugs.includes(g.slug) || (g.siteUrl && slugs.some((s) => g.siteUrl?.includes(s)))) ??
+      mapped ??
+      null;
+    if (page) {
+      const fromHtml = guideFromHtml(mapped?.slug || data.slug, page.url, page.html, mapped ?? local);
+      const htmlRich = fromHtml.sections.some((s) => (s.blocks?.length ?? 0) > 1);
+      if (htmlRich && fromHtml.sections.length >= (mapped?.sections.length ?? 0)) {
+        return {
+          ...fromHtml,
+          slug: mapped?.slug || fromHtml.slug,
+          title: mapped?.title || fromHtml.title,
+          date: mapped?.date || fromHtml.date,
+          topic: mapped?.topic || fromHtml.topic,
+          image: pickListingImage(mapped?.image, fromHtml.image, local?.image),
+        };
+      }
+    }
+    return mapped ?? local ?? null;
   });
 
 async function loadAuthorContent(authorId: number, headers: HeadersInit) {

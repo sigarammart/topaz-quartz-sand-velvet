@@ -34,59 +34,120 @@ export type GoogleLatLngBounds = {
   extend: (c: { lat: number; lng: number }) => void;
 };
 
+type MapsBootstrap = {
+  Map?: GoogleMapsNs["Map"];
+  Marker?: GoogleMapsNs["Marker"];
+  LatLngBounds?: GoogleMapsNs["LatLngBounds"];
+  SymbolPath?: GoogleMapsNs["SymbolPath"];
+  event?: GoogleMapsNs["event"];
+  ColorScheme?: GoogleMapsNs["ColorScheme"];
+  RenderingType?: GoogleMapsNs["RenderingType"];
+  importLibrary?: (name: string) => Promise<Record<string, unknown>>;
+};
+
 declare global {
   interface Window {
-    google?: { maps: GoogleMapsNs };
+    google?: { maps: MapsBootstrap };
     gm_authFailure?: () => void;
   }
 }
 
 let loading: Promise<boolean> | null = null;
 let authFailed = false;
+let mapsNs: GoogleMapsNs | null = null;
 
 export function googleMapsApi(): GoogleMapsNs | null {
   if (typeof window === "undefined" || authFailed) return null;
-  return window.google?.maps ?? null;
+  if (mapsNs && typeof mapsNs.Map === "function") return mapsNs;
+  return null;
+}
+
+function isReadyNs(ns: Partial<GoogleMapsNs> | null | undefined): ns is GoogleMapsNs {
+  return !!ns && typeof ns.Map === "function" && typeof ns.Marker === "function" && typeof ns.LatLngBounds === "function";
+}
+
+async function resolveMapsNamespace(): Promise<GoogleMapsNs | null> {
+  const bootstrap = window.google?.maps;
+  if (!bootstrap) return null;
+  try {
+    let mapsLib: Record<string, unknown> = bootstrap as unknown as Record<string, unknown>;
+    let markerLib: Record<string, unknown> = bootstrap as unknown as Record<string, unknown>;
+    if (typeof bootstrap.importLibrary === "function") {
+      mapsLib = await bootstrap.importLibrary("maps");
+      try {
+        markerLib = await bootstrap.importLibrary("marker");
+      } catch {
+        markerLib = (window.google?.maps ?? mapsLib) as unknown as Record<string, unknown>;
+      }
+    }
+    const root = window.google?.maps;
+    const ns: Partial<GoogleMapsNs> = {
+      Map: (mapsLib.Map ?? root?.Map) as GoogleMapsNs["Map"],
+      Marker: (markerLib.Marker ?? mapsLib.Marker ?? root?.Marker) as GoogleMapsNs["Marker"],
+      LatLngBounds: (mapsLib.LatLngBounds ?? root?.LatLngBounds) as GoogleMapsNs["LatLngBounds"],
+      SymbolPath: (root?.SymbolPath ?? mapsLib.SymbolPath) as GoogleMapsNs["SymbolPath"],
+      event: (root?.event ?? mapsLib.event) as GoogleMapsNs["event"],
+      ColorScheme: (mapsLib.ColorScheme ?? root?.ColorScheme) as GoogleMapsNs["ColorScheme"],
+      RenderingType: (mapsLib.RenderingType ?? root?.RenderingType) as GoogleMapsNs["RenderingType"],
+    };
+    return isReadyNs(ns) ? ns : null;
+  } catch {
+    return null;
+  }
 }
 
 export function loadGoogleMaps(): Promise<boolean> {
   if (typeof window === "undefined") return Promise.resolve(false);
   if (authFailed) return Promise.resolve(false);
-  if (window.google?.maps) return Promise.resolve(true);
+  if (isReadyNs(mapsNs)) return Promise.resolve(true);
   if (loading) return loading;
-  loading = new Promise<boolean>((resolve) => {
-    let settled = false;
-    const finish = (ok: boolean) => {
-      if (settled) return;
-      settled = true;
-      resolve(ok && !authFailed);
-    };
-    const prev = window.gm_authFailure;
-    window.gm_authFailure = () => {
-      authFailed = true;
-      try {
-        prev?.();
-      } catch {
-        /* ignore */
-      }
-      finish(false);
-    };
-    const existing = document.querySelector<HTMLScriptElement>("script[data-xp-gmaps]");
+  loading = (async () => {
+    const existing = await resolveMapsNamespace();
     if (existing) {
-      existing.addEventListener("load", () => finish(!!window.google?.maps));
-      existing.addEventListener("error", () => finish(false));
-      window.setTimeout(() => finish(!!window.google?.maps), 12000);
-      return;
+      mapsNs = existing;
+      return true;
     }
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&v=weekly&loading=async`;
-    script.async = true;
-    script.defer = true;
-    script.dataset.xpGmaps = "1";
-    script.onload = () => finish(!!window.google?.maps);
-    script.onerror = () => finish(false);
-    document.head.appendChild(script);
-    window.setTimeout(() => finish(!!window.google?.maps), 12000);
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      const prev = window.gm_authFailure;
+      window.gm_authFailure = () => {
+        authFailed = true;
+        try {
+          prev?.();
+        } catch {
+          /* ignore */
+        }
+        finish();
+      };
+      const existingScript = document.querySelector<HTMLScriptElement>("script[data-xp-gmaps]");
+      if (existingScript) {
+        existingScript.addEventListener("load", () => finish());
+        existingScript.addEventListener("error", () => finish());
+        window.setTimeout(finish, 12000);
+        if (window.google?.maps) finish();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&v=weekly&loading=async`;
+      script.async = true;
+      script.defer = true;
+      script.dataset.xpGmaps = "1";
+      script.onload = () => finish();
+      script.onerror = () => finish();
+      document.head.appendChild(script);
+      window.setTimeout(finish, 12000);
+    });
+    if (authFailed) return false;
+    mapsNs = await resolveMapsNamespace();
+    return isReadyNs(mapsNs);
+  })();
+  loading.then((ok) => {
+    if (!ok) loading = null;
   });
   return loading;
 }

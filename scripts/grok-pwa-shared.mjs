@@ -157,8 +157,8 @@ export function renderInstallPageHtml(template, { host, url } = {}) {
     .replaceAll("{{APP_URL}}", escapeHtml(stripInstallParams(url)));
 }
 
-export function renderWebManifest(hostHeader) {
-  const name = appNameFromHost(hostHeader);
+export function renderWebManifest(hostHeader, site = {}) {
+  const name = resolveOgTitle(site, DEFAULT_APP_NAME, hostHeader);
   return JSON.stringify(
     {
       name,
@@ -176,12 +176,12 @@ export function renderWebManifest(hostHeader) {
           type: "image/png",
         },
         {
-          src: "/__grok/icon-192.png",
+          src: "/icon-192.png",
           sizes: "192x192",
           type: "image/png",
         },
         {
-          src: "/__grok/icon-512.png",
+          src: "/icon-512.png",
           sizes: "512x512",
           type: "image/png",
           purpose: "any maskable",
