@@ -5,9 +5,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useHydrated } from "@/lib/use-hydrated";
+import { useAppLoggedIn } from "@/lib/app-session";
 import { useAuthModal } from "@/store/auth-modal";
 import { useCatalog } from "@/store/catalog";
-import { useSession } from "@/store/session";
 import { useTrip } from "@/store/trip";
 
 export function AddToTrip({
@@ -30,14 +30,15 @@ export function AddToTrip({
   const catalogId = useCatalog((s) => s.items.find((l) => l.slug === slug)?.wpId);
   const mappedId = useTrip((s) => s.wpIdsBySlug?.[slug]);
   const active = hydrated && on;
-  const wpUser = useSession((s) => s.user);
+  const wpUserCheck = useAppLoggedIn();
   const showLogin = useAuthModal((s) => s.show);
-  const loggedIn = Boolean(wpUser);
+  const loggedIn = wpUserCheck.loggedIn;
   const postId = wpId ?? catalogId ?? mappedId;
 
   function onClick(e?: MouseEvent) {
     e?.preventDefault();
     e?.stopPropagation();
+    if (wpUserCheck.isPending) return;
     if (!loggedIn) {
       showLogin({ reason: "add-trip", slug, name, wpId: postId, next: "/trip" });
       return;

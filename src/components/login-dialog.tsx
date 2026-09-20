@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { GROK_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
+import { useAppLoggedIn } from "@/lib/app-session";
 import { wpLogin } from "@/lib/wp-api";
 import { useAuthModal } from "@/store/auth-modal";
 import { useCatalog } from "@/store/catalog";
@@ -44,6 +45,7 @@ export function LoginDialog() {
   const slug = useAuthModal((s) => s.slug);
   const name = useAuthModal((s) => s.name);
   const wpId = useAuthModal((s) => s.wpId);
+  const { grokUser } = useAppLoggedIn();
   const navigate = useNavigate();
   const setSession = useSession((s) => s.setSession);
   const lastUsername = useSession((s) => s.lastUsername);
@@ -111,7 +113,7 @@ export function LoginDialog() {
     <Sheet open={open} onOpenChange={(nextOpen) => (!nextOpen ? hide() : undefined)}>
       <SheetContent side="center" title={title} className="max-h-[90vh] overflow-y-auto">
         <p className="-mt-2 mb-4 text-sm text-muted-foreground">{blurb}</p>
-        {authEnabled ? (
+        {authEnabled && !grokUser ? (
           <div className="space-y-2">
             {GROK_PROVIDERS.map((p) => (
               <Button

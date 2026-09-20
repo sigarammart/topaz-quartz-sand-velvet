@@ -2,8 +2,8 @@ import { Bookmark } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useHydrated } from "@/lib/use-hydrated";
+import { useAppLoggedIn } from "@/lib/app-session";
 import { useAuthModal } from "@/store/auth-modal";
-import { useSession } from "@/store/session";
 import { useTrip } from "@/store/trip";
 
 export function SaveButton({
@@ -20,10 +20,9 @@ export function SaveButton({
   const hydrated = useHydrated();
   const saved = useTrip((s) => s.saved.includes(slug));
   const toggle = useTrip((s) => s.toggleSaved);
-  const wpUser = useSession((s) => s.user);
+  const { loggedIn, isPending } = useAppLoggedIn();
   const showLogin = useAuthModal((s) => s.show);
   const on = hydrated && saved;
-  const loggedIn = Boolean(wpUser);
 
   return (
     <button
@@ -33,6 +32,7 @@ export function SaveButton({
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        if (isPending) return;
         if (!loggedIn) {
           showLogin({ reason: "bookmark", slug, name, wpId, next: "/saved" });
           return;

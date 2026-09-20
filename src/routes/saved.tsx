@@ -3,6 +3,7 @@ import { Bookmark } from "lucide-react";
 import { ListingCard } from "@/components/listing-card";
 import { Button } from "@/components/ui/button";
 import { useHydrated } from "@/lib/use-hydrated";
+import { useAppLoggedIn } from "@/lib/app-session";
 import { resolveListing, useCatalog } from "@/store/catalog";
 import { useAuthModal } from "@/store/auth-modal";
 import { useSession } from "@/store/session";
@@ -15,10 +16,9 @@ function SavedPage() {
   const saved = useTrip((s) => s.saved);
   const wpIds = useTrip((s) => s.wpIdsBySlug);
   const items = useCatalog((s) => s.items);
-  const wpUser = useSession((s) => s.user);
   const bookmarkIds = useSession((s) => s.bookmarkIds);
   const showLogin = useAuthModal((s) => s.show);
-  const loggedIn = Boolean(wpUser);
+  const { loggedIn, isPending } = useAppLoggedIn();
   const listings = hydrated
     ? saved
         .map((slug) => {
@@ -46,7 +46,9 @@ function SavedPage() {
         Places you bookmark here are the same JetEngine save-bookmark list as xplorepondy.com.
       </p>
 
-      {!loggedIn ? (
+      {isPending ? (
+        <p className="mt-16 text-center text-sm text-muted-foreground">Loading bookmarks…</p>
+      ) : !loggedIn ? (
         <div className="mt-16 flex flex-col items-center text-center">
           <Bookmark className="size-8 text-primary" />
           <p className="mt-3 max-w-sm text-sm text-muted-foreground">

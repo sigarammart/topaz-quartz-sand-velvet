@@ -28,6 +28,7 @@ import { useAuthModal } from "@/store/auth-modal";
 import { useSession } from "@/store/session";
 import { useTheme } from "@/store/theme";
 import { isStandaloneDisplay } from "@/lib/android";
+import { useAppLoggedIn } from "@/lib/app-session";
 import { useTrip } from "@/store/trip";
 import { JET_BOOKMARK_STORAGE_KEY, JET_TEMP_STORAGE_KEY } from "@/lib/jet-store";
 
@@ -53,7 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const user = useSession((s) => s.user);
   const bookmarkIds = useSession((s) => s.bookmarkIds);
   const showLogin = useAuthModal((s) => s.show);
-  const loggedIn = Boolean(user);
+  const { loggedIn } = useAppLoggedIn();
   const ensureCatalog = useCatalog((s) => s.ensure);
   const catalog = useCatalog((s) => s.items);
   const catalogStatus = useCatalog((s) => s.status);
