@@ -7,6 +7,7 @@ import {
   Compass,
   MapPinned,
   Search,
+  Smartphone,
   Sparkles,
 } from "lucide-react";
 import { ListingCard } from "@/components/listing-card";
@@ -68,53 +69,65 @@ function Home() {
   }
 
   return (
-    <div className="space-y-14">
+    <div className="space-y-7">
       <section className="relative overflow-hidden rounded-2xl">
         <img
           src="/images/promenade.jpg"
           alt="Promenade Beach at golden hour"
-          className="h-[28rem] w-full object-cover sm:h-[32rem]"
+          className="h-[16.5rem] w-full object-cover sm:h-[18.5rem]"
         />
         <div className="absolute inset-0 bg-overlay/45" />
-        <div className="absolute inset-0 flex flex-col justify-end p-6 sm:p-10">
-          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-hero-muted">
+        <div className="absolute inset-0 flex flex-col justify-end p-4 sm:p-6">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-hero-muted">
             Pondicherry travel planner
           </p>
-          <h1 className="mt-2 max-w-xl font-display text-4xl font-semibold text-hero sm:text-5xl">
+          <h1 className="mt-1 max-w-xl font-display text-3xl font-semibold leading-tight text-hero sm:text-4xl">
             Explore Puducherry like never before
           </h1>
-          <p className="mt-3 max-w-lg text-sm text-hero/85 sm:text-base">
-            Places, cafés, stays, and a trip you can actually follow — live from
-            xplorepondy.com.
+          <p className="mt-1.5 max-w-lg text-sm text-hero/85">
+            Places, cafés, stays, and a trip you can actually follow — live from xplorepondy.com.
             {source === "live" ? ` ${total.toLocaleString()} listings in the directory.` : ""}
             {user ? ` Signed in as ${user.name}.` : ""}
           </p>
-          <form onSubmit={onSearch} className="mt-6 flex max-w-lg gap-2">
+          <form onSubmit={onSearch} className="mt-4 flex max-w-lg gap-2">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Beaches, bakeries, Auroville…"
-                className="h-12 border-0 bg-card pl-10"
+                className="h-11 border-0 bg-card pl-10"
                 aria-label="Search Pondicherry"
               />
             </div>
-            <Button type="submit" size="lg">
+            <Button type="submit" size="lg" className="h-11">
               Search
             </Button>
           </form>
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Link
+              to="/get-app"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-hero/90 hover:text-hero"
+            >
+              <Smartphone className="size-4" />
+              Get the Android app
+            </Link>
+            <Link to="/trip" className="inline-flex items-center gap-1.5 text-sm font-medium text-hero/90 hover:text-hero">
+              <Compass className="size-4" />
+              Open my itinerary
+            </Link>
+          </div>
         </div>
       </section>
 
       <section>
-        <div className="mb-5 flex items-end justify-between">
+        <div className="mb-3 flex items-end justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Explore</p>
-            <h2 className="mt-1 font-display text-2xl font-semibold">Find Pondy your way</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Explore</p>
+            <h2 className="mt-0.5 font-display text-xl font-semibold">Find Pondy your way</h2>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {(Object.keys(CATEGORY_META) as Category[]).map((key) => {
             const meta = CATEGORY_META[key];
             return (
@@ -127,14 +140,12 @@ function Home() {
                 <img
                   src={meta.image}
                   alt=""
-                  className="h-36 w-full object-cover transition-transform duration-500 group-hover:scale-105 sm:h-44"
+                  className="h-24 w-full object-cover transition-transform duration-500 group-hover:scale-105 sm:h-28"
                 />
                 <div className="absolute inset-0 bg-overlay/45" />
-                <div className="absolute inset-x-0 bottom-0 p-3">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-hero-muted">
-                    {meta.kicker}
-                  </p>
-                  <p className="font-display text-lg font-semibold text-hero">{meta.label}</p>
+                <div className="absolute inset-x-0 bottom-0 p-2.5">
+                  <p className="text-[10px] font-medium uppercase tracking-wide text-hero-muted">{meta.kicker}</p>
+                  <p className="font-display text-base font-semibold text-hero">{meta.label}</p>
                 </div>
               </Link>
             );
@@ -142,51 +153,51 @@ function Home() {
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-2 gap-2 lg:grid-cols-4">
         {PILLARS.map((p) => (
-          <div key={p.title} className="rounded-xl bg-card p-5 ring-1 ring-border/70">
-            <p.icon className="size-5 text-primary" />
-            <h3 className="mt-3 font-display text-lg font-semibold">{p.title}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{p.body}</p>
+          <div key={p.title} className="flex gap-2.5 rounded-xl bg-card p-3 ring-1 ring-border/70">
+            <p.icon className="mt-0.5 size-4 shrink-0 text-primary" />
+            <div className="min-w-0">
+              <h3 className="font-display text-sm font-semibold leading-snug">{p.title}</h3>
+              <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{p.body}</p>
+            </div>
           </div>
         ))}
       </section>
 
       <section>
-        <div className="mb-5 flex items-end justify-between gap-3">
+        <div className="mb-3 flex items-end justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
-              Handpicked
-            </p>
-            <h2 className="mt-1 font-display text-2xl font-semibold">Do not miss these</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Handpicked</p>
+            <h2 className="mt-0.5 font-display text-xl font-semibold">Do not miss these</h2>
           </div>
           <Link to="/explore" className="flex items-center gap-1 text-sm font-medium text-primary">
             View all <ArrowRight className="size-4" />
           </Link>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {featured.map((l) => (
-            <ListingCard key={l.slug} listing={l} />
+            <ListingCard key={l.slug} listing={l} layout="compact" />
           ))}
         </div>
       </section>
 
       <section>
-        <div className="mb-5">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">By mood</p>
-          <h2 className="mt-1 font-display text-2xl font-semibold">Explore by theme</h2>
+        <div className="mb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">By mood</p>
+          <h2 className="mt-0.5 font-display text-xl font-semibold">Explore by theme</h2>
         </div>
-        <div className="flex gap-3 overflow-x-auto pb-2">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {THEMES.map((t) => (
             <Link
               key={t.label}
               to="/explore"
               search={{ q: t.q, cat: "all" }}
-              className="relative w-40 shrink-0 overflow-hidden rounded-xl"
+              className="relative w-32 shrink-0 overflow-hidden rounded-xl sm:w-36"
             >
-              <img src={t.image} alt="" className="h-28 w-full object-cover" />
+              <img src={t.image} alt="" className="h-20 w-full object-cover" />
               <div className="absolute inset-0 bg-overlay/40" />
-              <span className="absolute inset-x-0 bottom-0 p-3 font-display text-sm font-semibold text-hero">
+              <span className="absolute inset-x-0 bottom-0 p-2 font-display text-sm font-semibold text-hero">
                 {t.label}
               </span>
             </Link>
@@ -194,86 +205,83 @@ function Home() {
         </div>
       </section>
 
-      <section>
-        <div className="mb-5 flex items-end justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Guides</p>
-            <h2 className="mt-1 font-display text-2xl font-semibold">Read before you ride</h2>
-          </div>
-          <Link to="/guides" className="flex items-center gap-1 text-sm font-medium text-primary">
-            All guides <ArrowRight className="size-4" />
-          </Link>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {homeGuides.map((g) => (
-            <Link
-              key={g.slug}
-              to="/guides/$slug"
-              params={{ slug: g.slug }}
-              className="overflow-hidden rounded-2xl bg-card shadow-soft ring-1 ring-border/70"
-            >
-              <img src={g.image} alt="" className="h-40 w-full object-cover" />
-              <div className="p-4">
-                <p className="text-xs text-muted-foreground">
-                  {g.topic} · {g.readTime} read
-                </p>
-                <h3 className="mt-1 font-display text-lg font-semibold">{g.title}</h3>
-                <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{g.excerpt}</p>
-              </div>
+      <div className="grid gap-7 lg:grid-cols-2">
+        <section>
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Guides</p>
+              <h2 className="mt-0.5 font-display text-xl font-semibold">Read before you ride</h2>
+            </div>
+            <Link to="/guides" className="flex items-center gap-1 text-sm font-medium text-primary">
+              All <ArrowRight className="size-4" />
             </Link>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-5 flex items-end justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Now</p>
-            <h2 className="mt-1 font-display text-2xl font-semibold">What’s on</h2>
           </div>
-          <Link to="/events" className="flex items-center gap-1 text-sm font-medium text-primary">
-            All events <ArrowRight className="size-4" />
-          </Link>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          {events.slice(0, 4).map((ev) => (
-            <Link
-              key={ev.slug}
-              to="/events"
-              className="flex gap-3 overflow-hidden rounded-xl bg-card p-2 ring-1 ring-border/70"
-            >
-              <img src={ev.image} alt="" className="size-20 rounded-lg object-cover" />
-              <div className="py-1">
-                <p className="text-xs font-medium text-primary">{ev.dateLabel}</p>
-                <h3 className="font-display font-semibold">{ev.title}</h3>
-                <p className="text-xs text-muted-foreground">{ev.place}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
+          <div className="space-y-2">
+            {homeGuides.map((g) => (
+              <Link
+                key={g.slug}
+                to="/guides/$slug"
+                params={{ slug: g.slug }}
+                className="flex gap-3 overflow-hidden rounded-xl bg-card p-2 ring-1 ring-border/70"
+              >
+                <img src={g.image} alt="" className="size-20 shrink-0 rounded-lg object-cover" />
+                <div className="min-w-0 py-0.5">
+                  <p className="text-[11px] text-muted-foreground">
+                    {g.topic} · {g.readTime} read
+                  </p>
+                  <h3 className="font-display text-sm font-semibold leading-snug">{g.title}</h3>
+                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{g.excerpt}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
 
-      <section className="overflow-hidden rounded-2xl bg-primary px-6 py-10 text-primary-foreground sm:px-10">
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+        <section>
+          <div className="mb-3 flex items-end justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Now</p>
+              <h2 className="mt-0.5 font-display text-xl font-semibold">What’s on</h2>
+            </div>
+            <Link to="/events" className="flex items-center gap-1 text-sm font-medium text-primary">
+              All <ArrowRight className="size-4" />
+            </Link>
+          </div>
+          <div className="space-y-2">
+            {events.slice(0, 4).map((ev) => (
+              <Link
+                key={ev.slug}
+                to="/events"
+                className="flex gap-3 overflow-hidden rounded-xl bg-card p-2 ring-1 ring-border/70"
+              >
+                <img src={ev.image} alt="" className="size-16 shrink-0 rounded-lg object-cover" />
+                <div className="min-w-0 py-0.5">
+                  <p className="text-[11px] font-medium text-primary">{ev.dateLabel}</p>
+                  <h3 className="font-display text-sm font-semibold leading-snug">{ev.title}</h3>
+                  <p className="text-xs text-muted-foreground">{ev.place}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section className="overflow-hidden rounded-2xl bg-primary px-5 py-6 text-primary-foreground sm:px-8">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="max-w-lg">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary-foreground/70">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary-foreground/70">
               Custom trips
             </p>
-            <h2 className="mt-2 font-display text-3xl font-semibold">
+            <h2 className="mt-1 font-display text-2xl font-semibold leading-snug">
               Tell us how you travel. We’ll shape Pondy around it.
             </h2>
-            <p className="mt-3 text-sm text-primary-foreground/80">
-              Verified agents, 100% custom itineraries, assistance around the clock — the same
-              promise as xplorepondy.com, now in your pocket.
+            <p className="mt-2 text-sm text-primary-foreground/80">
+              Verified agents, 100% custom itineraries, assistance around the clock — the same promise as
+              xplorepondy.com, now in your pocket.
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button
-              asChild
-              variant="secondary"
-              size="lg"
-              className="bg-card text-foreground hover:bg-card/90"
-            >
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+            <Button asChild variant="secondary" className="bg-card text-foreground hover:bg-card/90">
               <Link to="/plan">
                 <Compass />
                 Plan a custom trip
@@ -282,7 +290,6 @@ function Home() {
             <Button
               asChild
               variant="outline"
-              size="lg"
               className="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10"
             >
               <Link to="/trip">Open my itinerary</Link>

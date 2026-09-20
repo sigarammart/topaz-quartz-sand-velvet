@@ -57,6 +57,7 @@ export type Listing = {
   bestFor: string[];
   image: string;
   siteUrl: string;
+  wpId?: number;
   lat?: number;
   lng?: number;
   price?: string;
@@ -64,6 +65,7 @@ export type Listing = {
   duration?: string;
   entry?: string;
   featured?: boolean;
+  listingPackage?: number;
   phone?: string;
   address?: string;
   cafeTypes?: string[];

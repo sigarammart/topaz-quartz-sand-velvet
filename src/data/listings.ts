@@ -998,7 +998,7 @@ export function searchListings(query: string) {
   });
 }
 
-export function nearbyListings(slug: string, limit = 3) {
+export function nearbyListings(slug: string, limit = 4) {
   const current = getListing(slug);
   if (!current) return listings.slice(0, limit);
   return listings

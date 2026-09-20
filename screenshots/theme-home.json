@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Xplore Pondy",
+      "hasCanvas": false,
+      "bodyTextLen": 2349,
+      "bodyTextHash": "b90fb7645a365e37946a7cb46485590e7f5a1c6986aed24de51f56f7c2a86303",
+      "bodyTextPrefix": "Home Explore Guides Trip Saved Events Dark Day Plan a trip App S",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/theme-home.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Xplore Pondy",
+      "hasCanvas": false,
+      "bodyTextLen": 2233,
+      "bodyTextHash": "30303a0a313326e7d2dc3bb0da13a4d76e0e8531c8f034c1fe8e0a77443945bd",
+      "bodyTextPrefix": "PONDICHERRY TRAVEL PLANNER Explore Puducherry like never before ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/theme-home-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/theme-home.json"
+}

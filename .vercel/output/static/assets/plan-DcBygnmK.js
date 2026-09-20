@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-Cltr0gcK.js";import{n as t}from"./useNavigate-B39gENa9.js";import{t as n}from"./trip-form-wizard-CBo21sDd.js";var r=e();function i(){let e=t();return(0,r.jsx)(n,{afterSave:()=>void e({to:`/trip`})})}export{i as component};

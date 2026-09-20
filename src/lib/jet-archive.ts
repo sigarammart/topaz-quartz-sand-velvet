@@ -12,6 +12,8 @@ export type JetArchiveHit = {
   hours?: string;
   openNow?: boolean;
   weeklyHours?: DayHours[];
+  featured?: boolean;
+  listingPackage?: number;
 };
 
 const SKIP_QVAR = new Set([
@@ -179,12 +181,14 @@ export function parseArchiveHtml(html: string): JetArchiveHit[] {
   const markers = parseMapMarkers(html);
   const hits: JetArchiveHit[] = [];
   const chunks = html.split(/data-post-id="/).slice(1);
+  let rank = 0;
   for (const chunk of chunks) {
     const id = Number(chunk.slice(0, chunk.indexOf('"')));
     const href = chunk.match(/https:\/\/xplorepondy\.com\/listing\/[^"\s>]+/);
     if (!href) continue;
     const slug = href[0].replace(/\/$/, "").split("/").pop();
     if (!slug) continue;
+    rank += 1;
     const window = chunk.slice(0, 36000);
     const facets = new Map<string, ListingTaxGroup>();
     const mustTry: string[] = [];
@@ -192,6 +196,7 @@ export function parseArchiveHtml(html: string): JetArchiveHit[] {
     const used = new Set<string>();
     const hoursInfo = parseOpenHoursHtml(window);
     const geo = Number.isFinite(id) ? markers.get(id) : undefined;
+    const featured = /badge-nl featured-nl/.test(window);
 
     const labeled = [...window.matchAll(/<strong>([^<]+)<\/strong>\s*([^<]*)/g)];
     for (const [, titleRaw, valuesRaw] of labeled) {
@@ -227,7 +232,7 @@ export function parseArchiveHtml(html: string): JetArchiveHit[] {
     }
 
     const list = [...facets.values()].filter((g) => g.terms.length);
-    if (!list.length && !mustTry.length && !geo && !hoursInfo.hours) continue;
+    if (!list.length && !mustTry.length && !geo && !hoursInfo.hours && !featured) continue;
     hits.push({
       slug,
       mustTry,
@@ -242,6 +247,8 @@ export function parseArchiveHtml(html: string): JetArchiveHit[] {
       hours: hoursInfo.hours || undefined,
       openNow: hoursInfo.openNow,
       weeklyHours: hoursInfo.weeklyHours.length ? hoursInfo.weeklyHours : undefined,
+      featured: featured || undefined,
+      listingPackage: rank,
     });
   }
   return hits;
@@ -270,6 +277,11 @@ function mergeHit(prev: JetArchiveHit, hit: JetArchiveHit): JetArchiveHit {
     hours: prev.hours || hit.hours,
     openNow: prev.openNow ?? hit.openNow,
     weeklyHours: prev.weeklyHours?.length ? prev.weeklyHours : hit.weeklyHours,
+    featured: prev.featured || hit.featured,
+    listingPackage:
+      prev.listingPackage != null && hit.listingPackage != null
+        ? Math.min(prev.listingPackage, hit.listingPackage)
+        : (prev.listingPackage ?? hit.listingPackage),
   };
 }
 
@@ -316,11 +328,12 @@ async function pool<T>(items: T[], size: number, worker: (item: T) => Promise<vo
 
 export async function loadJetArchiveMeta(
   categorySlugs: string[],
+  into?: Map<string, JetArchiveHit>,
 ): Promise<Map<string, JetArchiveHit>> {
-  const bySlug = new Map<string, JetArchiveHit>();
+  const bySlug = into ?? new Map<string, JetArchiveHit>();
   const markers = new Map<number, { lat: number; lng: number }>();
-  const slugs = [...new Set(categorySlugs.filter(Boolean))].slice(0, 10);
-  await pool(slugs, 8, async (cat) => {
+  const slugs = [...new Set(categorySlugs.filter(Boolean))].slice(0, 8);
+  await pool(slugs, 4, async (cat) => {
     for (let page = 1; page <= 2; page++) {
       const url =
         page === 1

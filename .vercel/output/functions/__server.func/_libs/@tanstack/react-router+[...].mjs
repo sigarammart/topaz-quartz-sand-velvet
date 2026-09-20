@@ -1,8 +1,8 @@
-import { i as __toESM, r as __require, t as __commonJSMin } from "../../_runtime.mjs";
+import { i as __require, o as __toESM, t as __commonJSMin } from "../../_runtime.mjs";
 import { n as require_react } from "../@radix-ui/react-compose-refs+[...].mjs";
-import { r as parseHref } from "../tanstack__history.mjs";
 import { n as require_jsx_runtime } from "../radix-ui__react-context+react.mjs";
 import { l as require_react_dom } from "../@radix-ui/react-dialog+[...].mjs";
+import { r as parseHref } from "../tanstack__history.mjs";
 import { PassThrough, Readable } from "node:stream";
 import { ReadableStream as ReadableStream$1 } from "node:stream/web";
 //#region node_modules/@tanstack/router-core/dist/esm/not-found.js
@@ -3813,11 +3813,11 @@ var BaseRootRoute = class extends BaseRoute {
 };
 //#endregion
 //#region node_modules/@tanstack/router-core/dist/esm/ssr/constants.js
+var import_jsx_runtime = require_jsx_runtime();
 var GLOBAL_TSR = "$_TSR";
 var TSR_SCRIPT_BARRIER_ID = "$tsr-stream-barrier";
 //#endregion
 //#region node_modules/@tanstack/react-router/dist/esm/CatchBoundary.js
-var import_jsx_runtime = require_jsx_runtime();
 var CatchBoundary = class extends import_react.Component {
 	constructor(..._args) {
 		super(..._args);
@@ -4445,6 +4445,31 @@ function useNavigate(_defaultOpts) {
 			from: options.from ?? _defaultOpts?.from
 		});
 	}, [_defaultOpts?.from, router]);
+}
+/**
+* Component that triggers a navigation when rendered. Navigation executes
+* in an effect after mount/update.
+*
+* Props are the same as `NavigateOptions` used by `navigate()`.
+*
+* @returns null
+* @link https://tanstack.com/router/latest/docs/framework/react/api/router/navigateComponent
+*/
+function Navigate(props) {
+	const router = useRouter();
+	const navigate = useNavigate();
+	const previousPropsRef = import_react.useRef(null);
+	useLayoutEffect(() => {
+		if (previousPropsRef.current !== props) {
+			navigate(props);
+			previousPropsRef.current = props;
+		}
+	}, [
+		router,
+		props,
+		navigate
+	]);
+	return null;
 }
 //#endregion
 //#region node_modules/@tanstack/react-router/dist/esm/useRouteContext.js
@@ -14586,4 +14611,4 @@ var renderRouterToStream = async ({ request, router, responseHeaders, children }
 	throw new Error("No renderToReadableStream or renderToPipeableStream found in react-dom/server. Ensure you are using a version of react-dom that supports streaming.");
 };
 //#endregion
-export { executeRewriteInput as A, notFound as B, createInlineCssPlaceholderAsset as C, resolveManifestAssetLink as D, getStylesheetHref as E, isResolvedRedirect as F, parseRedirect as I, decodePath as L, createSieveCache as M, dehydrateSsrMatchId as N, resolveManifestCssLink as O, isRedirect as P, rootRouteId as R, TSR_SCRIPT_BARRIER_ID as S, getScriptPreloadAttrs as T, createRootRoute as _, isSsrResponse as a, useRouter as b, stripSsrResponseBody as c, useRouterState as d, RouterProvider as f, createFileRoute as g, lazyRouteComponent as h, disposeSsrResponseDetached as i, invariant as j, _getRenderedMatches as k, Scripts as l, Outlet as m, bindSsrResponseToRequest as n, normalizeSsrResponse as o, createRouter as p, defineHandlerCallback as r, replaceSsrResponse as s, renderRouterToStream as t, HeadContent as u, Link as v, createInlineCssStyleAsset as w, GLOBAL_TSR as x, useNavigate as y, isNotFound as z };
+export { _getRenderedMatches as A, isNotFound as B, TSR_SCRIPT_BARRIER_ID as C, getStylesheetHref as D, getScriptPreloadAttrs as E, isRedirect as F, isResolvedRedirect as I, parseRedirect as L, invariant as M, createSieveCache as N, resolveManifestAssetLink as O, dehydrateSsrMatchId as P, decodePath as R, GLOBAL_TSR as S, createInlineCssStyleAsset as T, notFound as V, createRootRoute as _, isSsrResponse as a, useNavigate as b, stripSsrResponseBody as c, useRouterState as d, RouterProvider as f, createFileRoute as g, lazyRouteComponent as h, disposeSsrResponseDetached as i, executeRewriteInput as j, resolveManifestCssLink as k, Scripts as l, Outlet as m, bindSsrResponseToRequest as n, normalizeSsrResponse as o, createRouter as p, defineHandlerCallback as r, replaceSsrResponse as s, renderRouterToStream as t, HeadContent as u, Link as v, createInlineCssPlaceholderAsset as w, useRouter as x, Navigate as y, rootRouteId as z };

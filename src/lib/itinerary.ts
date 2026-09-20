@@ -68,6 +68,23 @@ function stopBlurb(listing: Listing, polish: boolean) {
   return firstSentence(listing.description) || `${listing.kind} in ${listing.area || listing.location}.`;
 }
 
+export function attachTravel(days: ItineraryDay[], listings: Listing[], origin: LatLng = ANNA_SALAI): ItineraryDay[] {
+  const bySlug = new Map(listings.map((l) => [l.slug, l]));
+  return days.map((block) => {
+    let prev: Listing | undefined;
+    const stops = block.stops.map((stop) => {
+      const listing = bySlug.get(stop.slug);
+      const travel = listing ? (prev ? travelLeg(prev, listing) : travelLeg(origin, listing)) : undefined;
+      if (listing) prev = listing;
+      return {
+        ...stop,
+        travel: travel && travel.minutes > 3 ? travel : undefined,
+      };
+    });
+    return { ...block, stops };
+  });
+}
+
 export function buildTripItinerary({
   items,
   listings,

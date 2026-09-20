@@ -1,13 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Clock, GripVertical, Sparkles, Star, Wand2, X } from "lucide-react";
+import { Check, Clock, GripVertical, Sparkles, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ListingMap } from "@/components/listing-map";
 import { TripFormWizard } from "@/components/trip-form-wizard";
 import { AddDayModal, useAddDayModal } from "@/components/add-day-modal";
+import { TripPaneBar, type TripPane } from "@/components/trip-pane-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { WP_ORIGIN } from "@/lib/wp-api";
+import { generateAiItinerary } from "@/lib/ai-itinerary";
 import {
   formatTripDates,
   interestLabel,
@@ -17,17 +19,26 @@ import {
   TRIP_LOCATIONS,
   TRIP_TYPES,
 } from "@/lib/trip-form";
-import { buildTripItinerary, travelLabel } from "@/lib/itinerary";
+import { attachTravel, buildTripItinerary, travelLabel } from "@/lib/itinerary";
 import { ANNA_SALAI } from "@/lib/geo";
+import { cn } from "@/lib/utils";
 import { useGeo } from "@/store/geo";
 import { resolveListing, useCatalog } from "@/store/catalog";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useTrip } from "@/store/trip";
 
-export const Route = createFileRoute("/trip")({ component: TripPage });
+type TripTab = "interests" | "saved" | "all";
+
+export const Route = createFileRoute("/trip")({
+  validateSearch: (search: Record<string, unknown>): { tab?: TripTab } => ({
+    tab: search.tab === "saved" || search.tab === "all" || search.tab === "interests" ? search.tab : undefined,
+  }),
+  component: TripPage,
+});
 
 function TripPage() {
   const hydrated = useHydrated();
+  const { tab: tabParam } = Route.useSearch();
   const catalog = useCatalog((s) => s.items);
   const started = useTrip((s) => s.started);
   const title = useTrip((s) => s.title);
@@ -40,7 +51,7 @@ function TripPage() {
   const end = useTrip((s) => s.end);
   const interests = useTrip((s) => s.interests);
   const items = useTrip((s) => s.items);
-  const saved = useTrip((s) => s.saved);
+  const tempTrip = useTrip((s) => s.tempTrip);
   const wpUrl = useTrip((s) => s.wpUrl);
   const addToDay = useTrip((s) => s.addToDay);
   const removeItem = useTrip((s) => s.removeItem);
@@ -51,13 +62,26 @@ function TripPage() {
   const origin = useGeo((s) => s.origin) ?? ANNA_SALAI;
   const [busy, setBusy] = useState<"generate" | "ai" | null>(null);
   const [day, setDay] = useState(1);
-  const [tab, setTab] = useState<"interests" | "saved" | "all">("interests");
+  const [tab, setTab] = useState<TripTab>(tabParam ?? "interests");
   const [chip, setChip] = useState<string>(interests[0] ?? "");
   const [q, setQ] = useState("");
   const [selectedSlug, setSelectedSlug] = useState<string | undefined>();
   const [drag, setDrag] = useState<string | null>(null);
+  const [pane, setPane] = useState<TripPane>("locations");
   const addDay = useAddDayModal();
   const seeded = useRef(false);
+  const tabSeeded = useRef(false);
+
+  useEffect(() => {
+    if (tabParam) {
+      setTab(tabParam);
+      tabSeeded.current = true;
+      return;
+    }
+    if (tabSeeded.current || !hydrated) return;
+    tabSeeded.current = true;
+    if (tempTrip.length > 0) setTab("saved");
+  }, [hydrated, tabParam, tempTrip.length]);
 
   useEffect(() => {
     if (seeded.current || !hydrated || items.length > 0 || catalog.length < 8 || interests.length === 0) return;
@@ -80,22 +104,45 @@ function TripPage() {
 
   const interestChips = interests.length ? interests : ["cafes", "activities", "beaches"];
   const activeChip = chip || interestChips[0];
+  const locationLabel = locations.map((s) => TRIP_LOCATIONS.find((l) => l.slug === s)?.label ?? s).join(", ") || "Pondicherry";
 
   const pool = useMemo(() => {
+    if (tab === "saved") {
+      const rows = [...tempTrip]
+        .reverse()
+        .map((slug) => resolveListing(slug, catalog))
+        .filter((l): l is NonNullable<typeof l> => !!l);
+      if (!q.trim()) return rows;
+      const needle = q.toLowerCase();
+      return rows.filter((l) => `${l.name} ${l.kind} ${l.location}`.toLowerCase().includes(needle));
+    }
     let rows = catalog;
-    if (tab === "saved") rows = catalog.filter((l) => saved.includes(l.slug));
-    else if (tab === "interests") rows = catalog.filter((l) => listingMatchesInterest(l, activeChip));
+    if (tab === "interests") rows = catalog.filter((l) => listingMatchesInterest(l, activeChip));
     if (q.trim()) {
       const needle = q.toLowerCase();
       rows = rows.filter((l) => `${l.name} ${l.kind} ${l.location}`.toLowerCase().includes(needle));
     }
     return rows.slice(0, 24);
-  }, [catalog, tab, saved, activeChip, q]);
+  }, [catalog, tab, tempTrip, activeChip, q]);
 
   const dayItems = items.filter((i) => i.day === day);
   const dayListings = dayItems.map((i) => resolveListing(i.slug, catalog)).filter(Boolean);
 
-  function runItinerary(polish: boolean) {
+  function applyLocalItinerary(polish: boolean) {
+    const built = buildTripItinerary({
+      items,
+      listings: catalog,
+      days,
+      polish,
+      origin,
+      tripType,
+      interests,
+      locationLabel,
+    });
+    setItinerary(built.days, built.items, polish);
+  }
+
+  async function runItinerary(polish: boolean) {
     const chosen = items
       .map((i) => resolveListing(i.slug, catalog))
       .filter((l): l is NonNullable<typeof l> => !!l);
@@ -104,44 +151,78 @@ function TripPage() {
       return;
     }
     setBusy(polish ? "ai" : "generate");
-    window.setTimeout(() => {
-      const built = buildTripItinerary({
-        items,
-        listings: catalog,
-        days,
-        polish,
-        origin,
-        tripType,
-        interests,
-        locationLabel: locations.map((s) => TRIP_LOCATIONS.find((l) => l.slug === s)?.label ?? s).join(", ") || "Pondicherry",
+    if (!polish) {
+      window.setTimeout(() => {
+        applyLocalItinerary(false);
+        setBusy(null);
+        setPane("itinerary");
+        toast.success("Itinerary created");
+      }, 250);
+      return;
+    }
+    try {
+      const slim = chosen.slice(0, 40).map((l) => ({
+        slug: l.slug,
+        name: l.name,
+        kind: l.kind,
+        area: l.area,
+        category: l.category,
+        description: (l.description || "").slice(0, 280),
+        ...(Number.isFinite(l.lat) ? { lat: l.lat } : {}),
+        ...(Number.isFinite(l.lng) ? { lng: l.lng } : {}),
+        ...(l.duration ? { duration: l.duration } : {}),
+      }));
+      const result = await generateAiItinerary({
+        data: {
+          days,
+          tripType,
+          interests,
+          locationLabel,
+          items,
+          listings: slim,
+        },
       });
-      setItinerary(built.days, built.items, polish);
+      if (result.ok && result.days.length) {
+        setItinerary(attachTravel(result.days, catalog, origin), result.items, true);
+        toast.success("AI itinerary ready");
+      } else {
+        applyLocalItinerary(true);
+        toast.message("AI was busy — local itinerary ready");
+      }
+    } catch {
+      applyLocalItinerary(true);
+      toast.message("AI was busy — local itinerary ready");
+    } finally {
       setBusy(null);
-      toast.success(polish ? "AI itinerary ready" : "Itinerary created");
-    }, 450);
+      setPane("itinerary");
+    }
   }
 
   if (!hydrated) return <p className="py-16 text-center text-sm text-muted-foreground">Loading trip…</p>;
 
-  if (!started && items.length === 0) {
+  if (!started && items.length === 0 && tempTrip.length === 0) {
     return <TripFormWizard />;
   }
 
-  const locationLabel = locations.map((s) => TRIP_LOCATIONS.find((l) => l.slug === s)?.label ?? s).join(", ");
   const budgetLabel = TRIP_BUDGETS.find((b) => b.slug === budget)?.label ?? budget;
   const typeLabel = TRIP_TYPES.find((t) => t.slug === tripType)?.label ?? tripType;
   const dateLabel = formatTripDates(start, end);
 
   return (
-    <div className="-mx-4 px-3 lg:-mx-0">
-      <section className="relative overflow-hidden rounded-2xl">
+    <div className="min-w-0">
+      <section className={cn("relative overflow-hidden rounded-2xl", pane === "map" ? "max-lg:hidden" : "block")}>
         <img src="/images/lighthouse.jpg" alt="" className="h-40 w-full object-cover sm:h-48" />
         <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/40 to-transparent" />
+        <div className="absolute right-3 top-3 z-10">
+          <Button variant="outline" size="sm" asChild className="bg-card/95 shadow-soft">
+            <Link to="/plan">Edit selection</Link>
+          </Button>
+        </div>
         <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
           <h1 className="font-display text-xl font-semibold leading-snug sm:text-2xl">{title}</h1>
           <div className="mt-3 flex flex-wrap gap-2">
-            <MetaChip label="Size" value={typeLabel} />
-            <MetaChip label="Budget" value={budgetLabel} />
+            <MetaChip label="Size" value={typeLabel || "Open"} />
+            <MetaChip label="Budget" value={budgetLabel || "Any"} />
             {code ? <MetaChip label="Code" value={code} /> : null}
             <MetaChip label="Location" value={locationLabel || "Pondicherry"} />
           </div>
@@ -149,13 +230,27 @@ function TripPage() {
         </div>
       </section>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)_minmax(0,0.85fr)]">
-        <section className="rounded-2xl bg-card p-3 ring-1 ring-border/70 sm:p-4">
+      <div
+        className={cn(
+          "mt-4 grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.95fr)_minmax(0,0.9fr)] lg:items-stretch",
+          pane === "map" && "max-lg:mt-0",
+        )}
+      >
+        <section
+          id="trip-panel-locations"
+          role="tabpanel"
+          aria-labelledby="trip-pane-locations"
+          className={cn(
+            "min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl bg-card p-3 ring-1 ring-border/70 sm:p-4 lg:max-h-[calc(100dvh-10rem)]",
+            pane === "locations" ? "flex" : "hidden lg:flex",
+          )}
+        >
+          <div className="shrink-0">
           <div className="flex flex-wrap gap-2">
             {(
               [
                 ["interests", "Chosen interests"],
-                ["saved", "Saved"],
+                ["saved", tempTrip.length ? `Saved (${tempTrip.length})` : "Saved"],
                 ["all", "Categories"],
               ] as const
             ).map(([key, label]) => (
@@ -189,78 +284,105 @@ function TripPage() {
               ))}
             </div>
           )}
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search …" className="mt-3 h-10" />
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {pool.map((listing) => {
-              const picked = items.find((i) => i.slug === listing.slug);
-              return (
-                <article key={listing.slug} className="overflow-hidden rounded-xl bg-background ring-1 ring-border/70">
-                  <img src={listing.image} alt="" className="h-24 w-full object-cover" />
-                  <div className="p-2">
-                    <p className="line-clamp-2 text-xs font-semibold leading-snug">{listing.name}</p>
-                    {listing.rating > 0 && (
-                      <p className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <Star className="size-3 fill-primary text-primary" />
-                        {listing.rating.toFixed(1)} ({listing.reviews.toLocaleString()})
-                      </p>
-                    )}
-                    {picked ? (
-                      <div className="mt-2 flex items-center gap-1">
-                        <button
-                          type="button"
-                          className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-accent-foreground"
-                          onClick={() => addDay.open({ slug: listing.slug, name: listing.name, currentDay: picked.day })}
-                        >
-                          Day {picked.day}
-                        </button>
-                        <button
-                          type="button"
-                          className="ml-auto text-[11px] font-medium text-destructive"
-                          onClick={() => removeItem(listing.slug)}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ) : (
-                      <Button
-                        size="sm"
-                        className="mt-2 h-8 w-full text-xs"
-                        onClick={() => addDay.open({ slug: listing.slug, name: listing.name })}
-                      >
-                        + Add
-                      </Button>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+          {tab === "saved" && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Saved from listing cards. Tap Add to put a place on a day.
+            </p>
+          )}
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={tab === "saved" ? "Search saved…" : "Search listings…"}
+            className="mt-3 h-10"
+            aria-label="Search trip listings"
+          />
           </div>
-          {pool.length === 0 && <p className="mt-6 text-center text-sm text-muted-foreground">No listings in this set.</p>}
+          <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {pool.map((listing) => {
+                const assigned = items.find((i) => i.slug === listing.slug);
+                return (
+                  <article
+                    key={listing.slug}
+                    className="flex min-w-0 flex-col overflow-hidden rounded-xl bg-background ring-1 ring-border/70"
+                  >
+                    <Link to="/place/$slug" params={{ slug: listing.slug }} className="block">
+                      <img src={listing.image} alt="" className="aspect-[4/3] w-full object-cover" />
+                    </Link>
+                    <div className="flex min-w-0 flex-1 flex-col gap-2 p-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-xs font-semibold leading-snug">{listing.name}</p>
+                        <p className="truncate text-[11px] text-muted-foreground">{listing.kind}</p>
+                      </div>
+                      {assigned ? (
+                        <div className="mt-auto flex gap-1.5">
+                          <button
+                            type="button"
+                            className="inline-flex h-8 min-w-0 flex-1 items-center justify-center gap-1 rounded-full bg-muted px-2 text-[11px] font-semibold text-muted-foreground"
+                            onClick={() => removeItem(listing.slug, assigned.day)}
+                          >
+                            <Check className="size-3.5" />
+                            Remove
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-8 shrink-0 items-center justify-center rounded-full bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground"
+                            onClick={() => addDay.open({ slug: listing.slug, name: listing.name, currentDay: assigned.day })}
+                          >
+                            Day {assigned.day}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="mt-auto inline-flex h-8 w-full items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
+                          onClick={() => addDay.open({ slug: listing.slug, name: listing.name })}
+                        >
+                          + Add
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+            {pool.length === 0 && (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                {tab === "saved" ? "Save listings from cards to see them here." : "No listings match."}
+              </p>
+            )}
+          </div>
         </section>
 
-        <section className="rounded-2xl bg-card p-3 ring-1 ring-border/70 sm:p-4">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h2 className="font-display text-lg font-semibold">Your selected listings</h2>
-              <p className="text-xs text-muted-foreground">Drag to reorder by preference</p>
+        <section
+          id="trip-panel-itinerary"
+          role="tabpanel"
+          aria-labelledby="trip-pane-itinerary"
+          className={cn(
+            "min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl bg-card p-3 ring-1 ring-border/70 sm:p-4 lg:max-h-[calc(100dvh-10rem)]",
+            pane === "itinerary" ? "flex" : "hidden lg:flex",
+          )}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-display text-lg font-semibold">Itinerary</h2>
+            <div className="flex gap-1">
+              {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDay(d)}
+                  className={cn(
+                    "flex size-8 items-center justify-center rounded-full text-xs font-semibold ring-1",
+                    day === d ? "bg-primary text-primary-foreground ring-primary" : "ring-border",
+                  )}
+                >
+                  {d}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="mt-3 flex gap-2">
-            {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
-              <button
-                key={d}
-                type="button"
-                onClick={() => setDay(d)}
-                className={cn(
-                  "h-9 rounded-full px-4 text-xs font-semibold",
-                  day === d ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-                )}
-              >
-                Day {d}
-              </button>
-            ))}
-          </div>
-          <ol className="mt-4 space-y-2">
+          <p className="mt-1 text-xs text-muted-foreground">Day {day} · drag to reorder</p>
+          <ol className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
             {dayListings.map((listing, index) => {
               if (!listing) return null;
               const prev = dayListings[index - 1];
@@ -269,7 +391,7 @@ function TripPage() {
                 <li key={listing.slug}>
                   {leg && (
                     <p className="mb-1 pl-10 text-[11px] text-muted-foreground">
-                      {leg.minutes} min · {leg.km < 1 ? `${Math.round(leg.km * 1000)} m` : `${leg.km.toFixed(1)} km`}
+                      {leg.minutes} min · {travelLabel(leg.km)}
                     </p>
                   )}
                   <div
@@ -288,8 +410,9 @@ function TripPage() {
                       setDrag(null);
                     }}
                     className={cn(
-                      "flex gap-3 rounded-xl bg-background p-2 ring-1",
-                      selectedSlug === listing.slug ? "ring-primary" : "ring-border/70",
+                      "flex cursor-grab gap-2 rounded-xl bg-background p-2 ring-1 ring-border/70 active:cursor-grabbing",
+                      drag === listing.slug && "opacity-60",
+                      selectedSlug === listing.slug && "ring-primary",
                     )}
                     onClick={() => setSelectedSlug(listing.slug)}
                   >
@@ -323,22 +446,26 @@ function TripPage() {
             })}
           </ol>
           {dayListings.length === 0 && (
-            <p className="mt-8 text-center text-sm text-muted-foreground">Add listings from the left for Day {day}.</p>
+            <p className="mt-8 text-center text-sm text-muted-foreground">Add listings from Saved for Day {day}.</p>
           )}
           <div className="mt-5 flex flex-wrap gap-2">
             <Button variant="outline" size="sm" asChild>
               <Link to="/plan">Edit selection</Link>
             </Button>
-            <Button size="sm" disabled={busy != null} onClick={() => runItinerary(false)}>
+            <Button size="sm" disabled={busy != null} onClick={() => void runItinerary(false)}>
               <Wand2 className="size-3.5" />
               {busy === "generate" ? "Generating…" : itinerary ? "Regenerate itinerary" : "Generate itinerary"}
             </Button>
-            <Button variant="secondary" size="sm" disabled={busy != null} onClick={() => runItinerary(true)}>
+            <Button variant="secondary" size="sm" disabled={busy != null} onClick={() => void runItinerary(true)}>
               <Sparkles className="size-3.5" />
-              {busy === "ai" ? "Polishing…" : "AI generator"}
+              {busy === "ai" ? "Writing with AI…" : "AI generator"}
             </Button>
           </div>
-          {busy && <p className="mt-3 text-sm text-muted-foreground">Generating itinerary… please wait.</p>}
+          {busy && (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {busy === "ai" ? "Asking Gemini to shape the days…" : "Generating itinerary… please wait."}
+            </p>
+          )}
           {itinerary && itinerary.length > 0 && (
             <div className="mt-5 rounded-xl bg-background p-3 ring-1 ring-border/70">
               <h3 className="font-display text-base font-semibold">
@@ -376,42 +503,32 @@ function TripPage() {
               </div>
             </div>
           )}
-          {wpUrl && (
+          {wpUrl ? (
             <a href={wpUrl} className="mt-3 block text-xs text-primary hover:underline" target="_blank" rel="noreferrer">
               Open on {WP_ORIGIN.replace("https://", "")}
             </a>
-          )}
+          ) : null}
         </section>
 
-        <section className="rounded-2xl bg-card p-3 ring-1 ring-border/70 sm:p-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold">Map view</h2>
-            <div className="flex gap-1">
-              {Array.from({ length: days }, (_, i) => i + 1).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => setDay(d)}
-                  className={cn(
-                    "h-8 rounded-full px-3 text-[11px] font-semibold",
-                    day === d ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  Day {d}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="mt-3">
-            <ListingMap
-              listings={dayListings.filter((l): l is NonNullable<typeof l> => !!l)}
-              selected={selectedSlug}
-              onSelect={setSelectedSlug}
-            />
-          </div>
+        <section
+          id="trip-panel-map"
+          role="tabpanel"
+          aria-labelledby="trip-pane-map"
+          className={cn(
+            "min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl bg-card p-0 ring-1 ring-border/70 lg:max-h-[calc(100dvh-10rem)]",
+            pane === "map" ? "flex max-lg:min-h-[calc(100dvh-8.5rem)]" : "hidden lg:flex",
+          )}
+        >
+          <ListingMap
+            listings={dayListings.filter((l): l is NonNullable<typeof l> => !!l)}
+            selected={selectedSlug}
+            onSelect={setSelectedSlug}
+            className="h-full min-h-[22rem] rounded-none ring-0 sm:h-full"
+          />
         </section>
       </div>
 
+      <TripPaneBar pane={pane} onChange={setPane} badge={items.length} />
       <AddDayModal
         pending={addDay.pending}
         days={days}
@@ -430,9 +547,9 @@ function TripPage() {
 
 function MetaChip({ label, value }: { label: string; value: string }) {
   return (
-    <span className="rounded-full bg-card/90 px-3 py-1 text-[11px] font-medium text-foreground backdrop-blur-sm">
-      <span className="text-muted-foreground">{label} · </span>
-      {value}
+    <span className="inline-flex items-center gap-1 rounded-full bg-card/90 px-2.5 py-1 text-[11px] ring-1 ring-border/70">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium">{value}</span>
     </span>
   );
 }

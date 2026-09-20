@@ -4,7 +4,10 @@ import { listingIsOpen } from "@/lib/hours";
 import { listingPinNumbers } from "@/lib/pins";
 import { cn } from "@/lib/utils";
 import { ListingCard } from "@/components/listing-card";
+import { GoogleListingMap } from "@/components/google-listing-map";
+import { loadGoogleMaps } from "@/lib/google-maps";
 import { useGeo } from "@/store/geo";
+import { useTheme } from "@/store/theme";
 
 const PONDICHERRY = { lat: 11.934, lng: 79.832 };
 const TILE = 256;
@@ -12,6 +15,13 @@ const MIN_ZOOM = 10;
 const MAX_ZOOM = 18;
 
 type MapView = { lat: number; lng: number; zoom: number };
+
+type ListingMapProps = {
+  listings: Listing[];
+  selected?: string;
+  onSelect: (slug: string | undefined) => void;
+  className?: string;
+};
 
 function project(lat: number, lng: number, zoom: number) {
   const n = 2 ** zoom;
@@ -74,16 +84,36 @@ function fit(pins: Array<{ lat: number; lng: number }>, width: number, height: n
   return { ...mid, zoom: MIN_ZOOM };
 }
 
-export function ListingMap({
-  listings,
-  selected,
-  onSelect,
-}: {
-  listings: Listing[];
-  selected?: string;
-  onSelect: (slug: string | undefined) => void;
-}) {
+export function ListingMap(props: ListingMapProps) {
+  const [engine, setEngine] = useState<"pending" | "google" | "osm">("pending");
+  useEffect(() => {
+    let cancelled = false;
+    void loadGoogleMaps().then((ok) => {
+      if (!cancelled) setEngine(ok ? "google" : "osm");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (engine === "google") return <GoogleListingMap {...props} />;
+  if (engine === "osm") return <OsmListingMap {...props} />;
+  return (
+    <div
+      className={cn(
+        "relative h-[22rem] overflow-hidden rounded-2xl bg-muted ring-1 ring-border sm:h-[28rem]",
+        props.className,
+      )}
+      aria-busy="true"
+      aria-label="Loading map"
+    >
+      <p className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">Loading map…</p>
+    </div>
+  );
+}
+
+function OsmListingMap({ listings, selected, onSelect, className }: ListingMapProps) {
   const root = useRef<HTMLDivElement>(null);
+  const dark = useTheme((s) => s.mode) !== "light";
   const [size, setSize] = useState({ w: 640, h: 420 });
   const pinNumbers = useMemo(() => listingPinNumbers(listings), [listings]);
   const pins = useMemo(
@@ -198,7 +228,10 @@ export function ListingMap({
   return (
     <div
       ref={root}
-      className="relative h-[22rem] touch-none overflow-hidden rounded-2xl bg-muted ring-1 ring-border sm:h-[28rem]"
+      className={cn(
+        "relative h-[22rem] touch-none overflow-hidden rounded-2xl bg-muted ring-1 ring-border sm:h-[28rem]",
+        className,
+      )}
       style={{ touchAction: "none" }}
       onPointerDown={(e) => {
         if (e.pointerType === "mouse") {
@@ -284,8 +317,12 @@ export function ListingMap({
             key={tile.key}
             alt=""
             draggable={false}
-            src={`https://tile.openstreetmap.org/${tileZoom}/${tile.x}/${tile.y}.png`}
-            className="pointer-events-none absolute size-[256px] max-w-none select-none"
+            src={
+              dark
+                ? `https://basemaps.cartocdn.com/dark_all/${tileZoom}/${tile.x}/${tile.y}.png`
+                : `https://basemaps.cartocdn.com/rastertiles/voyager/${tileZoom}/${tile.x}/${tile.y}.png`
+            }
+            className="pointer-events-none absolute size-[256px] max-w-none select-none outline-none"
             style={{ left: tile.left, top: tile.top }}
           />
         ))}
@@ -381,7 +418,7 @@ export function ListingMap({
         </button>
       </div>
       <p className="absolute bottom-2 left-3 z-20 rounded-md bg-card/90 px-2 py-0.5 text-[10px] text-muted-foreground">
-        © OpenStreetMap · Listeo pins
+        © OpenStreetMap · CARTO
       </p>
       {pins.length === 0 && (
         <p className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 text-sm text-muted-foreground">

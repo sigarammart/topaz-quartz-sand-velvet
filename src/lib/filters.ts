@@ -1,4 +1,4 @@
-import type { Category, Listing } from "@/lib/types";
+import type { Category, Listing, ListingTaxTerm } from "@/lib/types";
 import { listingIsOpen } from "@/lib/hours";
 
 export type FilterParam =
@@ -28,6 +28,7 @@ export type FilterParam =
   | "bike"
   | "atype"
   | "prange"
+  | "area"
   | "open";
 
 export type SmartFilters = Partial<Record<FilterParam, string[]>>;
@@ -38,35 +39,63 @@ export type FilterGroup = {
   metaKeys?: string[];
   label: string;
   cats: Array<Category | "all">;
+  hints?: string[];
 };
 
 export const FILTER_GROUPS: FilterGroup[] = [
   { param: "type", tax: "listing_category", label: "Type", cats: ["all"] },
-  { param: "ctype", metaKeys: ["cafe_type"], label: "Cafe type", cats: ["food"] },
-  { param: "amen", metaKeys: ["cafe_amenities", "restaurant_amenities", "hotel_amenities", "beach_amenities", "_activity_amenities", "transport_amenities", "amenities"], label: "Amenities", cats: ["all"] },
-  { param: "atmo", metaKeys: ["cafe_atmosphere", "beach_atmosphere"], label: "Atmosphere", cats: ["all"] },
-  { param: "cfeat", metaKeys: ["cafe_features", "transport_features", "hotel_facilities"], label: "Features", cats: ["all"] },
-  { param: "ent", metaKeys: ["pub_entertainment"], label: "Entertainment", cats: ["food"] },
-  { param: "drinks", metaKeys: ["pub_drinks_amp_food"], label: "Drinks & food", cats: ["food"] },
-  { param: "dining", metaKeys: ["dining_options", "restaurant_service_options"], label: "Dining", cats: ["food"] },
-  { param: "bact", metaKeys: ["beach_activities"], label: "Beach activities", cats: ["places"] },
-  { param: "btime", metaKeys: ["beach_timing_infos"], label: "Timings", cats: ["places"] },
-  { param: "shop", metaKeys: ["beach_shopping"], label: "Shopping", cats: ["places"] },
-  { param: "bike", metaKeys: ["bike_models"], label: "Bike models", cats: ["activities"] },
-  { param: "atype", metaKeys: ["_activity_type"], label: "Activity style", cats: ["activities"] },
-  { param: "prange", metaKeys: ["price_range_filter"], label: "Price range", cats: ["all"] },
-  { param: "feat", tax: "listing_feature", label: "Listing features", cats: ["all"] },
-  { param: "cuisine", tax: "cuisine-type", label: "Cuisine", cats: ["food"] },
-  { param: "rtype", tax: "restaurant-types", label: "Restaurant type", cats: ["food"] },
-  { param: "pub", tax: "pub-type", label: "Pub type", cats: ["food"] },
-  { param: "restobar", tax: "resto-bar-type", label: "Resto bar", cats: ["food"] },
+  { param: "area", tax: "region", label: "Area", cats: ["all"] },
+  { param: "ctype", metaKeys: ["cafe_type"], label: "Cafe type", cats: ["food"], hints: ["cafe type"] },
+  {
+    param: "amen",
+    metaKeys: [
+      "cafe_amenities",
+      "restaurant_amenities",
+      "hotel_amenities",
+      "beach_amenities",
+      "_activity_amenities",
+      "transport_amenities",
+      "amenities",
+    ],
+    label: "Amenities",
+    cats: ["all"],
+    hints: ["amenit"],
+  },
+  { param: "atmo", metaKeys: ["cafe_atmosphere", "beach_atmosphere"], label: "Atmosphere", cats: ["all"], hints: ["atmosphere"] },
+  {
+    param: "cfeat",
+    metaKeys: ["cafe_features", "transport_features", "hotel_facilities"],
+    label: "Features",
+    cats: ["all"],
+    hints: ["feature", "facilit"],
+  },
+  { param: "ent", metaKeys: ["pub_entertainment"], label: "Entertainment", cats: ["food"], hints: ["entertainment"] },
+  { param: "drinks", metaKeys: ["pub_drinks_amp_food"], label: "Drinks & food", cats: ["food"], hints: ["drink"] },
+  {
+    param: "dining",
+    metaKeys: ["dining_options", "restaurant_service_options"],
+    label: "Dining",
+    cats: ["food"],
+    hints: ["dining", "service option"],
+  },
+  { param: "bact", metaKeys: ["beach_activities"], label: "Beach activities", cats: ["places"], hints: ["beach activ"] },
+  { param: "btime", metaKeys: ["beach_timing_infos"], label: "Timings", cats: ["places"], hints: ["timing"] },
+  { param: "shop", metaKeys: ["beach_shopping"], label: "Shopping", cats: ["places"], hints: ["shopping"] },
+  { param: "bike", metaKeys: ["bike_models"], label: "Bike models", cats: ["activities"], hints: ["bike"] },
+  { param: "atype", metaKeys: ["_activity_type"], label: "Activity style", cats: ["activities"], hints: ["activity type", "activity style"] },
+  { param: "prange", metaKeys: ["price_range_filter"], label: "Price range", cats: ["all"], hints: ["price"] },
+  { param: "feat", tax: "listing_feature", label: "Listing features", cats: ["all"], hints: ["feature"] },
+  { param: "cuisine", tax: "cuisine-type", label: "Cuisine", cats: ["food"], hints: ["cuisine"] },
+  { param: "rtype", tax: "restaurant-types", label: "Restaurant type", cats: ["food"], hints: ["restaurant"] },
+  { param: "pub", tax: "pub-type", label: "Pub type", cats: ["food"], hints: ["pub"] },
+  { param: "restobar", tax: "resto-bar-type", label: "Resto bar", cats: ["food"], hints: ["resto"] },
   { param: "activity", tax: "activity-type", label: "Activity type", cats: ["activities"] },
-  { param: "water", tax: "water-sport", label: "Water sports", cats: ["activities"] },
-  { param: "land", tax: "land-adventures", label: "Land adventures", cats: ["activities"] },
+  { param: "water", tax: "water-sport", label: "Water sports", cats: ["activities"], hints: ["water"] },
+  { param: "land", tax: "land-adventures", label: "Land adventures", cats: ["activities"], hints: ["land"] },
   { param: "sport", tax: "sport-type", label: "Sport", cats: ["activities"] },
   { param: "theme", tax: "by-theme", label: "Theme", cats: ["all"] },
-  { param: "ptype", tax: "property-type", label: "Property type", cats: ["stay"] },
-  { param: "pcat", tax: "property-category", label: "Property", cats: ["stay"] },
+  { param: "ptype", tax: "property-type", label: "Property type", cats: ["stay"], hints: ["property type"] },
+  { param: "pcat", tax: "property-category", label: "Property", cats: ["stay"], hints: ["property"] },
 ];
 
 export const FILTER_TAX_KEYS = [...new Set(FILTER_GROUPS.map((g) => g.tax).filter((t): t is string => !!t))];
@@ -79,7 +108,32 @@ const TYPE_SKIP = new Set([
   "rentals",
   "services",
   "events",
+  "listing",
+  "pondicherry",
 ]);
+
+export function facetSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function asTerm(name: string | undefined | null): ListingTaxTerm | null {
+  const clean = (name ?? "").replace(/\s+/g, " ").trim();
+  if (clean.length < 2 || clean.length > 48) return null;
+  const slug = facetSlug(clean);
+  if (!slug || slug.length < 2) return null;
+  return { name: clean, slug };
+}
+
+function pushTerm(out: ListingTaxTerm[], seen: Set<string>, name?: string | null) {
+  const term = asTerm(name);
+  if (!term || seen.has(term.slug)) return;
+  seen.add(term.slug);
+  out.push(term);
+}
 
 export function parseCsv(value?: string): string[] {
   if (!value) return [];
@@ -122,6 +176,7 @@ export function emptyFilterSearch(): Record<FilterParam, undefined> {
     bike: undefined,
     atype: undefined,
     prange: undefined,
+    area: undefined,
     open: undefined,
   };
 }
@@ -140,40 +195,98 @@ export function activeFilterCount(filters: SmartFilters): number {
   return Object.values(filters).reduce((n, v) => n + (v?.length ?? 0), 0);
 }
 
+function taxTerms(listing: Listing, key: string): ListingTaxTerm[] {
+  return listing.taxonomies?.find((g) => g.key === key)?.terms ?? [];
+}
+
+function metaTerms(listing: Listing, keys: string[]): ListingTaxTerm[] {
+  return (listing.metaFacets ?? []).filter((g) => keys.includes(g.key)).flatMap((g) => g.terms);
+}
+
+function hintedMetaGroups(listing: Listing, hints: string[]): ListingTaxTerm[] {
+  if (!hints.length) return [];
+  const out: ListingTaxTerm[] = [];
+  const seen = new Set<string>();
+  for (const group of listing.metaGroups ?? []) {
+    const title = group.title.toLowerCase();
+    if (!hints.some((hint) => title.includes(hint))) continue;
+    for (const item of group.items) pushTerm(out, seen, item.label);
+  }
+  return out;
+}
+
+function listingTermsForGroup(listing: Listing, group: FilterGroup): ListingTaxTerm[] {
+  const seen = new Set<string>();
+  const out: ListingTaxTerm[] = [];
+  const add = (terms: ListingTaxTerm[]) => {
+    for (const term of terms) {
+      if (!term.slug || seen.has(term.slug)) continue;
+      if (group.param === "type" && TYPE_SKIP.has(term.slug)) continue;
+      seen.add(term.slug);
+      out.push(term);
+    }
+  };
+
+  if (group.tax) add(taxTerms(listing, group.tax));
+  if (group.metaKeys?.length) add(metaTerms(listing, group.metaKeys));
+  if (group.hints?.length) add(hintedMetaGroups(listing, group.hints));
+
+  if (group.param === "type") add([asTerm(listing.kind)].filter((t): t is ListingTaxTerm => !!t));
+  if (group.param === "area") {
+    const name = listing.area && listing.area !== "Pondicherry" ? listing.area : listing.location;
+    if (name && name !== "Pondicherry" && !/,/.test(name) && name.split(" ").length <= 4) {
+      add([asTerm(name)].filter((t): t is ListingTaxTerm => !!t));
+    }
+  }
+  if (group.param === "feat") {
+    for (const tag of listing.tags ?? []) add([asTerm(tag)].filter((t): t is ListingTaxTerm => !!t));
+  }
+  if (group.param === "theme") {
+    for (const tag of listing.bestFor ?? []) add([asTerm(tag)].filter((t): t is ListingTaxTerm => !!t));
+  }
+  if (group.param === "prange" && listing.price) {
+    const digits = listing.price.replace(/[^\d]/g, "");
+    const n = Number(digits);
+    if (n > 0) {
+      const bucket = n <= 500 ? "Budget" : n <= 1500 ? "Mid-range" : "Premium";
+      add([asTerm(bucket)].filter((t): t is ListingTaxTerm => !!t));
+    }
+  }
+
+  return out;
+}
+
 export function listingHasTerm(listing: Listing, tax: string, slugs: string[]): boolean {
   if (!slugs.length) return true;
-  const group = listing.taxonomies?.find((g) => g.key === tax);
-  if (!group) return false;
-  const have = new Set(group.terms.map((t) => t.slug));
+  const group = FILTER_GROUPS.find((g) => g.tax === tax);
+  if (group) {
+    const have = new Set(listingTermsForGroup(listing, group).map((t) => t.slug));
+    return slugs.some((slug) => have.has(slug));
+  }
+  const have = new Set(taxTerms(listing, tax).map((t) => t.slug));
   return slugs.some((slug) => have.has(slug));
 }
 
 export function listingHasMeta(listing: Listing, keys: string[], slugs: string[]): boolean {
   if (!slugs.length) return true;
-  const groups = listing.metaFacets?.filter((g) => keys.includes(g.key)) ?? [];
-  if (!groups.length) return false;
-  const have = new Set(groups.flatMap((g) => g.terms.map((t) => t.slug)));
+  const group = FILTER_GROUPS.find((g) => g.metaKeys?.some((k) => keys.includes(k)));
+  if (group) {
+    const have = new Set(listingTermsForGroup(listing, group).map((t) => t.slug));
+    return slugs.some((slug) => have.has(slug));
+  }
+  const have = new Set(metaTerms(listing, keys).map((t) => t.slug));
   return slugs.some((slug) => have.has(slug));
 }
 
-function listingMatchesGroup(listing: Listing, group: FilterGroup, slugs: string[], pool: Listing[]): boolean {
+function listingMatchesGroup(listing: Listing, group: FilterGroup, slugs: string[]): boolean {
   if (!slugs.length) return true;
-  if (group.tax) {
-    const present = pool.some((row) => row.taxonomies?.some((g) => g.key === group.tax && g.terms.length));
-    if (!present) return true;
-    return listingHasTerm(listing, group.tax, slugs);
-  }
-  if (group.metaKeys?.length) {
-    const present = pool.some((row) => row.metaFacets?.some((g) => group.metaKeys!.includes(g.key) && g.terms.length));
-    if (!present) return true;
-    return listingHasMeta(listing, group.metaKeys, slugs);
-  }
-  return true;
+  const have = new Set(listingTermsForGroup(listing, group).map((t) => t.slug));
+  return slugs.some((slug) => have.has(slug));
 }
 
 export function applySmartFilters(items: Listing[], filters: SmartFilters): Listing[] {
   const next = items.filter((listing) =>
-    FILTER_GROUPS.every((group) => listingMatchesGroup(listing, group, filters[group.param] ?? [], items)),
+    FILTER_GROUPS.every((group) => listingMatchesGroup(listing, group, filters[group.param] ?? [])),
   );
   if (filters.open?.includes("1")) return next.filter((listing) => listingIsOpen(listing) === true);
   return next;
@@ -204,23 +317,27 @@ function countTerms(
 }
 
 export function optionsForGroup(items: Listing[], tax: string, hide?: Set<string>): FilterOption[] {
+  const group = FILTER_GROUPS.find((g) => g.tax === tax);
   return countTerms(
     items,
-    (listing) => listing.taxonomies?.find((g) => g.key === tax)?.terms ?? [],
+    (listing) => (group ? listingTermsForGroup(listing, group) : taxTerms(listing, tax)),
     hide,
   );
 }
 
 export function optionsForMeta(items: Listing[], keys: string[]): FilterOption[] {
+  const group = FILTER_GROUPS.find((g) => g.metaKeys?.some((k) => keys.includes(k)));
   return countTerms(items, (listing) =>
-    (listing.metaFacets ?? []).filter((g) => keys.includes(g.key)).flatMap((g) => g.terms),
+    group ? listingTermsForGroup(listing, group) : metaTerms(listing, keys),
   );
 }
 
 export function optionsForFilter(items: Listing[], group: FilterGroup): FilterOption[] {
-  if (group.tax) return optionsForGroup(items, group.tax, group.param === "type" ? TYPE_SKIP : undefined);
-  if (group.metaKeys?.length) return optionsForMeta(items, group.metaKeys);
-  return [];
+  return countTerms(
+    items,
+    (listing) => listingTermsForGroup(listing, group),
+    group.param === "type" ? TYPE_SKIP : undefined,
+  );
 }
 
 export function groupsForCategory(category: Category | "all"): FilterGroup[] {

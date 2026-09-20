@@ -7,11 +7,11 @@ import { SmartFiltersBar } from "@/components/smart-filters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { emptyFilterSearch, filtersFromSearch, type FilterParam } from "@/lib/filters";
-import { listingDistanceKm, type LatLng } from "@/lib/geo";
+import type { LatLng } from "@/lib/geo";
 import { listingPinNumbers } from "@/lib/pins";
 import { CATEGORIES, CATEGORY_META, type Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { catalogSearch, useCatalog } from "@/store/catalog";
+import { catalogSearch, sortListings, useCatalog } from "@/store/catalog";
 import { useGeo } from "@/store/geo";
 
 type ArchiveView = "list" | "grid" | "map";
@@ -75,27 +75,18 @@ function Explore() {
   const category: Category | "all" = isCategory(cat) ? cat : "all";
   const filters = useMemo(() => filtersFromSearch(search), [search]);
   const origin = useGeo((s) => s.origin);
-  const geoSource = useGeo((s) => s.source);
   const geoStatus = useGeo((s) => s.status);
+  const nearMe = useGeo((s) => s.nearMe);
   const locate = useGeo((s) => s.locate);
   const clearGeo = useGeo((s) => s.clear);
-  const usingGps = geoSource === "gps";
   const scoped = useMemo(
     () => items.filter((l) => (category === "all" ? true : l.category === category)),
     [items, category],
   );
   const results = useMemo(() => {
     const rows = catalogSearch(items, q, category, filters);
-    if (!origin) return rows;
-    return [...rows].sort((a, b) => {
-      const da = listingDistanceKm(origin, a);
-      const db = listingDistanceKm(origin, b);
-      if (da == null && db == null) return 0;
-      if (da == null) return 1;
-      if (db == null) return -1;
-      return da - db;
-    });
-  }, [items, q, category, filters, origin]);
+    return sortListings(rows, { origin, nearMe });
+  }, [items, q, category, filters, origin, nearMe]);
   const meta = isCategory(category) ? CATEGORY_META[category] : null;
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [selected, setSelected] = useState<string | undefined>();
@@ -104,7 +95,7 @@ function Explore() {
 
   useEffect(() => {
     const fromUrl = hereToLatLng(search.here);
-    if (fromUrl) useGeo.setState({ origin: fromUrl, source: "gps", status: "ready" });
+    if (fromUrl) useGeo.setState({ origin: fromUrl, source: "gps", status: "ready", nearMe: true });
   }, [search.here]);
 
   const shown = view === "map" ? results : results.slice(0, visible);
@@ -122,7 +113,7 @@ function Explore() {
   useEffect(() => {
     setVisible(PAGE_SIZE);
     setSelected(undefined);
-  }, [q, category, items.length, search.type, search.feat, search.amen, search.open]);
+  }, [q, category, items.length, search.type, search.feat, search.amen, search.area, search.theme, search.open]);
 
   useEffect(() => {
     if (!selected) return;
@@ -139,11 +130,11 @@ function Explore() {
 
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Explore</p>
-      <h1 className="mt-1 font-display text-3xl font-semibold">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Explore</p>
+      <h1 className="mt-0.5 font-display text-2xl font-semibold">
         {meta ? meta.label : "All of Pondy"}
       </h1>
-      <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+      <p className="mt-1 max-w-xl text-sm text-muted-foreground">
         {meta
           ? meta.description
           : "Beaches, the French Quarter, dives, bakeries, pubs, and a bed for the night."}
@@ -158,7 +149,7 @@ function Explore() {
               : "Loading the directory…"}
       </p>
 
-      <div className="relative mt-6">
+      <div className="relative mt-4">
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={q}
@@ -168,12 +159,12 @@ function Explore() {
             })
           }
           placeholder="Search places, food, stays…"
-          className="h-12 pl-10"
+          className="h-10 pl-10"
           aria-label="Filter listings"
         />
       </div>
 
-      <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+      <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1">
         {(["all", ...CATEGORIES] as const).map((key) => {
           const label = key === "all" ? "All" : CATEGORY_META[key].label;
           const active = category === key || (key === "all" && !isCategory(cat));
@@ -187,7 +178,7 @@ function Explore() {
                 })
               }
               className={cn(
-                "h-10 shrink-0 rounded-full px-4 text-sm font-medium ring-1 ring-border transition-colors",
+                "h-8 shrink-0 rounded-full px-3 text-xs font-medium ring-1 ring-border transition-colors",
                 active
                   ? "bg-primary text-primary-foreground ring-primary"
                   : "bg-card text-foreground hover:bg-muted",
@@ -210,26 +201,26 @@ function Explore() {
         }
       />
 
-      <div className="mt-5 flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground tabular-nums">
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground tabular-nums">
           {results.length} {results.length === 1 ? "place" : "places"}
-          {" · nearest first"}
+          {nearMe ? " · nearest first" : " · featured first"}
           {view === "map" && mappedCount > 0 ? ` · ${mappedCount} on the map` : ""}
         </p>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => (usingGps ? clearGeo() : locate())}
+            onClick={() => (nearMe ? clearGeo() : locate())}
             className={cn(
-              "flex h-10 items-center gap-1.5 rounded-full px-3 text-sm ring-1 transition-colors",
-              usingGps
+              "flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs ring-1 transition-colors",
+              nearMe
                 ? "bg-primary text-primary-foreground ring-primary"
                 : "bg-card text-foreground ring-border hover:bg-muted",
             )}
           >
             <LocateFixed className="size-4" />
-            <span className="hidden sm:inline">
-              {geoStatus === "asking" ? "Locating…" : usingGps ? "Near me" : geoStatus === "denied" ? "Location off" : "Near me"}
+            <span>
+              {geoStatus === "asking" && nearMe ? "Locating…" : "Near me"}
             </span>
           </button>
           <div className="flex overflow-hidden rounded-full ring-1 ring-border">
@@ -245,7 +236,7 @@ function Explore() {
                 type="button"
                 onClick={() => setView(key)}
                 className={cn(
-                  "flex h-10 items-center gap-1.5 px-3 text-sm transition-colors",
+                  "flex h-8 items-center gap-1.5 px-2.5 text-xs transition-colors",
                   view === key ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground",
                 )}
                 aria-pressed={view === key}
@@ -290,7 +281,7 @@ function Explore() {
         </div>
       ) : view === "grid" ? (
         <>
-          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {shown.map((l) => (
               <ListingCard key={l.slug} listing={l} layout="grid" pin={pinNumbers.get(l.slug)} />
             ))}

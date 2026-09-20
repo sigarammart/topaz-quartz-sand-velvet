@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/trip",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Xplore Pondy",
+      "hasCanvas": false,
+      "bodyTextLen": 417,
+      "bodyTextHash": "e8414eaa77271c3499d89284c499e0103f210dcee2e96c906aa3a333e5d03903",
+      "bodyTextPrefix": "Home Explore Guides Trip Saved Events Dark Day Plan a trip App S",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/trip-page.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Xplore Pondy",
+      "hasCanvas": false,
+      "bodyTextLen": 301,
+      "bodyTextHash": "f5164df31ab2129df70e1b8fcc23944838cc3a898555445fef6dbd920b4668df",
+      "bodyTextPrefix": "Custom days, listings you pick, then an itinerary — start here. ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/trip-page-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/trip-page.json"
+}

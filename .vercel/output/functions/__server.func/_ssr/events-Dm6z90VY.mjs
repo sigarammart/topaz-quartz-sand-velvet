@@ -1,5 +1,5 @@
 import { n as require_jsx_runtime } from "../_libs/radix-ui__react-context+react.mjs";
-import { b as MapPin } from "../_libs/lucide-react.mjs";
+import { S as MapPin } from "../_libs/lucide-react.mjs";
 import { t as Badge } from "./badge-DteMQpJ4.mjs";
 import { t as events } from "./events-BM4iX4Cm.mjs";
 //#region node_modules/.nitro/vite/services/ssr/assets/events-Dm6z90VY.js

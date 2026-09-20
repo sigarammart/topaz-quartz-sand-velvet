@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as ExploreRouteImport } from './routes/explore'
+import { Route as GetAppRouteImport } from './routes/get-app'
 import { Route as GuidesRouteImport } from './routes/guides'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PlanRouteImport } from './routes/plan'
@@ -21,6 +22,7 @@ import { Route as TripRouteImport } from './routes/trip'
 import { Route as GuidesIndexRouteImport } from './routes/guides.index'
 import { Route as GuidesSlugRouteImport } from './routes/guides.$slug'
 import { Route as PlaceSlugRouteImport } from './routes/place.$slug'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +42,11 @@ const EventsRoute = EventsRouteImport.update({
 const ExploreRoute = ExploreRouteImport.update({
   id: '/explore',
   path: '/explore',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GetAppRoute = GetAppRouteImport.update({
+  id: '/get-app',
+  path: '/get-app',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GuidesRoute = GuidesRouteImport.update({
@@ -82,12 +89,18 @@ const PlaceSlugRoute = PlaceSlugRouteImport.update({
   path: '/place/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
+  '/get-app': typeof GetAppRoute
   '/guides': typeof GuidesRouteWithChildren
   '/login': typeof LoginRoute
   '/plan': typeof PlanRoute
@@ -96,12 +109,14 @@ export interface FileRoutesByFullPath {
   '/guides/$slug': typeof GuidesSlugRoute
   '/place/$slug': typeof PlaceSlugRoute
   '/guides/': typeof GuidesIndexRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/account': typeof AccountRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
+  '/get-app': typeof GetAppRoute
   '/login': typeof LoginRoute
   '/plan': typeof PlanRoute
   '/saved': typeof SavedRoute
@@ -109,6 +124,7 @@ export interface FileRoutesByTo {
   '/guides/$slug': typeof GuidesSlugRoute
   '/place/$slug': typeof PlaceSlugRoute
   '/guides': typeof GuidesIndexRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -116,6 +132,7 @@ export interface FileRoutesById {
   '/account': typeof AccountRoute
   '/events': typeof EventsRoute
   '/explore': typeof ExploreRoute
+  '/get-app': typeof GetAppRoute
   '/guides': typeof GuidesRouteWithChildren
   '/login': typeof LoginRoute
   '/plan': typeof PlanRoute
@@ -124,6 +141,7 @@ export interface FileRoutesById {
   '/guides/$slug': typeof GuidesSlugRoute
   '/place/$slug': typeof PlaceSlugRoute
   '/guides/': typeof GuidesIndexRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -132,6 +150,7 @@ export interface FileRouteTypes {
     | '/account'
     | '/events'
     | '/explore'
+    | '/get-app'
     | '/guides'
     | '/login'
     | '/plan'
@@ -140,12 +159,14 @@ export interface FileRouteTypes {
     | '/guides/$slug'
     | '/place/$slug'
     | '/guides/'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/account'
     | '/events'
     | '/explore'
+    | '/get-app'
     | '/login'
     | '/plan'
     | '/saved'
@@ -153,12 +174,14 @@ export interface FileRouteTypes {
     | '/guides/$slug'
     | '/place/$slug'
     | '/guides'
+    | '/api/auth/$'
   id:
     | '__root__'
     | '/'
     | '/account'
     | '/events'
     | '/explore'
+    | '/get-app'
     | '/guides'
     | '/login'
     | '/plan'
@@ -167,6 +190,7 @@ export interface FileRouteTypes {
     | '/guides/$slug'
     | '/place/$slug'
     | '/guides/'
+    | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -174,12 +198,14 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRoute
   EventsRoute: typeof EventsRoute
   ExploreRoute: typeof ExploreRoute
+  GetAppRoute: typeof GetAppRoute
   GuidesRoute: typeof GuidesRouteWithChildren
   LoginRoute: typeof LoginRoute
   PlanRoute: typeof PlanRoute
   SavedRoute: typeof SavedRoute
   TripRoute: typeof TripRoute
   PlaceSlugRoute: typeof PlaceSlugRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -210,6 +236,13 @@ declare module '@tanstack/react-router' {
       path: '/explore'
       fullPath: '/explore'
       preLoaderRoute: typeof ExploreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/get-app': {
+      id: '/get-app'
+      path: '/get-app'
+      fullPath: '/get-app'
+      preLoaderRoute: typeof GetAppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/guides': {
@@ -268,6 +301,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlaceSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -289,12 +329,14 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRoute,
   EventsRoute: EventsRoute,
   ExploreRoute: ExploreRoute,
+  GetAppRoute: GetAppRoute,
   GuidesRoute: GuidesRouteWithChildren,
   LoginRoute: LoginRoute,
   PlanRoute: PlanRoute,
   SavedRoute: SavedRoute,
   TripRoute: TripRoute,
   PlaceSlugRoute: PlaceSlugRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

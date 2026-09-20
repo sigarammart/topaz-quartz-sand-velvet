@@ -1,0 +1,1 @@
+import{n as e,t}from"./jsx-runtime-Cltr0gcK.js";import{t as n}from"./utils-DojpP95n.js";e();var r=t();function i({className:e,...t}){return(0,r.jsx)(`label`,{className:n(`text-sm font-medium text-foreground`,e),...t})}export{i as t};

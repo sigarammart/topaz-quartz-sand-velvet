@@ -46,7 +46,7 @@ export function SmartFiltersBar({
         const without = applySmartFilters(items, { ...filters, [group.param]: undefined });
         return { group, options: optionsForFilter(without, group) };
       })
-      .filter((row) => row.options.length >= 2);
+      .filter((row) => row.options.length >= 2 || (row.options.length === 1 && row.options[0].count < items.length));
   }, [items, category, filters]);
   const selectedType = filters.type ?? [];
   const extraCount = activeFilterCount({ ...filters, type: undefined, open: undefined });
@@ -69,9 +69,9 @@ export function SmartFiltersBar({
   }
 
   return (
-    <div className="mt-4 space-y-3">
+    <div className="mt-3 space-y-2.5">
       {typeOptions.length > 0 && (
-        <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+        <div className="flex flex-nowrap gap-1.5 overflow-x-auto pb-1">
           {typeOptions.map((option) => {
             const active = selectedType.includes(option.slug);
             return (
@@ -80,53 +80,53 @@ export function SmartFiltersBar({
                 type="button"
                 onClick={() => setGroup("type", toggleValue(selectedType, option.slug))}
                 className={cn(
-                  "h-10 shrink-0 rounded-full px-3.5 text-sm ring-1 transition-colors",
+                  "h-8 shrink-0 rounded-full px-3 text-xs ring-1 transition-colors",
                   active
                     ? "bg-accent text-accent-foreground ring-primary/30"
                     : "bg-card text-foreground ring-border hover:bg-muted",
                 )}
               >
                 {option.name}
-                <span className="ml-1.5 tabular-nums text-muted-foreground">{option.count}</span>
+                <span className="ml-1 tabular-nums text-muted-foreground">{option.count}</span>
               </button>
             );
           })}
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         <button
           type="button"
           onClick={() => onChange({ open: openActive ? undefined : "1" })}
           className={cn(
-            "h-10 rounded-full px-3.5 text-sm ring-1 transition-colors",
+            "h-8 rounded-full px-3 text-xs ring-1 transition-colors",
             openActive
               ? "bg-primary text-primary-foreground ring-primary"
               : "bg-card text-foreground ring-border hover:bg-muted",
           )}
         >
           Open now
-          <span className={cn("ml-1.5 tabular-nums", openActive ? "text-primary-foreground/80" : "text-muted-foreground")}>
+          <span className={cn("ml-1 tabular-nums", openActive ? "text-primary-foreground/80" : "text-muted-foreground")}>
             {openCount}
           </span>
         </button>
         <Sheet open={open} onOpenChange={setOpen}>
           <SheetTrigger asChild>
-            <Button variant="outline" className="h-10 gap-2 rounded-full px-4">
-              <SlidersHorizontal className="size-4" />
+            <Button variant="outline" className="h-8 gap-1.5 rounded-full px-3 text-xs">
+              <SlidersHorizontal className="size-3.5" />
               Filters
               {extraCount > 0 && (
-                <span className="rounded-full bg-primary px-1.5 text-[11px] font-semibold tabular-nums text-primary-foreground">
+                <span className="rounded-full bg-primary px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
                   {extraCount}
                 </span>
               )}
             </Button>
           </SheetTrigger>
           <SheetContent side="bottom" title="Smart filters" className="gap-0">
-            <p className="text-sm text-muted-foreground">
-              JetEngine meta keys from the directory — cafe type, amenities, atmosphere, and more.
+            <p className="text-xs text-muted-foreground">
+              Type, area, amenities, and listing features from the Pondicherry directory.
             </p>
-            <div className="mt-4 min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
+            <div className="mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
               {extraGroups.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   No extra facets for this set yet. Try another category.
@@ -197,10 +197,10 @@ function FilterGroupBlock({
   const visible = expanded ? options : options.slice(0, 12);
   return (
     <section>
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
         {group.label}
       </p>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
         {visible.map((option) => {
           const active = selected.includes(option.slug);
           return (
@@ -209,7 +209,7 @@ function FilterGroupBlock({
               type="button"
               onClick={() => onToggle(option.slug)}
               className={cn(
-                "min-h-10 rounded-full px-3 text-sm ring-1 transition-colors",
+                "min-h-8 rounded-full px-2.5 text-xs ring-1 transition-colors",
                 active
                   ? "bg-primary text-primary-foreground ring-primary"
                   : "bg-background text-foreground ring-border hover:bg-muted",

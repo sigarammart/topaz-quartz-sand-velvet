@@ -6,6 +6,7 @@ import {
   getListing,
 } from "@/data/listings";
 import { applySmartFilters, type SmartFilters } from "@/lib/filters";
+import { listingDistanceKm, type LatLng } from "@/lib/geo";
 import { fetchWpCatalog, fetchWpGuides } from "@/lib/wp-api";
 import type { Category, Guide, Listing } from "@/lib/types";
 
@@ -30,15 +31,21 @@ export const useCatalog = create<CatalogState>((set, get) => ({
   error: null,
   ensure: async () => {
     const current = get();
-    if (current.status === "loading" && Date.now() - loadStarted < 32000) return;
-    if (current.source === "live" && current.items.filter((item) => item.lat != null).length > 40) return;
+    if (current.status === "loading" && Date.now() - loadStarted < 36000) return;
+    if (
+      current.source === "live" &&
+      current.items.filter((item) => item.lat != null).length > 40 &&
+      current.items.some((item) => item.wpId) &&
+      current.items.filter((item) => item.weeklyHours?.length).length > 8 &&
+      current.items.filter((item) => item.featured).length < 80
+    ) return;
     loadStarted = Date.now();
     set({ status: "loading" });
     try {
       const result = await Promise.race([
         fetchWpCatalog(),
         new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("catalog-timeout")), 18000);
+          setTimeout(() => reject(new Error("catalog-timeout")), 32000);
         }),
       ]);
       set({
@@ -109,6 +116,42 @@ export function catalogSearch(
   return applySmartFilters(scoped, filters);
 }
 
+function archiveRank(listing: Listing): number {
+  if (listing.featured) return 0;
+  return 1;
+}
+
+function packageRank(listing: Listing): number {
+  return listing.listingPackage ?? Number.POSITIVE_INFINITY;
+}
+
+/** Default archive order: `_featured` first, then `listing-package` lowest to highest. */
+export function sortListings(
+  rows: Listing[],
+  opts?: { origin?: LatLng | null; nearMe?: boolean },
+): Listing[] {
+  if (opts?.nearMe && opts.origin) {
+    return [...rows].sort((a, b) => {
+      const da = listingDistanceKm(opts.origin!, a);
+      const db = listingDistanceKm(opts.origin!, b);
+      if (da == null && db == null) return compareArchive(a, b);
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return da - db || compareArchive(a, b);
+    });
+  }
+  return [...rows].sort(compareArchive);
+}
+
+function compareArchive(a: Listing, b: Listing) {
+  const featured = archiveRank(a) - archiveRank(b);
+  if (featured) return featured;
+  const pack = packageRank(a) - packageRank(b);
+  if (pack) return pack;
+  if (b.rating !== a.rating) return b.rating - a.rating;
+  return a.name.localeCompare(b.name);
+}
+
 export function catalogFeatured(items: Listing[]) {
   const marked = items.filter((l) => l.featured);
   if (marked.length >= 6) return marked.slice(0, 6);
@@ -120,7 +163,7 @@ export function catalogNearby(slug: string, items: Listing[]) {
   if (!current) return localNearby(slug);
   return items
     .filter((l) => l.slug !== slug && (l.area === current.area || l.category === current.category))
-    .slice(0, 3);
+    .slice(0, 4);
 }
 
 export function catalogGuide(slug: string, guides: Guide[]) {

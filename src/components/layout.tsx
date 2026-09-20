@@ -8,11 +8,15 @@ import {
   LogIn,
   Menu,
   Search,
+  Smartphone,
   UserRound,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
+import { HeaderAuth } from "@/components/header-auth";
+import { InstallBanner, InstallHeaderButton } from "@/components/install-app";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
@@ -20,7 +24,10 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { useCatalog } from "@/store/catalog";
 import { useGeo } from "@/store/geo";
 import { useSession } from "@/store/session";
+import { useTheme } from "@/store/theme";
+import { isStandaloneDisplay } from "@/lib/android";
 import { useTrip } from "@/store/trip";
+import { JET_TEMP_STORAGE_KEY } from "@/lib/jet-store";
 
 const NAV = [
   { to: "/", label: "Home", icon: House },
@@ -35,12 +42,24 @@ export function AppShell({ children }: { children: ReactNode }) {
   const hydrated = useHydrated();
   const savedCount = useTrip((s) => s.saved.length);
   const tripCount = useTrip((s) => s.items.length);
+  const tempCount = useTrip((s) => s.tempTrip.length);
+  const tripStarted = useTrip((s) => s.started);
   const [open, setOpen] = useState(false);
   const savedBadge = hydrated ? savedCount : 0;
-  const tripBadge = hydrated ? tripCount : 0;
+  const tripBadge = hydrated ? tempCount || tripCount : 0;
+  const hideAppNav = pathname === "/trip" && (tripStarted || tripCount > 0 || tempCount > 0);
   const user = useSession((s) => s.user);
   const ensureCatalog = useCatalog((s) => s.ensure);
+  const catalog = useCatalog((s) => s.items);
+  const catalogStatus = useCatalog((s) => s.status);
   const hydrateGeo = useGeo((s) => s.hydrate);
+  const hydrateTheme = useTheme((s) => s.hydrate);
+  const syncJetTemp = useTrip((s) => s.syncJetTemp);
+  const wide = pathname === "/trip" || pathname.startsWith("/explore");
+
+  useEffect(() => {
+    hydrateTheme();
+  }, [hydrateTheme]);
 
   useEffect(() => {
     void ensureCatalog();
@@ -50,12 +69,29 @@ export function AppShell({ children }: { children: ReactNode }) {
     hydrateGeo();
   }, [hydrateGeo]);
 
+  useEffect(() => {
+    if (catalogStatus === "ready" || catalog.length > 8) syncJetTemp(catalog);
+  }, [catalog, catalogStatus, syncJetTemp]);
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== JET_TEMP_STORAGE_KEY) return;
+      useTrip.getState().syncJetTemp(useCatalog.getState().items);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  useEffect(() => {
+    if (isStandaloneDisplay()) document.documentElement.classList.add("standalone");
+  }, []);
+
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
-      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/90 backdrop-blur-md">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
+      <header className="site-header sticky top-0 z-40 border-b border-border/80 bg-logo-bg text-foreground pt-[env(safe-area-inset-top)]">
+        <div className={cn("mx-auto flex h-14 items-center gap-3 px-4", wide ? "max-w-7xl" : "max-w-6xl")}>
           <Link to="/" className="shrink-0">
-            <Logo />
+            <Logo className="rounded-none bg-transparent p-0" />
           </Link>
           <nav className="ml-6 hidden items-center gap-1 md:flex">
             {NAV.map((item) => {
@@ -86,30 +122,18 @@ export function AppShell({ children }: { children: ReactNode }) {
               Events
             </Link>
           </nav>
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-1.5">
             <Button variant="ghost" size="icon" asChild className="md:hidden">
               <Link to="/explore" aria-label="Search">
                 <Search />
               </Link>
             </Button>
+            <ThemeToggle />
             <Button variant="ghost" size="sm" asChild className="hidden md:inline-flex">
               <Link to="/plan">Plan a trip</Link>
             </Button>
-            {hydrated && user ? (
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/account">
-                  <UserRound />
-                  <span className="hidden sm:inline">{user.name.split(" ")[0]}</span>
-                </Link>
-              </Button>
-            ) : (
-              <Button variant="ghost" size="sm" asChild>
-                <Link to="/login">
-                  <LogIn />
-                  <span className="hidden sm:inline">Sign in</span>
-                </Link>
-              </Button>
-            )}
+            <InstallHeaderButton />
+            <HeaderAuth />
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="md:hidden" aria-label="Menu">
@@ -122,6 +146,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     ...NAV,
                     { to: "/events", label: "Events", icon: CalendarDays },
                     { to: "/plan", label: "Custom trip", icon: Compass },
+                    { to: "/get-app", label: "Android app", icon: Smartphone },
                     {
                       to: user ? "/account" : "/login",
                       label: user ? "Account" : "Sign in",
@@ -138,6 +163,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                       {item.label}
                     </Link>
                   ))}
+                  <div className="mt-3 px-1">
+                    <ThemeToggle className="w-full justify-stretch [&>button]:flex-1 [&>button]:justify-center" />
+                  </div>
                   <a
                     href="https://xplorepondy.com"
                     target="_blank"
@@ -153,10 +181,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-24 pt-6 md:pb-12">{children}</main>
+      <main className={cn("mx-auto w-full flex-1 px-4 pb-24 pt-6 md:pb-12", wide ? "max-w-7xl" : "max-w-6xl")}>
+        {children}
+      </main>
+      <InstallBanner />
 
       <footer className="hidden border-t border-border bg-card md:block">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground">
+        <div className={cn("mx-auto flex items-center justify-between gap-4 px-4 py-8 text-sm text-muted-foreground", wide ? "max-w-7xl" : "max-w-6xl")}>
           <Logo />
           <p>Companion to xplorepondy.com · Pondicherry travel planner</p>
           <a href="https://xplorepondy.com" className="text-primary hover:underline">
@@ -165,7 +196,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </footer>
 
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden">
+      <nav
+        className={cn(
+          "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden",
+          hideAppNav && "hidden",
+        )}
+      >
         <ul className="grid grid-cols-5">
           {NAV.map((item) => {
             const active =

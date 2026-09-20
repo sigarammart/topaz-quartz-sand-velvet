@@ -3,10 +3,10 @@ import { z } from "zod";
 import { guides as localGuides } from "@/data/guides";
 import { listings as localListings } from "@/data/listings";
 import type { Category, Guide, GuideSection, Listing, ListingFaq, ListingMetaGroup, ListingMetaItem, ListingStop, ListingTaxGroup, ListingTaxTerm } from "@/lib/types";
-import { FILTER_TAX_KEYS } from "@/lib/filters";
 import { parseOpenHoursHtml } from "@/lib/hours";
 import { loadJetArchiveMeta, type JetArchiveHit } from "@/lib/jet-archive";
 import { loadListeoGeo, type ListeoGeo } from "@/lib/listeo-geo";
+import { extractOgImage, pickListingImage, uncropImage, uniqueImages } from "@/lib/media";
 
 export const WP_ORIGIN = "https://xplorepondy.com";
 export const WP_APP_PASSWORD_URL = `${WP_ORIGIN}/wp-admin/authorize-application.php?app_name=Xplore%20Pondy%20App`;
@@ -499,17 +499,28 @@ function extractListingGeo(html: string): { lat?: number; lng?: number } {
 }
 
 function extractGallery(html: string, featured?: string): string[] {
-  const block = html.match(/listeo-listing-grid-gallery[\s\S]{0,12000}/i)?.[0] ?? "";
-  const urls = [...block.matchAll(/src="(https:\/\/xplorepondy\.com\/wp-content\/uploads\/[^"]+)"/g)].map((m) => m[1]);
+  const blocks = [
+    html.match(/listeo-listing-grid-gallery[\s\S]{0,16000}/i)?.[0] ?? "",
+    html.match(/listing-slider[\s\S]{0,16000}/i)?.[0] ?? "",
+    html.match(/mfp-gallery[\s\S]{0,16000}/i)?.[0] ?? "",
+    html.match(/wp-block-gallery[\s\S]{0,12000}/i)?.[0] ?? "",
+    html.match(/elementor-widget-image-gallery[\s\S]{0,16000}/i)?.[0] ?? "",
+  ];
+  const urls = blocks.flatMap((block) =>
+    [...block.matchAll(/(?:src|data-src|href)="(https:\/\/xplorepondy\.com\/wp-content\/uploads\/[^"]+\.(?:jpe?g|png|webp))"/gi)].map(
+      (m) => m[1],
+    ),
+  );
+  const featuredClean = featured ? uncropImage(featured) : "";
   const seen = new Set<string>();
   const out: string[] = [];
   for (const url of urls) {
-    const clean = url.replace(/-\d+x\d+(?=\.[a-z]+$)/i, "");
-    if (featured && (url === featured || clean === featured.replace(/-\d+x\d+(?=\.[a-z]+$)/i, ""))) continue;
+    const clean = uncropImage(url);
+    if (featuredClean && clean === featuredClean) continue;
     if (seen.has(clean)) continue;
     seen.add(clean);
-    out.push(url);
-    if (out.length >= 12) break;
+    out.push(clean);
+    if (out.length >= 16) break;
   }
   return out;
 }
@@ -518,7 +529,8 @@ function enrichListingFromHtml(listing: Listing, html: string): Listing {
   const extra = extractJsonLd(html);
   const jet = extractJetMetaGroups(html);
   const geo = extractListingGeo(html);
-  const gallery = extractGallery(html, listing.image);
+  const og = extractOgImage(html);
+  const gallery = uniqueImages(extractGallery(html, og || listing.image), listing.gallery);
   const hoursInfo = parseOpenHoursHtml(html);
   const telFromPage = html.match(/href="tel:([^"]+)"/i);
   const phoneFromPage = telFromPage ? decodeURIComponent(telFromPage[1]).replace(/%20/g, " ").trim() : "";
@@ -535,8 +547,9 @@ function enrichListingFromHtml(listing: Listing, html: string): Listing {
     location: listing.location === "Pondicherry" && extra.address ? extra.address : listing.location,
     lat: listing.lat ?? geo.lat,
     lng: listing.lng ?? geo.lng,
-    metaGroups: jet.groups,
+    metaGroups: jet.groups.length ? jet.groups : listing.metaGroups,
     gallery: gallery.length ? gallery : listing.gallery,
+    image: pickListingImage(og, listing.image, gallery[0]) || listing.image,
   };
 }
 
@@ -607,6 +620,7 @@ function mapListing(
     bestFor: local?.bestFor ?? [],
     image,
     siteUrl: raw.link ?? `${WP_ORIGIN}/listing/${raw.slug}/`,
+    wpId: raw.id,
     lat: local?.lat,
     lng: local?.lng,
     price: local?.price,
@@ -784,8 +798,10 @@ function mergeLocal(listings: Listing[]) {
 
 let catalogCache: { at: number; listings: Listing[]; total: number; v: number } | null = null;
 let guidesCache: { at: number; guides: Guide[] } | null = null;
+const listingPageCache = new Map<string, { at: number; listing: Listing }>();
 const CATALOG_TTL = 5 * 60 * 1000;
-const CATALOG_VERSION = 12;
+const LISTING_PAGE_TTL = 10 * 60 * 1000;
+const CATALOG_VERSION = 19;
 
 const ARCHIVE_SLUGS = [
   "cafes",
@@ -801,72 +817,114 @@ const ARCHIVE_SLUGS = [
 ];
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
-  const listeoGeo = await loadListeoGeo().catch(() => new Map<string, ListeoGeo>());
-  const rows: WpListing[] = [];
-  const total = 0;
-  const catMap = new Map<number, WpTerm>();
-  const regionMap = new Map<number, WpTerm>();
-  const extraMaps: Array<readonly [string, Map<number, WpTerm>]> = [];
   const jetMeta = new Map<string, JetArchiveHit>();
-  const taxMaps: Record<string, Map<number, WpTerm>> = {
-    listing_category: catMap,
-    region: regionMap,
-  };
-  for (const [key, map] of extraMaps) taxMaps[key] = map;
-  const mediaMap = new Map<number, string>();
-  const mapped = rows.map((raw) => mapListing(raw, { catMap, regionMap, mediaMap, taxMaps }));
+  const jetTask = loadJetArchiveMeta(ARCHIVE_SLUGS, jetMeta).catch(() => jetMeta);
+  const listeoGeo = await loadListeoGeo().catch(() => new Map<string, ListeoGeo>());
+  await Promise.race([jetTask, new Promise((resolve) => setTimeout(resolve, 10000))]);
+  if (listeoGeo.size < 8 && jetMeta.size < 8) throw new Error("listeo-empty");
+
   const seen = new Set<string>();
   const listings: Listing[] = [];
-  for (const item of mapped) {
-    if (seen.has(item.slug)) continue;
-    seen.add(item.slug);
-    const hit = jetMeta.get(item.slug) ?? jetMeta.get(urlTail(item.siteUrl));
-    const geo = listeoGeo.get(item.slug) ?? listeoGeo.get(urlTail(item.siteUrl));
-    listings.push({
+
+  function applyLive(item: Listing, slug: string): Listing {
+    const hit = jetMeta.get(slug) ?? jetMeta.get(urlTail(item.siteUrl));
+    const geo = listeoGeo.get(slug) ?? listeoGeo.get(urlTail(item.siteUrl));
+    const local = findLocal(slug, item.siteUrl);
+    return {
       ...item,
+      wpId: item.wpId ?? geo?.id ?? local?.wpId,
       mustTry: item.mustTry?.length ? item.mustTry : hit?.mustTry,
       cafeTypes: item.cafeTypes?.length ? item.cafeTypes : hit?.cafeTypes,
       metaFacets: hit?.facets.length ? hit.facets : item.metaFacets,
       metaGroups: item.metaGroups?.length ? item.metaGroups : hit?.groups,
       lat: geo?.lat ?? hit?.lat ?? item.lat,
       lng: geo?.lng ?? hit?.lng ?? item.lng,
-      hours: hit?.hours || item.hours,
-      openNow: hit?.openNow ?? item.openNow,
-      weeklyHours: hit?.weeklyHours?.length ? hit.weeklyHours : item.weeklyHours,
-      rating: item.rating || geo?.rating || 0,
-      reviews: item.reviews || geo?.reviews || 0,
+      hours: hit?.hours || item.hours || local?.hours || "",
+      openNow: hit?.openNow ?? item.openNow ?? local?.openNow,
+      weeklyHours: hit?.weeklyHours?.length ? hit.weeklyHours : (item.weeklyHours ?? local?.weeklyHours),
+      rating: item.rating || geo?.rating || local?.rating || 0,
+      reviews: item.reviews || geo?.reviews || local?.reviews || 0,
       address: item.address || geo?.address,
       location: item.location === "Pondicherry" && geo?.address ? geo.address : item.location,
       area: item.area === "Pondicherry" && geo?.address ? geo.address : item.area,
-    });
+      featured: geo?.featured || hit?.featured || item.featured || local?.featured,
+      listingPackage: hit?.listingPackage ?? item.listingPackage,
+      image: pickListingImage(geo?.image, item.image, local?.image) || item.image || FALLBACK_IMAGE[item.category],
+      gallery: uniqueImages(geo?.gallery, item.gallery, local?.gallery),
+    };
   }
+
   for (const geo of listeoGeo.values()) {
     if (seen.has(geo.slug)) continue;
     seen.add(geo.slug);
     const category = geo.category ?? "places";
-    listings.push({
-      slug: geo.slug,
-      name: geo.name,
-      category,
-      kind: geo.kind ?? "Listing",
-      rating: geo.rating ?? 0,
-      reviews: geo.reviews ?? 0,
-      location: geo.address ?? "Pondicherry",
-      area: geo.address ?? "Pondicherry",
-      distance: "",
-      hours: "",
-      description: "",
-      tags: geo.kind ? [geo.kind] : [],
-      bestFor: [],
-      image: geo.image ?? FALLBACK_IMAGE[category],
-      siteUrl: `${WP_ORIGIN}/listing/${geo.slug}/`,
-      lat: geo.lat,
-      lng: geo.lng,
-      address: geo.address,
-    });
+    const local = findLocal(geo.slug);
+    listings.push(
+      applyLive(
+        {
+          slug: geo.slug,
+          name: geo.name,
+          category,
+          kind: geo.kind ?? local?.kind ?? "Listing",
+          rating: geo.rating ?? 0,
+          reviews: geo.reviews ?? 0,
+          location: geo.address ?? "Pondicherry",
+          area: geo.address ?? "Pondicherry",
+          distance: "",
+          hours: local?.hours ?? "",
+          description: local?.description ?? "",
+          tags: geo.kind ? [geo.kind] : (local?.tags ?? []),
+          bestFor: local?.bestFor ?? [],
+          image: geo.image ?? FALLBACK_IMAGE[category],
+          gallery: geo.gallery,
+          siteUrl: `${WP_ORIGIN}/listing/${geo.slug}/`,
+          wpId: geo.id ?? local?.wpId,
+          lat: geo.lat,
+          lng: geo.lng,
+          address: geo.address,
+          featured: geo.featured || local?.featured,
+        },
+        geo.slug,
+      ),
+    );
   }
+
+  for (const [slug, hit] of jetMeta) {
+    if (seen.has(slug)) continue;
+    seen.add(slug);
+    const local = findLocal(slug);
+    const category = local?.category ?? "places";
+    listings.push(
+      applyLive(
+        {
+          slug,
+          name: local?.name ?? slug,
+          category,
+          kind: local?.kind ?? "Listing",
+          rating: local?.rating ?? 0,
+          reviews: local?.reviews ?? 0,
+          location: local?.location ?? "Pondicherry",
+          area: local?.area ?? "Pondicherry",
+          distance: "",
+          hours: hit.hours || local?.hours || "",
+          description: local?.description ?? "",
+          tags: local?.tags ?? [],
+          bestFor: local?.bestFor ?? [],
+          image: local?.image ?? FALLBACK_IMAGE[category],
+          siteUrl: `${WP_ORIGIN}/listing/${slug}/`,
+          wpId: local?.wpId,
+          lat: hit.lat ?? local?.lat,
+          lng: hit.lng ?? local?.lng,
+          featured: hit.featured || local?.featured,
+          listingPackage: hit.listingPackage,
+        },
+        slug,
+      ),
+    );
+  }
+
   const merged = mergeLocal(listings);
-  return { listings: merged, total: Math.max(total, merged.length) };
+  return { listings: merged, total: Math.max(merged.length, listeoGeo.size, jetMeta.size) };
 }
 
 async function loadGuidesFromWp(): Promise<Guide[]> {
@@ -904,26 +962,74 @@ export const fetchWpGuides = createServerFn({ method: "GET" }).handler(async () 
   return { guides };
 });
 
-export const fetchWpListing = createServerFn({ method: "GET" })
-  .validator(z.object({ slug: z.string().min(1) }))
-  .handler(async ({ data }) => {
-    const res = await wpGet<WpListing[]>(
-      `/wp-json/wp/v2/listing?slug=${encodeURIComponent(data.slug)}&_embed=1`,
-      {},
-      15000,
-    );
-    if (!res.ok || !Array.isArray(res.data) || !res.data[0]) return null;
-    const listing = mapListing(res.data[0]);
+async function loadListingPageHtml(urls: string[]) {
+  for (const url of urls) {
     try {
-      const page = await fetch(listing.siteUrl, {
-        headers: { Accept: "text/html", "User-Agent": "XplorePondyApp/1.0" },
-        signal: AbortSignal.timeout(12000),
+      const page = await fetch(url, {
+        headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 XplorePondyApp/1.0" },
+        signal: AbortSignal.timeout(10000),
       });
-      if (!page.ok) return listing;
-      return enrichListingFromHtml(listing, await page.text());
+      if (!page.ok) continue;
+      const html = await page.text();
+      if (/<title>[^<]*Page not found/i.test(html)) continue;
+      return { url, html };
     } catch {
-      return listing;
+      /* try next url */
     }
+  }
+  return null;
+}
+
+export const fetchWpListing = createServerFn({ method: "GET" })
+  .validator(z.object({ slug: z.string().min(1), url: z.string().optional() }))
+  .handler(async ({ data }) => {
+    const cached = listingPageCache.get(data.slug);
+    if (cached && Date.now() - cached.at < LISTING_PAGE_TTL) return cached.listing;
+
+    const urls = [
+      data.url,
+      `${WP_ORIGIN}/listing/service/${data.slug}/`,
+      `${WP_ORIGIN}/listing/${data.slug}/`,
+    ].filter((url, i, all): url is string => !!url && all.indexOf(url) === i);
+
+    const [rest, page] = await Promise.all([
+      wpGet<WpListing[]>(
+        `/wp-json/wp/v2/listing?slug=${encodeURIComponent(data.slug)}&_embed=wp:term`,
+        {},
+        12000,
+      ).catch(() => null),
+      loadListingPageHtml(urls),
+    ]);
+
+    let listing: Listing | null = null;
+    if (rest?.ok && Array.isArray(rest.data) && rest.data[0]) listing = mapListing(rest.data[0]);
+    const local = findLocal(data.slug, data.url ?? page?.url);
+    const seed = listing ?? local ?? null;
+    let result = seed;
+    if (page) {
+      const base =
+        seed ??
+        ({
+          slug: data.slug,
+          name: data.slug,
+          category: "places",
+          kind: "Listing",
+          rating: 0,
+          reviews: 0,
+          location: "Pondicherry",
+          area: "Pondicherry",
+          distance: "",
+          hours: "",
+          description: "",
+          tags: [],
+          bestFor: [],
+          image: "",
+          siteUrl: page.url,
+        } satisfies Listing);
+      result = enrichListingFromHtml({ ...base, siteUrl: base.siteUrl || page.url }, page.html);
+    }
+    if (result) listingPageCache.set(data.slug, { at: Date.now(), listing: result });
+    return result;
   });
 
 export const fetchWpUserTrips = createServerFn({ method: "GET" }).handler(async () => {
