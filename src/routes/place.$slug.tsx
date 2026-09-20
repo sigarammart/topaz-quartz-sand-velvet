@@ -17,6 +17,7 @@ import {
 import { AddToTrip } from "@/components/add-to-trip";
 import { ListingCard } from "@/components/listing-card";
 import { PhotoGallery } from "@/components/photo-gallery";
+import { OpenNowBadge } from "@/components/open-now-badge";
 import { SaveButton } from "@/components/save-button";
 import { Stars } from "@/components/stars";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +31,7 @@ import { listingPhotos } from "@/lib/media";
 import { catalogListing, catalogNearby, useCatalog } from "@/store/catalog";
 import { useGeo } from "@/store/geo";
 import { formatDistance, listingDistanceKm } from "@/lib/geo";
-import { listingIsOpen } from "@/lib/hours";
+import { decodeEntities } from "@/lib/utils";
 
 export const Route = createFileRoute("/place/$slug")({
   component: PlacePage,
@@ -117,7 +118,10 @@ function PlacePage() {
     void fetchWpListing({ data: { slug, url } })
       .then((row) => {
         if (cancelled) return;
-        if (row) detailCache.set(slug, { at: Date.now(), listing: row });
+        if (row) {
+          detailCache.set(slug, { at: Date.now(), listing: row });
+          useCatalog.getState().patchListing(row);
+        }
         setFetched({ slug, listing: row ?? null });
       })
       .catch(() => {
@@ -160,7 +164,6 @@ function PlacePage() {
   const tel = listing.phone?.replace(/[^\d+]/g, "") ?? "";
   const metaTitles = new Set(metaGroups.map((g) => g.title.toLowerCase()));
   const showCafeTypes = cafeTypes.length > 0 && !metaTitles.has("cafe type");
-  const open = listingIsOpen(listing);
   const where = listing.address || listing.location;
   const showDetailsSkeleton = detailsLoading && !listingHasDetails(listing);
 
@@ -176,7 +179,7 @@ function PlacePage() {
             className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary"
           >
             {CATEGORY_META[listing.category].label}
-            {listing.kind ? ` · ${listing.kind}` : ""}
+            {listing.kind ? ` · ${decodeEntities(listing.kind)}` : ""}
           </Link>
           <div className="mt-1 flex items-start justify-between gap-3">
             <h1 className="font-display text-2xl font-semibold leading-tight sm:text-[1.7rem]">{listing.name}</h1>
@@ -189,16 +192,7 @@ function PlacePage() {
                 <span className="tabular-nums">{listing.reviews.toLocaleString()} reviews</span>
               </span>
             )}
-            {open === true && (
-              <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
-                Open now
-              </span>
-            )}
-            {open === false && (
-              <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
-                Closed
-              </span>
-            )}
+            <OpenNowBadge listing={listing} />
             <span className="flex items-center gap-1">
               <MapPin className="size-3.5" />
               {km != null ? formatDistance(km, fromGps) : where}

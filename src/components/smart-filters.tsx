@@ -18,7 +18,8 @@ import {
 } from "@/lib/filters";
 import { listingIsOpen } from "@/lib/hours";
 import type { Category, Listing } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, decodeEntities } from "@/lib/utils";
+import { useCatalog } from "@/store/catalog";
 
 type SearchPatch = { q?: string; cat?: string } & Partial<Record<FilterParam, string | undefined>>;
 
@@ -49,12 +50,20 @@ export function SmartFiltersBar({
       .filter((row) => row.options.length >= 2 || (row.options.length === 1 && row.options[0].count < items.length));
   }, [items, category, filters]);
   const selectedType = filters.type ?? [];
+  const openNowTotal = useCatalog((s) => s.openNowTotal);
+  const openNowByCategory = useCatalog((s) => s.openNowByCategory);
+  const openNowStatus = useCatalog((s) => s.openNowStatus);
   const extraCount = activeFilterCount({ ...filters, type: undefined, open: undefined });
   const totalCount = activeFilterCount(filters);
   const openCount = useMemo(() => {
     const without = applySmartFilters(items, { ...filters, open: undefined });
-    return without.filter((row) => listingIsOpen(row) === true).length;
-  }, [items, filters]);
+    const live = without.filter((row) => listingIsOpen(row) === true).length;
+    const typed = (filters.type ?? []).length > 0 || extraCount > 0;
+    if (typed) return live;
+    const indexed = category === "all" ? openNowTotal : openNowByCategory[category];
+    if (indexed > 0) return indexed;
+    return live;
+  }, [items, filters, extraCount, category, openNowTotal, openNowByCategory]);
   const openActive = (filters.open ?? []).includes("1");
 
   function setGroup(param: FilterParam, values: string[]) {
@@ -86,7 +95,7 @@ export function SmartFiltersBar({
                     : "bg-card text-foreground ring-border hover:bg-muted",
                 )}
               >
-                {option.name}
+                {decodeEntities(option.name)}
                 <span className="ml-1 tabular-nums text-muted-foreground">{option.count}</span>
               </button>
             );
@@ -105,9 +114,9 @@ export function SmartFiltersBar({
               : "bg-card text-foreground ring-border hover:bg-muted",
           )}
         >
-          Open now
+          Open Now 🟢
           <span className={cn("ml-1 tabular-nums", openActive ? "text-primary-foreground/80" : "text-muted-foreground")}>
-            {openCount}
+            {openNowStatus === "loading" && openCount === 0 ? "…" : openCount}
           </span>
         </button>
         <Sheet open={open} onOpenChange={setOpen}>
@@ -215,7 +224,7 @@ function FilterGroupBlock({
                   : "bg-background text-foreground ring-border hover:bg-muted",
               )}
             >
-              {option.name}
+              {decodeEntities(option.name)}
               <span className={cn("ml-1.5 tabular-nums", active ? "text-primary-foreground/80" : "text-muted-foreground")}>
                 {option.count}
               </span>

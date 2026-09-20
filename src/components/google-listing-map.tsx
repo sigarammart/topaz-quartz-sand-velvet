@@ -16,14 +16,14 @@ import { useTheme } from "@/store/theme";
 
 const PONDICHERRY = { lat: 11.934, lng: 79.832 };
 
-function pinIcon(g: NonNullable<ReturnType<typeof googleMapsApi>>, fill: string, stroke: string) {
+function pinIcon(g: NonNullable<ReturnType<typeof googleMapsApi>>, fill: string, stroke: string, scale = 13) {
   return {
     path: g.SymbolPath?.CIRCLE ?? 0,
-    scale: 12,
+    scale,
     fillColor: fill,
     fillOpacity: 1,
     strokeColor: stroke,
-    strokeWeight: 2,
+    strokeWeight: 3,
   };
 }
 
@@ -113,9 +113,10 @@ export function GoogleListingMap({
     const map = mapRef.current;
     if (!g || !map || typeof g.Marker !== "function") return;
     try {
-      const fill = dark ? "#efe8dc" : "#1c1914";
-      const fillActive = dark ? "#4db8bf" : "#1a5f66";
-      const stroke = dark ? "#0b1213" : "#fffbf5";
+      const fill = "#5ee1e8";
+      const fillActive = "#f5c15d";
+      const stroke = "#0b1213";
+      const labelColor = "#0b1213";
       const keep = new Set(pins.map((p) => p.slug));
       for (const [slug, marker] of markers.current) {
         if (!keep.has(slug)) {
@@ -138,10 +139,10 @@ export function GoogleListingMap({
         } else {
           marker.setPosition({ lat: listing.lat, lng: listing.lng });
         }
-        marker.setIcon(pinIcon(g, isActive ? fillActive : fill, stroke));
+        marker.setIcon(pinIcon(g, isActive ? fillActive : fill, stroke, isActive ? 15 : 13));
         marker.setLabel({
           text: n,
-          color: isActive ? (dark ? "#0b1213" : "#f7f4ec") : dark ? "#0b1213" : "#f7f4ec",
+          color: labelColor,
           fontSize: "11px",
           fontWeight: "700",
         });
@@ -160,10 +161,10 @@ export function GoogleListingMap({
         }
         youMarker.current.setIcon({
           path: g.SymbolPath?.CIRCLE ?? 0,
-          scale: 7,
-          fillColor: fillActive,
+          scale: 8,
+          fillColor: "#f5c15d",
           fillOpacity: 1,
-          strokeColor: stroke,
+          strokeColor: "#ffffff",
           strokeWeight: 3,
         });
         youMarker.current.setMap(map);

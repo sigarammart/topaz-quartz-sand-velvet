@@ -1,5 +1,6 @@
 import type { Category, Listing, ListingTaxTerm } from "@/lib/types";
 import { listingIsOpen } from "@/lib/hours";
+import { decodeEntities } from "@/lib/utils";
 
 export type FilterParam =
   | "type"
@@ -113,15 +114,15 @@ const TYPE_SKIP = new Set([
 ]);
 
 export function facetSlug(value: string): string {
-  return value
+  return decodeEntities(value)
     .toLowerCase()
-    .replace(/&/g, "and")
+    .replace(/&/g, " ")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
 
 function asTerm(name: string | undefined | null): ListingTaxTerm | null {
-  const clean = (name ?? "").replace(/\s+/g, " ").trim();
+  const clean = decodeEntities(name ?? "");
   if (clean.length < 2 || clean.length > 48) return null;
   const slug = facetSlug(clean);
   if (!slug || slug.length < 2) return null;
@@ -305,7 +306,8 @@ function countTerms(
     for (const term of groupsOf(listing)) {
       if (!term.slug || seen.has(term.slug) || hide?.has(term.slug)) continue;
       seen.add(term.slug);
-      const row = counts.get(term.slug) ?? { name: term.name, count: 0 };
+      const row = counts.get(term.slug) ?? { name: decodeEntities(term.name), count: 0 };
+      row.name = decodeEntities(term.name || row.name);
       row.count += 1;
       counts.set(term.slug, row);
     }

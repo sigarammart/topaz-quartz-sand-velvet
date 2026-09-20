@@ -2,32 +2,16 @@ import { Link } from "@tanstack/react-router";
 import { MapPin } from "lucide-react";
 import type { Listing } from "@/lib/types";
 import { formatDistance, listingDistanceKm } from "@/lib/geo";
-import { listingIsOpen } from "@/lib/hours";
 import { listingCover } from "@/lib/media";
 import { AddToTrip } from "@/components/add-to-trip";
+import { OpenNowBadge } from "@/components/open-now-badge";
 import { Stars } from "@/components/stars";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { cn, decodeEntities } from "@/lib/utils";
 import { useGeo } from "@/store/geo";
 
-function OpenStatus({ listing, compact = false }: { listing: Listing; compact?: boolean }) {
-  const open = listingIsOpen(listing);
-  if (open === undefined && !listing.hours) return null;
-  const label =
-    open === true ? "Open now" : open === false ? listing.hours || "Closed" : listing.hours;
-  return (
-    <span
-      className={cn(
-        "truncate rounded-full px-2 py-0.5 text-[11px] font-semibold",
-        open === true && "bg-accent text-accent-foreground",
-        open === false && "bg-destructive/10 text-destructive",
-        open === undefined && "bg-card/90 text-muted-foreground",
-        compact && "max-w-[11rem]",
-      )}
-    >
-      {label}
-    </span>
-  );
+function kindLabel(listing: Listing) {
+  return decodeEntities(listing.kind || "Listing");
 }
 
 function PlaceLine({ listing }: { listing: Listing }) {
@@ -106,13 +90,10 @@ export function ListingCard({
             {pin != null && <PinMark n={pin} active={active} className="left-1 top-1" />}
           </div>
           <div className="min-w-0 flex-1 py-0.5 pr-9">
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-[11px] font-medium uppercase tracking-wide text-primary">
-                {listing.featured ? "Featured · " : ""}
-                {listing.kind}
-              </p>
-              <OpenStatus listing={listing} compact />
-            </div>
+            <p className="truncate text-[11px] font-medium uppercase tracking-wide text-primary">
+              {listing.featured ? "Featured · " : ""}
+              {kindLabel(listing)}
+            </p>
             <h3 className="truncate text-sm font-semibold leading-snug">{listing.name}</h3>
             {listing.rating > 0 && (
               <div className="mt-0.5 flex items-center gap-1.5 text-muted-foreground">
@@ -120,7 +101,8 @@ export function ListingCard({
                 <span className="text-[11px]">({listing.reviews.toLocaleString()})</span>
               </div>
             )}
-            <div className="mt-0.5">
+            <div className="mt-0.5 flex min-w-0 items-center gap-2">
+              <OpenNowBadge listing={listing} />
               <PlaceLine listing={listing} />
             </div>
           </div>
@@ -153,13 +135,11 @@ export function ListingCard({
               pin != null ? "left-9" : "left-2",
             )}
           >
-            {listing.featured ? `Featured · ${listing.kind}` : listing.kind}
+            {listing.featured ? `Featured · ${kindLabel(listing)}` : kindLabel(listing)}
           </Badge>
-          {!compact && (
-            <span className="absolute right-2 top-2">
-              <OpenStatus listing={listing} compact />
-            </span>
-          )}
+          <span className="absolute right-2 top-2">
+            <OpenNowBadge listing={listing} compact />
+          </span>
         </div>
         <div className={cn("flex flex-1 flex-col gap-0.5", compact ? "p-2.5 pr-10" : "p-3 pr-12")}>
           <h3 className={cn("font-semibold leading-snug", compact ? "text-sm" : "text-base")}>{listing.name}</h3>
@@ -170,6 +150,9 @@ export function ListingCard({
             </div>
           )}
           <PlaceLine listing={listing} />
+          <div className="mt-0.5">
+            <OpenNowBadge listing={listing} />
+          </div>
         </div>
       </Link>
       <AddToTrip

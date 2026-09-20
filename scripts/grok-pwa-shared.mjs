@@ -151,14 +151,20 @@ export function stripInstallParams(url) {
   return rest ? `${path}?${rest}` : path;
 }
 
-export function renderInstallPageHtml(template, { host, url } = {}) {
+export function pwaNameFromSite(site = {}, hostHeader = "") {
+  const named = String(site?.pwaName ?? "").trim();
+  if (named) return named;
+  return appNameFromHost(hostHeader);
+}
+
+export function renderInstallPageHtml(template, { host, url, site } = {}) {
   return String(template)
-    .replaceAll("{{APP_NAME}}", escapeHtml(appNameFromHost(host)))
+    .replaceAll("{{APP_NAME}}", escapeHtml(pwaNameFromSite(site, host)))
     .replaceAll("{{APP_URL}}", escapeHtml(stripInstallParams(url)));
 }
 
-export function renderWebManifest(hostHeader) {
-  const name = appNameFromHost(hostHeader);
+export function renderWebManifest(hostHeader, site = {}) {
+  const name = pwaNameFromSite(site, hostHeader);
   return JSON.stringify(
     {
       name,
@@ -167,12 +173,22 @@ export function renderWebManifest(hostHeader) {
       start_url: "/",
       scope: "/",
       display: "standalone",
-      background_color: "#000000",
-      theme_color: "#000000",
+      background_color: "#0b1213",
+      theme_color: "#0b1213",
       icons: [
         {
           src: "/__grok/icon-180.png",
           sizes: "180x180",
+          type: "image/png",
+        },
+        {
+          src: "/icon-192.png",
+          sizes: "192x192",
+          type: "image/png",
+        },
+        {
+          src: "/icon-512.png",
+          sizes: "512x512",
           type: "image/png",
         },
       ],

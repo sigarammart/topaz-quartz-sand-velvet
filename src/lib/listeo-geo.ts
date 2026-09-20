@@ -1,11 +1,13 @@
 import type { Category } from "@/lib/types";
+import { categoryFromKindName } from "@/lib/listing-categories";
 import { pickListingImage, uniqueImages } from "@/lib/media";
+import { decodeEntities } from "@/lib/utils";
 
 export type ListeoGeo = {
   slug: string;
   name: string;
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
   rating?: number;
   reviews?: number;
   address?: string;
@@ -22,21 +24,19 @@ function urlTail(url: string) {
 }
 
 function decode(raw: string): string {
-  return raw
-    .replace(/&/gi, "&")
-    .replace(/&#038;/g, "&")
-    .replace(/"/gi, '"')
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/\s+/g, " ")
-    .trim();
+  return decodeEntities(raw.replace(/&#038;/g, "&"));
 }
 
 function categoryFromCard(kind: string, listingType: string): Category {
+  const mapped = categoryFromKindName(kind);
+  if (mapped) return mapped;
   const hay = `${kind} ${listingType}`.toLowerCase();
   if (/hotel|guest|stay|resort|homestay|villa|property/.test(hay)) return "stay";
-  if (/beach|heritage|temple|church|ashram|museum|park|attraction|spiritual/.test(hay)) return "places";
-  if (/bike|rental|scuba|sport|adventure|activity|tour|kayak|workshop|class/.test(hay)) return "activities";
   if (/cafe|restaurant|pub|bar|food|pizza|bakery|night/.test(hay)) return "food";
+  if (/bike|rental|scuba|sport|adventure|activity|tour|kayak|workshop|class|photo|salon|spa/.test(hay)) {
+    return "activities";
+  }
+  if (/beach|heritage|temple|church|ashram|museum|park|attraction|spiritual/.test(hay)) return "places";
   if (listingType === "rental") return "activities";
   return "places";
 }
@@ -49,8 +49,7 @@ export function parseListeoGeoHtml(html: string): ListeoGeo[] {
     const window = chunk.slice(0, 9000);
     const lat = Number(window.match(/data-latitude="([\d.-]+)"/)?.[1]);
     const lng = Number(window.match(/data-longitude="([\d.-]+)"/)?.[1]);
-    if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
-    if (lat < 11.5 || lat > 12.4 || lng < 79.4 || lng > 80.2) continue;
+    const hasGeo = Number.isFinite(lat) && Number.isFinite(lng);
     const href = window.match(/https:\/\/xplorepondy\.com\/listing\/[^"\s>]+/);
     const slug = href ? urlTail(href[0].replace(/\/$/, "")) : "";
     if (!slug || seen.has(slug)) continue;
@@ -74,8 +73,8 @@ export function parseListeoGeoHtml(html: string): ListeoGeo[] {
     out.push({
       slug,
       name: name || slug,
-      lat,
-      lng,
+      lat: hasGeo ? lat : undefined,
+      lng: hasGeo ? lng : undefined,
       rating: Number.isFinite(rating) && rating > 0 ? rating : undefined,
       reviews: Number.isFinite(reviews) && reviews > 0 ? reviews : undefined,
       address: address || undefined,
@@ -90,32 +89,59 @@ export function parseListeoGeoHtml(html: string): ListeoGeo[] {
   return out;
 }
 
-async function fetchListeoPage(page: number, perPage: number): Promise<string> {
+async function fetchListeoPage(
+  page: number,
+  perPage: number,
+): Promise<{ html: string; pages: number; total: number }> {
   const url = `https://xplorepondy.com/wp-admin/admin-ajax.php?action=listeo_get_listings&page=${page}&per_page=${perPage}`;
-  const res = await fetch(url, {
-    headers: { Accept: "application/json", "User-Agent": "XplorePondyApp/1.0" },
-    signal: AbortSignal.timeout(25000),
-  });
-  if (!res.ok) return "";
-  const data = (await res.json()) as { html?: string };
-  return data.html ?? "";
-}
-
-export async function loadListeoGeo(): Promise<Map<string, ListeoGeo>> {
-  const map = new Map<string, ListeoGeo>();
-  const pages = await Promise.all(
-    [1, 2, 3, 4].map(async (page) => {
-      try {
-        return await fetchListeoPage(page, 100);
-      } catch {
-        return "";
-      }
-    }),
-  );
-  for (const html of pages) {
-    for (const hit of parseListeoGeoHtml(html)) {
-      if (!map.has(hit.slug)) map.set(hit.slug, hit);
+  const empty = { html: "", pages: 1, total: 0 };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { Accept: "application/json", "User-Agent": "XplorePondyApp/1.0" },
+        signal: AbortSignal.timeout(12000),
+      });
+      if (!res.ok) continue;
+      const data = (await res.json()) as {
+        html?: string;
+        max_num_pages?: number | string;
+        total_found?: number | string;
+      };
+      return {
+        html: data.html ?? "",
+        pages: Math.max(1, Number(data.max_num_pages) || 1),
+        total: Number(data.total_found) || 0,
+      };
+    } catch {
+      /* retry */
     }
   }
-  return map;
+  return empty;
+}
+
+function ingest(html: string, map: Map<string, ListeoGeo>) {
+  for (const hit of parseListeoGeoHtml(html)) {
+    if (!map.has(hit.slug)) map.set(hit.slug, hit);
+  }
+}
+
+export async function loadListeoGeo(): Promise<{ map: Map<string, ListeoGeo>; total: number }> {
+  const map = new Map<string, ListeoGeo>();
+  const pageNos = [1, 2, 3, 4];
+  const results = await Promise.all(pageNos.map(async (page) => ({ page, ...(await fetchListeoPage(page, 100)) })));
+  let total = 0;
+  for (const row of results) {
+    ingest(row.html, map);
+    if (row.total > total) total = row.total;
+  }
+  const weak = results.filter((row) => !row.html);
+  if (weak.length || (total > 0 && map.size < total * 0.9)) {
+    const retryPages = weak.length ? weak.map((row) => row.page) : pageNos;
+    const again = await Promise.all(retryPages.map((page) => fetchListeoPage(page, 100)));
+    for (const row of again) {
+      ingest(row.html, map);
+      if (row.total > total) total = row.total;
+    }
+  }
+  return { map, total: Math.max(total, map.size) };
 }

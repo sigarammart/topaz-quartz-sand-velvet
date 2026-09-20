@@ -4,7 +4,8 @@ import { guides as localGuides } from "@/data/guides";
 import { listings as localListings } from "@/data/listings";
 import type { Category, Guide, GuideBlock, GuideSection, Listing, ListingFaq, ListingMetaGroup, ListingMetaItem, ListingStop, ListingTaxGroup, ListingTaxTerm } from "@/lib/types";
 import { parseOpenHoursHtml } from "@/lib/hours";
-import { loadJetArchiveMeta, type JetArchiveHit } from "@/lib/jet-archive";
+import { ARCHIVE_SLUGS, categoryFromKindName } from "@/lib/listing-categories";
+import { loadJetArchiveMeta, loadOpenNowSnapshot, type JetArchiveHit } from "@/lib/jet-archive";
 import { loadListeoGeo, type ListeoGeo } from "@/lib/listeo-geo";
 import { extractOgImage, pickListingImage, uncropImage, uniqueImages } from "@/lib/media";
 
@@ -1083,30 +1084,17 @@ function mergeLocal(listings: Listing[]) {
 
 let catalogCache: { at: number; listings: Listing[]; total: number; v: number } | null = null;
 let guidesCache: { at: number; guides: Guide[] } | null = null;
+let openNowCache: { at: number; snapshot: Awaited<ReturnType<typeof loadOpenNowSnapshot>> } | null = null;
 const listingPageCache = new Map<string, { at: number; listing: Listing }>();
 const CATALOG_TTL = 5 * 60 * 1000;
 const LISTING_PAGE_TTL = 10 * 60 * 1000;
-const CATALOG_VERSION = 19;
-
-const ARCHIVE_SLUGS = [
-  "cafes",
-  "restaurants",
-  "resto-pubs",
-  "resto-bars",
-  "beaches",
-  "hotels",
-  "bike-rental",
-  "adventure-sports",
-  "guest-house",
-  "saloon-spa",
-];
+const CATALOG_VERSION = 24;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
+  const { map: listeoGeo, total: listeoTotal } = await loadListeoGeo();
+  if (listeoGeo.size < 8) throw new Error("listeo-empty");
+
   const jetMeta = new Map<string, JetArchiveHit>();
-  const jetTask = loadJetArchiveMeta(ARCHIVE_SLUGS, jetMeta).catch(() => jetMeta);
-  const listeoGeo = await loadListeoGeo().catch(() => new Map<string, ListeoGeo>());
-  await Promise.race([jetTask, new Promise((resolve) => setTimeout(resolve, 10000))]);
-  if (listeoGeo.size < 8 && jetMeta.size < 8) throw new Error("listeo-empty");
 
   const seen = new Set<string>();
   const listings: Listing[] = [];
@@ -1115,8 +1103,12 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
     const hit = jetMeta.get(slug) ?? jetMeta.get(urlTail(item.siteUrl));
     const geo = listeoGeo.get(slug) ?? listeoGeo.get(urlTail(item.siteUrl));
     const local = findLocal(slug, item.siteUrl);
+    const kind = decodeHtml(hit?.kind || item.kind);
+    const category = hit?.category ?? categoryFromKindName(kind) ?? item.category;
     return {
       ...item,
+      category,
+      kind,
       wpId: item.wpId ?? geo?.id ?? local?.wpId,
       mustTry: item.mustTry?.length ? item.mustTry : hit?.mustTry,
       cafeTypes: item.cafeTypes?.length ? item.cafeTypes : hit?.cafeTypes,
@@ -1150,7 +1142,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
           slug: geo.slug,
           name: geo.name,
           category,
-          kind: geo.kind ?? local?.kind ?? "Listing",
+          kind: decodeHtml(geo.kind ?? local?.kind ?? "Listing"),
           rating: geo.rating ?? 0,
           reviews: geo.reviews ?? 0,
           location: geo.address ?? "Pondicherry",
@@ -1158,7 +1150,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
           distance: "",
           hours: local?.hours ?? "",
           description: local?.description ?? "",
-          tags: geo.kind ? [geo.kind] : (local?.tags ?? []),
+          tags: geo.kind ? [decodeHtml(geo.kind)] : (local?.tags ?? []),
           bestFor: local?.bestFor ?? [],
           image: geo.image ?? FALLBACK_IMAGE[category],
           gallery: geo.gallery,
@@ -1209,7 +1201,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
   }
 
   const merged = mergeLocal(listings);
-  return { listings: merged, total: Math.max(merged.length, listeoGeo.size, jetMeta.size) };
+  return { listings: merged, total: Math.max(merged.length, listeoGeo.size, listeoTotal) };
 }
 
 async function loadGuidesFromWp(): Promise<Guide[]> {
@@ -1232,12 +1224,86 @@ export const fetchWpCatalog = createServerFn({ method: "GET" }).handler(async ()
   }
   try {
     const fresh = await loadCatalogFromWp();
-    catalogCache = { at: now, v: CATALOG_VERSION, ...fresh };
+    if (fresh.listings.length >= 300) {
+      catalogCache = { at: now, v: CATALOG_VERSION, ...fresh };
+    }
     return fresh;
   } catch {
+    if (catalogCache && catalogCache.listings.length >= 80) {
+      return { listings: catalogCache.listings, total: catalogCache.total };
+    }
     return { listings: localListings, total: localListings.length };
   }
 });
+
+export const fetchWpOpenNowSnapshot = createServerFn({ method: "GET" }).handler(async () => {
+  const now = Date.now();
+  if (openNowCache && now - openNowCache.at < CATALOG_TTL) return openNowCache.snapshot;
+  const snapshot = await loadOpenNowSnapshot();
+  openNowCache = { at: now, snapshot };
+  return snapshot;
+});
+
+export const fetchWpListingHours = createServerFn({ method: "GET" }).handler(async () => {
+  const bySlug = new Map<string, JetArchiveHit>();
+  await loadJetArchiveMeta(ARCHIVE_SLUGS, bySlug);
+  return [...bySlug.values()]
+    .filter((hit) => hit.hours || hit.weeklyHours?.length || hit.openNow != null)
+    .map((hit) => ({
+      slug: hit.slug,
+      hours: hit.hours,
+      openNow: hit.openNow,
+      weeklyHours: hit.weeklyHours,
+    }));
+});
+
+export const fetchWpOpenNowForSlugs = createServerFn({ method: "GET" })
+  .validator(z.object({ slugs: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const slugs = [...new Set(data.slugs.split(",").map((s) => s.trim()).filter(Boolean))].slice(0, 24);
+    const rows: Array<{
+      slug: string;
+      hours?: string;
+      openNow?: boolean;
+      weeklyHours?: Listing["weeklyHours"];
+    }> = [];
+    const queue = [...slugs];
+    await Promise.all(
+      Array.from({ length: Math.min(6, queue.length) }, async () => {
+        while (queue.length) {
+          const slug = queue.shift();
+          if (!slug) break;
+          const cached = listingPageCache.get(slug);
+          if (cached && Date.now() - cached.at < LISTING_PAGE_TTL) {
+            const listing = cached.listing;
+            if (listing.hours || listing.weeklyHours?.length || listing.openNow != null) {
+              rows.push({
+                slug,
+                hours: listing.hours,
+                openNow: listing.openNow,
+                weeklyHours: listing.weeklyHours,
+              });
+            }
+            continue;
+          }
+          const page = await loadListingPageHtml(
+            [`${WP_ORIGIN}/listing/service/${slug}/`, `${WP_ORIGIN}/listing/${slug}/`],
+            8000,
+          );
+          if (!page) continue;
+          const hoursInfo = parseOpenHoursHtml(page.html);
+          if (!hoursInfo.hours && !hoursInfo.weeklyHours.length && hoursInfo.openNow == null) continue;
+          rows.push({
+            slug,
+            hours: hoursInfo.hours || undefined,
+            openNow: hoursInfo.openNow,
+            weeklyHours: hoursInfo.weeklyHours.length ? hoursInfo.weeklyHours : undefined,
+          });
+        }
+      }),
+    );
+    return rows;
+  });
 
 export const fetchWpGuides = createServerFn({ method: "GET" }).handler(async () => {
   const now = Date.now();

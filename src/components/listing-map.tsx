@@ -347,9 +347,8 @@ function OsmListingMap({ listings, selected, onSelect, className }: ListingMapPr
               onSelect(listing.slug);
             }}
             className={cn(
-              "absolute z-10 flex size-7 -translate-x-1/2 -translate-y-full items-center justify-center rounded-full text-[11px] font-semibold tabular-nums shadow-soft ring-2 transition-transform",
-              isActive ? "z-20 scale-110 bg-primary text-primary-foreground ring-background" : "bg-card text-foreground ring-background",
-              open === true && !isActive && "ring-primary/50",
+              "absolute z-10 flex size-8 -translate-x-1/2 -translate-y-full items-center justify-center rounded-full text-[11px] font-bold tabular-nums shadow-[0_2px_8px_rgba(0,0,0,0.55)] ring-2 ring-white transition-transform",
+              isActive ? "z-20 scale-110 bg-amber-400 text-zinc-900" : "bg-cyan-400 text-zinc-900",
               open === false && !isActive && "opacity-80",
             )}
             style={{ left, top }}

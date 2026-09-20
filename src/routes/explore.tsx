@@ -140,10 +140,10 @@ function Explore() {
           : "Beaches, the French Quarter, dives, bakeries, pubs, and a bed for the night."}
       </p>
       <p className="mt-2 text-xs text-muted-foreground">
-        {status === "loading"
-          ? "Refreshing from xplorepondy.com…"
-          : source === "live"
-            ? `Live from xplorepondy.com · ${total.toLocaleString()} listings`
+        {source === "live" && items.length > 80
+          ? `Live from xplorepondy.com · ${Math.max(total, items.length).toLocaleString()} listings`
+          : status === "loading"
+            ? "Refreshing from xplorepondy.com…"
             : status === "offline"
               ? "WordPress unreachable · showing the curated set"
               : "Loading the directory…"}

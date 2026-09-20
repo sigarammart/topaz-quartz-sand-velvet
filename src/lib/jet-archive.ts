@@ -1,5 +1,7 @@
 import { parseOpenHoursHtml } from "@/lib/hours";
-import type { DayHours, ListingMetaGroup, ListingTaxGroup, ListingTaxTerm } from "@/lib/types";
+import { archiveCategory, DEEP_ARCHIVE_SLUGS, WP_PARENT_ARCHIVES } from "@/lib/listing-categories";
+import type { Category, DayHours, ListingMetaGroup, ListingTaxGroup, ListingTaxTerm } from "@/lib/types";
+import { decodeEntities } from "@/lib/utils";
 
 export type JetArchiveHit = {
   slug: string;
@@ -14,6 +16,8 @@ export type JetArchiveHit = {
   weeklyHours?: DayHours[];
   featured?: boolean;
   listingPackage?: number;
+  category?: Category;
+  kind?: string;
 };
 
 const SKIP_QVAR = new Set([
@@ -60,22 +64,18 @@ const KEY_LABEL: Record<string, string> = {
 };
 
 function stripTags(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&/g, "&")
-    .replace(/"/g, '"')
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return decodeEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<[^>]+>/g, " "),
+  );
 }
 
 export function facetSlug(value: string): string {
   return stripTags(value)
     .toLowerCase()
-    .replace(/&/g, "and")
+    .replace(/&/g, " ")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 }
@@ -156,10 +156,7 @@ function addFacet(map: Map<string, ListingTaxGroup>, key: string, label: string,
 function parseMapMarkers(html: string): Map<number, { lat: number; lng: number }> {
   const out = new Map<number, { lat: number; lng: number }>();
   for (const match of html.matchAll(/data-markers="([^"]+)"/g)) {
-    const raw = match[1]
-      .replace(/"/g, '"')
-      .replace(/&/g, "&")
-      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
+    const raw = decodeEntities(match[1]);
     try {
       const rows = JSON.parse(raw) as Array<{ id?: number; latLang?: { lat?: number; lng?: number } }>;
       if (!Array.isArray(rows)) continue;
@@ -176,9 +173,10 @@ function parseMapMarkers(html: string): Map<number, { lat: number; lng: number }
   return out;
 }
 
-export function parseArchiveHtml(html: string): JetArchiveHit[] {
+export function parseArchiveHtml(html: string, archiveSlug?: string): JetArchiveHit[] {
   const qvars = archiveMetaVars(html);
   const markers = parseMapMarkers(html);
+  const archiveCat = archiveSlug ? archiveCategory(archiveSlug) : undefined;
   const hits: JetArchiveHit[] = [];
   const chunks = html.split(/data-post-id="/).slice(1);
   let rank = 0;
@@ -194,9 +192,20 @@ export function parseArchiveHtml(html: string): JetArchiveHit[] {
     const mustTry: string[] = [];
     const cafeTypes: string[] = [];
     const used = new Set<string>();
-    const hoursInfo = parseOpenHoursHtml(window);
+    let hoursInfo = parseOpenHoursHtml(window);
+    if (!hoursInfo.hours && !hoursInfo.weeklyHours.length && hoursInfo.openNow == null) {
+      const extra = parseOpenHoursHtml(chunk.slice(0, 80000));
+      if (extra.hours || extra.weeklyHours.length || extra.openNow != null) hoursInfo = extra;
+    }
     const geo = Number.isFinite(id) ? markers.get(id) : undefined;
     const featured = /badge-nl featured-nl/.test(window);
+    const kind = decodeEntities(
+      window.match(/listing-category-tag[^"]*"[^>]*>\s*([^<]+)/)?.[1] ??
+        window.match(/listing-category-tag-nl">([^<]+)/)?.[1] ??
+        "",
+    )
+      .split(",")[0]
+      ?.trim();
 
     const labeled = [...window.matchAll(/<strong>([^<]+)<\/strong>\s*([^<]*)/g)];
     for (const [, titleRaw, valuesRaw] of labeled) {
@@ -232,7 +241,8 @@ export function parseArchiveHtml(html: string): JetArchiveHit[] {
     }
 
     const list = [...facets.values()].filter((g) => g.terms.length);
-    if (!list.length && !mustTry.length && !geo && !hoursInfo.hours && !featured) continue;
+    const hasHours = Boolean(hoursInfo.hours || hoursInfo.weeklyHours.length || hoursInfo.openNow != null);
+    if (!list.length && !mustTry.length && !geo && !hasHours && !featured) continue;
     hits.push({
       slug,
       mustTry,
@@ -249,6 +259,8 @@ export function parseArchiveHtml(html: string): JetArchiveHit[] {
       weeklyHours: hoursInfo.weeklyHours.length ? hoursInfo.weeklyHours : undefined,
       featured: featured || undefined,
       listingPackage: rank,
+      category: archiveCat ?? (kind ? archiveCategory(facetSlug(kind)) : undefined),
+      kind: kind || undefined,
     });
   }
   return hits;
@@ -278,6 +290,8 @@ function mergeHit(prev: JetArchiveHit, hit: JetArchiveHit): JetArchiveHit {
     openNow: prev.openNow ?? hit.openNow,
     weeklyHours: prev.weeklyHours?.length ? prev.weeklyHours : hit.weeklyHours,
     featured: prev.featured || hit.featured,
+    category: prev.category ?? hit.category,
+    kind: prev.kind || hit.kind,
     listingPackage:
       prev.listingPackage != null && hit.listingPackage != null
         ? Math.min(prev.listingPackage, hit.listingPackage)
@@ -308,10 +322,89 @@ async function resolveListingSlugs(ids: number[]): Promise<Map<number, string>> 
 async function fetchHtml(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { Accept: "text/html", "User-Agent": "XplorePondyApp/1.0" },
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) return "";
   return res.text();
+}
+
+export function parseIsOpenNowCount(html: string): number {
+  let max = 0;
+  for (const match of html.matchAll(/is_open_now"\s*:\s*\{\s*"1"\s*:\s*"?(\d+)/g)) {
+    const n = Number(match[1]);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return max;
+}
+
+export type OpenNowSnapshot = {
+  total: number;
+  byCategory: Record<Category, number>;
+  rows: Array<{
+    slug: string;
+    hours?: string;
+    openNow?: boolean;
+    weeklyHours?: DayHours[];
+  }>;
+};
+
+function hoursRows(bySlug: Map<string, JetArchiveHit>) {
+  return [...bySlug.values()]
+    .filter((hit) => hit.hours || hit.weeklyHours?.length || hit.openNow != null)
+    .map((hit) => ({
+      slug: hit.slug,
+      hours: hit.hours,
+      openNow: hit.openNow,
+      weeklyHours: hit.weeklyHours,
+    }));
+}
+
+export async function loadOpenNowSnapshot(): Promise<OpenNowSnapshot> {
+  const bySlug = new Map<string, JetArchiveHit>();
+  const byCategory: Record<Category, number> = { places: 0, activities: 0, food: 0, stay: 0 };
+  await Promise.all(
+    WP_PARENT_ARCHIVES.map(async (archive) => {
+      const html = await fetchHtml(`https://xplorepondy.com/listing-category/${encodeURIComponent(archive.slug)}/`);
+      if (!html) return;
+      byCategory[archive.category] = parseIsOpenNowCount(html);
+      mergeHoursFromHtml(html, bySlug);
+    }),
+  );
+  const rows = hoursRows(bySlug);
+  const total = byCategory.places + byCategory.activities + byCategory.food + byCategory.stay;
+  return { total, byCategory, rows };
+}
+
+function listingSlugFromUrl(url: string) {
+  return url.replace(/\/$/, "").split("/").pop() ?? "";
+}
+
+function mergeHoursFromHtml(html: string, into: Map<string, JetArchiveHit>) {
+  for (const match of html.matchAll(/https:\/\/xplorepondy\.com\/listing\/[^"'\s<]+/g)) {
+    const slug = listingSlugFromUrl(match[0]);
+    if (!slug) continue;
+    const start = match.index ?? 0;
+    const slice = html.slice(Math.max(0, start - 4000), start + 28000);
+    const hoursInfo = parseOpenHoursHtml(slice);
+    if (!hoursInfo.hours && !hoursInfo.weeklyHours.length && hoursInfo.openNow == null) continue;
+    const prev = into.get(slug);
+    if (!prev) {
+      into.set(slug, {
+        slug,
+        mustTry: [],
+        cafeTypes: [],
+        facets: [],
+        groups: [],
+        hours: hoursInfo.hours || undefined,
+        openNow: hoursInfo.openNow,
+        weeklyHours: hoursInfo.weeklyHours.length ? hoursInfo.weeklyHours : undefined,
+      });
+      continue;
+    }
+    if (!prev.hours) prev.hours = hoursInfo.hours || undefined;
+    if (prev.openNow == null) prev.openNow = hoursInfo.openNow;
+    if (!prev.weeklyHours?.length && hoursInfo.weeklyHours.length) prev.weeklyHours = hoursInfo.weeklyHours;
+  }
 }
 
 async function pool<T>(items: T[], size: number, worker: (item: T) => Promise<void>) {
@@ -332,9 +425,10 @@ export async function loadJetArchiveMeta(
 ): Promise<Map<string, JetArchiveHit>> {
   const bySlug = into ?? new Map<string, JetArchiveHit>();
   const markers = new Map<number, { lat: number; lng: number }>();
-  const slugs = [...new Set(categorySlugs.filter(Boolean))].slice(0, 8);
+  const slugs = [...new Set(categorySlugs.filter(Boolean))].slice(0, 16);
   await pool(slugs, 4, async (cat) => {
-    for (let page = 1; page <= 2; page++) {
+    const maxPages = DEEP_ARCHIVE_SLUGS.has(cat) ? 10 : 3;
+    for (let page = 1; page <= maxPages; page++) {
       const url =
         page === 1
           ? `https://xplorepondy.com/listing-category/${encodeURIComponent(cat)}/`
@@ -347,7 +441,8 @@ export async function loadJetArchiveMeta(
       }
       if (!html || !html.includes("data-post-id=")) break;
       for (const [id, geo] of parseMapMarkers(html)) markers.set(id, geo);
-      const hits = parseArchiveHtml(html);
+      const hits = parseArchiveHtml(html, cat);
+      mergeHoursFromHtml(html, bySlug);
       if (!hits.length && page > 1) break;
       let fresh = 0;
       for (const hit of hits) {

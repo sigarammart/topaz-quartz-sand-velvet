@@ -8,6 +8,7 @@ import { useTheme } from "@/store/theme";
 import appCss from "../styles.css?url";
 
 const APP_NAME = "Xplore Pondy";
+const PWA_NAME = "XP App";
 
 const THEME_BOOT = `(function(){try{var m=localStorage.getItem("xp-color-mode");var r=document.documentElement;if(m==="light"){r.classList.add("light");r.classList.remove("dark")}else{r.classList.add("dark");r.classList.remove("light")}}catch(e){}})();`;
 
@@ -26,8 +27,8 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#0b1213" },
       { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-title", content: APP_NAME },
-      { name: "application-name", content: APP_NAME },
+      { name: "apple-mobile-web-app-title", content: PWA_NAME },
+      { name: "application-name", content: PWA_NAME },
     ],
     links: [
       { rel: "icon", href: "/favicon.ico", sizes: "48x48" },

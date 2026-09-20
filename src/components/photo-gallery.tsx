@@ -50,11 +50,19 @@ export function PhotoGallery({
       )}
 
       {layout === "hero" ? (
-        <div className={cn("grid gap-1 overflow-hidden rounded-2xl", thumbs.length ? "grid-cols-3 sm:grid-cols-4 sm:grid-rows-2" : "grid-cols-1")}>
+        <div
+          className={cn(
+            "grid h-[14.5rem] gap-1 overflow-hidden rounded-2xl sm:h-[20rem]",
+            thumbs.length ? "grid-cols-1 sm:grid-cols-4 sm:grid-rows-2" : "grid-cols-1",
+          )}
+        >
           <button
             type="button"
             onClick={() => setIndex(0)}
-            className={cn("relative overflow-hidden bg-muted", thumbs.length ? "col-span-3 row-span-1 aspect-[16/10] sm:col-span-2 sm:row-span-2 sm:aspect-auto sm:min-h-[18rem]" : "aspect-[16/9] sm:min-h-[18rem]")}
+            className={cn(
+              "relative min-h-0 overflow-hidden bg-muted",
+              thumbs.length ? "sm:col-span-2 sm:row-span-2" : "",
+            )}
             aria-label={`View ${name} photos`}
           >
             <img src={photos[0]} alt={name} className="size-full object-cover" />
@@ -70,7 +78,7 @@ export function PhotoGallery({
                 key={src}
                 type="button"
                 onClick={() => setIndex(n)}
-                className="relative hidden overflow-hidden bg-muted sm:block sm:min-h-[8.75rem]"
+                className="relative hidden min-h-0 overflow-hidden bg-muted sm:block"
               >
                 <img src={src} alt={`${name} photo ${n + 1}`} className="size-full object-cover" />
                 {last && extra > 0 && (
