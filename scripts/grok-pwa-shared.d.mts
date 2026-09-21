@@ -9,18 +9,11 @@ export declare function isInstallQuery(url: string | null | undefined): boolean;
 export declare function isDocumentPath(pathname: string | null | undefined): boolean;
 export declare function acceptsHtml(accept: string | null | undefined): boolean;
 export declare function stripInstallParams(url: string | null | undefined): string;
-export declare function pwaNameFromSite(
-  site?: { pwaName?: string; title?: string } | null,
-  hostHeader?: string | null,
-): string;
 export declare function renderInstallPageHtml(
   template: string,
-  context?: { host?: string | null; url?: string | null; site?: { pwaName?: string; title?: string } | null },
+  context?: { host?: string | null; url?: string | null },
 ): string;
-export declare function renderWebManifest(
-  hostHeader: string | null | undefined,
-  site?: { pwaName?: string; title?: string } | null,
-): string;
+export declare function renderWebManifest(hostHeader: string | null | undefined): string;
 export declare function grokPwaHeadTags(appName?: string): Array<[string, string]>;
 export declare const GROK_EXTENSIONS_SCRIPT_SRC: string;
 export declare function readGrokProjectId(): string;
