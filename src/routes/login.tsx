@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { FormEvent, useEffect, useState } from "react";
-import { KeyRound, LockKeyhole } from "lucide-react";
+import { LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/logo";
 import { GROK_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { WP_APP_PASSWORD_URL, wpLogin } from "@/lib/wp-api";
+import { wpLogin } from "@/lib/wp-api";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useSession } from "@/store/session";
 
@@ -78,7 +78,7 @@ function LoginPage() {
       toast.success(`Signed in as ${result.user.name}`);
       void navigate({ to: "/account" });
     } catch {
-      setError("Could not reach WordPress. Check the connection and try again.");
+      setError("Could not sign in. Check your username and password.");
     } finally {
       setPending(false);
     }
@@ -90,7 +90,7 @@ function LoginPage() {
       <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-primary">Sign in</p>
       <h1 className="mt-1 font-display text-3xl font-semibold">Welcome back</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Google for a quick account. WordPress if you manage listings on xplorepondy.com.
+        Google for a quick account, or sign in with your xplorepondy.com username and password.
       </p>
 
       {authEnabled ? (
@@ -119,31 +119,31 @@ function LoginPage() {
 
       <div className="my-8 flex items-center gap-3 text-xs uppercase tracking-wide text-muted-foreground">
         <span className="h-px flex-1 bg-border" />
-        WordPress
+        Login
         <span className="h-px flex-1 bg-border" />
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-1.5">
-          <Label htmlFor="username">WordPress username</Label>
+          <Label htmlFor="username">Username</Label>
           <Input
             id="username"
             name="username"
             autoComplete="username"
             required
             defaultValue={hydrated ? lastUsername : ""}
-            placeholder="your-wp-username"
+            placeholder="Username"
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="password">Application password</Label>
+          <Label htmlFor="password">Password</Label>
           <Input
             id="password"
             name="password"
             type="password"
             autoComplete="current-password"
             required
-            placeholder="xxxx xxxx xxxx xxxx xxxx xxxx"
+            placeholder="Password"
           />
         </div>
         {error && (
@@ -151,32 +151,12 @@ function LoginPage() {
         )}
         <Button type="submit" className="w-full" size="lg" disabled={pending}>
           <LockKeyhole />
-          {pending ? "Checking WordPress…" : "Sign in with WordPress"}
+          {pending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
 
-      <div className="mt-8 rounded-xl bg-card p-5 ring-1 ring-border/70">
-        <p className="flex items-center gap-2 text-sm font-semibold">
-          <KeyRound className="size-4 text-primary" />
-          How to get an application password
-        </p>
-        <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
-          <li>Sign in to the xplorepondy.com WordPress dashboard.</li>
-          <li>Open Users → Profile, then scroll to Application Passwords.</li>
-          <li>Create one named “Xplore Pondy App” and paste it here.</li>
-        </ol>
-        <a
-          href={WP_APP_PASSWORD_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-4 inline-flex text-sm font-medium text-primary hover:underline"
-        >
-          Create one on xplorepondy.com
-        </a>
-      </div>
-
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        Google sign-in is handled securely. WordPress credentials go only to xplorepondy.com.
+        Google sign-in is handled securely. Your username and password go only to xplorepondy.com.
       </p>
       <p className="mt-6 text-center text-sm">
         <Link to="/" className="text-muted-foreground hover:text-foreground">

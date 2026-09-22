@@ -1536,7 +1536,7 @@ export const wpLogin = createServerFn({ method: "POST" })
         return {
           ok: false as const,
           error:
-            "WordPress rejected that username or password. Use your site username and an Application Password from Users → Profile.",
+            "That username or password was not accepted. Use the same login as xplorepondy.com.",
         };
       }
       authHeaders = { Cookie: cookie };

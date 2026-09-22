@@ -103,7 +103,7 @@ export function LoginDialog() {
       toast.success(`Signed in as ${result.user.name}`);
       finishAfterLogin(result.bookmarkIds);
     } catch {
-      setError("Could not reach WordPress. Check the connection and try again.");
+      setError("Could not sign in. Check your username and password.");
     } finally {
       setPending(false);
     }
@@ -138,7 +138,7 @@ export function LoginDialog() {
 
         <div className="my-4 flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
           <span className="h-px flex-1 bg-border" />
-          WordPress
+          Login
           <span className="h-px flex-1 bg-border" />
         </div>
 
@@ -151,11 +151,11 @@ export function LoginDialog() {
               autoComplete="username"
               required
               defaultValue={lastUsername}
-              placeholder="your-wp-username"
+              placeholder="Username"
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="modal-password">Password or application password</Label>
+            <Label htmlFor="modal-password">Password</Label>
             <Input
               id="modal-password"
               name="password"
