@@ -987,6 +987,106 @@ function cookieHeader(setCookies: string[]) {
   return setCookies.map((c) => c.split(";")[0]).join("; ");
 }
 
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function xmlMember(xml: string, name: string) {
+  const re = new RegExp(`<name>${name}</name>\\s*<value>(?:<(?:string|int|i4)>)?([^<]*)`, "i");
+  return re.exec(xml)?.[1]?.trim() ?? "";
+}
+
+function extractRestNonce(html: string) {
+  const patterns = [
+    /wpApiSettings\s*=\s*\{[^}]*?"nonce"\s*:\s*"([a-zA-Z0-9]+)"/,
+    /"restNonce"\s*:\s*"([a-zA-Z0-9]+)"/,
+    /createNonceMiddleware\(\s*"([a-zA-Z0-9]+)"/,
+    /"nonce"\s*:\s*"([a-zA-Z0-9]{8,})"/,
+  ];
+  for (const re of patterns) {
+    const match = html.match(re);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+async function fetchMeXmlRpc(username: string, password: string): Promise<WpMe | null> {
+  const body = `<?xml version="1.0"?><methodCall><methodName>wp.getProfile</methodName><params><param><value><int>1</int></value></param><param><value><string>${escapeXml(username)}</string></value></param><param><value><string>${escapeXml(password)}</string></value></param></params></methodCall>`;
+  const res = await fetch(`${WP_ORIGIN}/xmlrpc.php`, {
+    method: "POST",
+    headers: { "Content-Type": "text/xml" },
+    body,
+    signal: AbortSignal.timeout(15000),
+  });
+  const xml = await res.text();
+  if (!res.ok || /faultCode|faultString/i.test(xml)) return null;
+  const id = Number(xmlMember(xml, "user_id") || xmlMember(xml, "userid"));
+  if (!Number.isFinite(id) || id <= 0) return null;
+  return {
+    id,
+    name: xmlMember(xml, "display_name") || xmlMember(xml, "nickname") || username,
+    slug: xmlMember(xml, "nicename") || xmlMember(xml, "username") || username,
+    email: xmlMember(xml, "email"),
+    roles: [],
+    avatar_urls: {},
+    meta: {},
+  };
+}
+
+async function wpCookieLogin(username: string, password: string) {
+  const form = new URLSearchParams({
+    log: username,
+    pwd: password,
+    rememberme: "forever",
+    "wp-submit": "Log In",
+    redirect_to: `${WP_ORIGIN}/`,
+    testcookie: "1",
+  });
+  const loginRes = await fetch(`${WP_ORIGIN}/wp-login.php`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Cookie: "wordpress_test_cookie=WP%20Cookie%20check",
+      Referer: `${WP_ORIGIN}/wp-login.php`,
+    },
+    body: form,
+    redirect: "manual",
+    signal: AbortSignal.timeout(20000),
+  });
+  const rawCookies =
+    typeof loginRes.headers.getSetCookie === "function" ? loginRes.headers.getSetCookie() : [];
+  const cookie = cookieHeader(rawCookies);
+  if (!cookie.includes("wordpress_logged_in")) return "";
+  return cookie;
+}
+
+async function fetchMeWithCookie(cookie: string): Promise<WpMe | null> {
+  if (!cookie) return null;
+  const pages = ["/", "/wp-admin/", "/wp-admin/profile.php"];
+  let nonce: string | null = null;
+  for (const path of pages) {
+    try {
+      const res = await fetch(`${WP_ORIGIN}${path}`, {
+        headers: { Cookie: cookie, Accept: "text/html" },
+        redirect: "follow",
+        signal: AbortSignal.timeout(12000),
+      });
+      nonce = extractRestNonce(await res.text());
+      if (nonce) break;
+    } catch {
+      /* try next page */
+    }
+  }
+  const headers: HeadersInit = nonce
+    ? { Cookie: cookie, "X-WP-Nonce": nonce }
+    : { Cookie: cookie };
+  return fetchMe(headers);
+}
+
 async function wpGet<T>(path: string, headers: HeadersInit = {}, timeout = 20000): Promise<{ headers: Headers; data: T; ok: boolean; status: number }> {
   const res = await fetch(`${WP_ORIGIN}${path}`, {
     headers: { Accept: "application/json", ...headers },
@@ -1507,48 +1607,20 @@ export const wpLogin = createServerFn({ method: "POST" })
     let authHeaders: HeadersInit = { Authorization: basic };
 
     if (!me) {
-      const form = new URLSearchParams({
-        log: username,
-        pwd: data.password,
-        rememberme: "forever",
-        "wp-submit": "Log In",
-        redirect_to: `${WP_ORIGIN}/wp-admin/`,
-        testcookie: "1",
-      });
-      const loginRes = await fetch(`${WP_ORIGIN}/wp-login.php`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Cookie: "wordpress_test_cookie=WP%20Cookie%20check",
-          Referer: `${WP_ORIGIN}/wp-login.php`,
-        },
-        body: form,
-        redirect: "manual",
-        signal: AbortSignal.timeout(20000),
-      });
-      const rawCookies =
-        typeof loginRes.headers.getSetCookie === "function" ? loginRes.headers.getSetCookie() : [];
-      const cookie = cookieHeader(rawCookies);
-      const location = loginRes.headers.get("location") ?? "";
-      const hasSession = cookie.includes("wordpress_logged_in");
-      const toAdmin = /\/wp-admin\/?/i.test(location) && !/[?&]login=/i.test(location);
-      if (!hasSession && !toAdmin) {
+      const xmlMe = await fetchMeXmlRpc(username, password);
+      const cookie = await wpCookieLogin(username, password);
+      const cookieMe = cookie ? await fetchMeWithCookie(cookie) : null;
+      me = cookieMe ?? xmlMe;
+      if (!me) {
         return {
           ok: false as const,
-          error:
-            "That username or password was not accepted. Use the same login as xplorepondy.com.",
+          error: "That username or password was not accepted. Use the same login as xplorepondy.com.",
         };
       }
-      authHeaders = { Cookie: cookie };
-      me = await fetchMe(authHeaders);
       method = "wordpress";
-    }
-
-    if (!me) {
-      return {
-        ok: false as const,
-        error: "Signed in, but WordPress did not return a profile. Try an Application Password.",
-      };
+      authHeaders = cookie
+        ? { Cookie: cookie }
+        : { Authorization: basic };
     }
 
     const user = mapUser(me);

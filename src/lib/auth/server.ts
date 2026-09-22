@@ -33,7 +33,7 @@ import { betterAuth } from "better-auth";
 import { bearer, genericOAuth } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { Pool } from "pg";
 import { ensureDbReady, getPglite } from "../db";
 import { emailAndPasswordEnabled } from "./email-password";
@@ -63,6 +63,13 @@ const globalAuthRef = globalThis as typeof globalThis & {
 function previewAuthSecret(): string {
   globalAuthRef.__grokAuthPreviewSecret__ ??= randomBytes(32).toString("hex");
   return globalAuthRef.__grokAuthPreviewSecret__;
+}
+
+/** Stable across Hostinger process restarts so Google/X OAuth state cookies still verify. */
+function customDomainAuthSecret(): string {
+  return createHash("sha256")
+    .update(`xplore-pondy-auth|${GOOGLE_OAUTH_CLIENT_SECRET}|${TWITTER_OAUTH_CLIENT_SECRET}`)
+    .digest("hex");
 }
 
 /** Read an env var, treating empty/whitespace as unset. */
@@ -113,7 +120,7 @@ const baseURL = {
   // `auto` → trust both http:// and https:// expansions of allowedHosts
   // (preview is https; local dev is http).
   protocol: "auto" as const,
-  fallback: explicitBaseURL || "http://localhost:8080",
+  fallback: explicitBaseURL || "https://app.xplorepondy.com",
 };
 
 // Origins Better Auth accepts on credentialed POSTs (sign-up/sign-in, …).
@@ -179,7 +186,7 @@ export const auth = betterAuth({
   baseURL,
   // Deployed apps inject BETTER_AUTH_SECRET. Preview: process-stable secret on
   // globalThis so HMR doesn't invalidate PGLite-backed sessions (see above).
-  secret: env("BETTER_AUTH_SECRET") ?? previewAuthSecret(),
+  secret: env("BETTER_AUTH_SECRET") ?? customDomainAuthSecret() ?? previewAuthSecret(),
   database,
 
   // CSRF / origin check for credentialed auth POSTs (email sign-up/sign-in, …).
