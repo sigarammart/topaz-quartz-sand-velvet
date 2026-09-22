@@ -146,9 +146,6 @@ export function ListingCard({
           >
             {listing.featured ? `Featured · ${kindLabel(listing)}` : kindLabel(listing)}
           </Badge>
-          <span className="absolute right-2 top-2">
-            <OpenNowBadge listing={listing} compact />
-          </span>
         </div>
         <div className={cn("flex flex-1 flex-col gap-0.5", compact ? "p-2.5 pr-10" : "p-3 pr-12")}>
           <h3 className={cn("font-semibold leading-snug", compact ? "text-sm" : "text-base")}>{listing.name}</h3>

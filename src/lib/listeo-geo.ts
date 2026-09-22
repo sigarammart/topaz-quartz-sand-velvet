@@ -69,7 +69,8 @@ export function parseListeoGeoHtml(html: string): ListeoGeo[] {
     const listingType = window.match(/data-listing-type="([^"]+)"/)?.[1] ?? "";
     const kind = decode(window.match(/listing-category-tag-nl">([^<]+)/)?.[1] ?? "").split(",")[0]?.trim() ?? "";
     const id = Number(window.match(/data-post-id="(\d+)"/)?.[1] || window.match(/data-id="(\d+)"/)?.[1]);
-    const featured = /badge-nl featured-nl/.test(window);
+    const featured =
+      /<(?:div|span)[^>]*class="[^"]*\bfeatured-nl\b/.test(window) || /\bbadge-nl featured-nl\b/.test(window);
     out.push({
       slug,
       name: name || slug,

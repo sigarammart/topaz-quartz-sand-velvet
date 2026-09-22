@@ -3,12 +3,21 @@ import { FormEvent, useState } from "react";
 import {
   ArrowRight,
   BadgeCheck,
+  BedDouble,
+  Bike,
   Clock3,
+  Coffee,
   Compass,
+  Hourglass,
+  Landmark,
   MapPinned,
   Search,
+  ShoppingBag,
   Smartphone,
   Sparkles,
+  Umbrella,
+  UtensilsCrossed,
+  Wine,
 } from "lucide-react";
 import { ListingCard } from "@/components/listing-card";
 import { Button } from "@/components/ui/button";
@@ -42,6 +51,18 @@ const PILLARS = [
     body: "White Town to Auroville, mapped the way locals move.",
   },
 ];
+
+const QUICK_TILES = [
+  { label: "Activities", slug: "adventure-sports", cat: "activities" as const, icon: Hourglass },
+  { label: "Beaches", slug: "beaches", cat: "places" as const, icon: Umbrella },
+  { label: "Bike Rental", slug: "bike-rental", cat: "activities" as const, icon: Bike },
+  { label: "Cafe", slug: "cafes", cat: "food" as const, icon: Coffee },
+  { label: "Spiritual", slug: "spiritual-places", cat: "places" as const, icon: Landmark },
+  { label: "Hotels", slug: "hotels", cat: "stay" as const, icon: BedDouble },
+  { label: "Restaurants", slug: "restaurants", cat: "food" as const, icon: UtensilsCrossed },
+  { label: "Nightlife", slug: "resto-pubs", cat: "food" as const, icon: Wine },
+  { label: "Shopping", slug: "shopping-bazaars", cat: "activities" as const, icon: ShoppingBag },
+] as const;
 
 const THEMES = [
   { label: "French heritage", q: "heritage", image: "/images/french-quarter.jpg" },
@@ -118,6 +139,20 @@ function Home() {
             </Link>
           </div>
         </div>
+      </section>
+
+      <section className="grid grid-cols-3 gap-2 md:grid-cols-5 md:gap-3 xl:grid-cols-6 2xl:grid-cols-7">
+        {QUICK_TILES.map((tile) => (
+          <Link
+            key={tile.slug}
+            to="/explore"
+            search={{ cat: tile.cat, type: tile.slug, q: "" }}
+            className="flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-hero px-2 py-3.5 text-overlay shadow-soft ring-1 ring-border/40 transition-transform duration-150 hover:-translate-y-0.5"
+          >
+            <tile.icon className="size-7 text-primary sm:size-8" strokeWidth={1.75} />
+            <span className="text-center text-[11px] font-semibold leading-tight sm:text-xs">{tile.label}</span>
+          </Link>
+        ))}
       </section>
 
       <section>

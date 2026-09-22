@@ -198,7 +198,7 @@ export function parseArchiveHtml(html: string, archiveSlug?: string): JetArchive
       if (extra.hours || extra.weeklyHours.length || extra.openNow != null) hoursInfo = extra;
     }
     const geo = Number.isFinite(id) ? markers.get(id) : undefined;
-    const featured = /badge-nl featured-nl/.test(window);
+    const featured = /<(?:div|span)[^>]*class="[^"]*\bfeatured-nl\b/.test(window) || /\bbadge-nl featured-nl\b/.test(window);
     const kind = decodeEntities(
       window.match(/listing-category-tag[^"]*"[^>]*>\s*([^<]+)/)?.[1] ??
         window.match(/listing-category-tag-nl">([^<]+)/)?.[1] ??
