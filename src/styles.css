@@ -21,11 +21,16 @@
   --color-ring: var(--xp-ring);
   --color-input: var(--xp-input);
   --color-destructive: var(--xp-destructive);
-  --color-hero: #f7f4ec;
-  --color-hero-muted: #d8d0c4;
-  --color-overlay: #14110e;
+  --color-hero: #fff6e8;
+  --color-hero-muted: #e8d5b8;
+  --color-overlay: #07131a;
   --color-logo-bg: #000000;
-  --color-star: var(--xp-primary);
+  --color-star: var(--xp-mango);
+  --color-coral: var(--xp-coral);
+  --color-lagoon: var(--xp-lagoon);
+  --color-sea: var(--xp-sea);
+  --color-mango: var(--xp-mango);
+  --color-leaf: var(--xp-leaf);
 
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
@@ -41,44 +46,54 @@
 html.dark,
 html.light .site-header {
   color-scheme: dark;
-  --xp-bg: #0b1213;
-  --xp-fg: #efe8dc;
-  --xp-card: #131b1c;
-  --xp-card-fg: #efe8dc;
-  --xp-muted: #1b2527;
-  --xp-muted-fg: #9aa5a2;
-  --xp-primary: #4db8bf;
-  --xp-primary-fg: #062022;
-  --xp-secondary: #1e2a2c;
-  --xp-secondary-fg: #efe8dc;
-  --xp-accent: #1a3336;
-  --xp-accent-fg: #b7e0e3;
-  --xp-border: #2a383a;
-  --xp-ring: #4db8bf;
-  --xp-input: #2a383a;
-  --xp-destructive: #e07a6c;
-  --xp-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 10px 28px rgb(0 0 0 / 0.38);
+  --xp-bg: #071820;
+  --xp-fg: #f6eee3;
+  --xp-card: #123038;
+  --xp-card-fg: #f6eee3;
+  --xp-muted: #1a3c46;
+  --xp-muted-fg: #a9c9cf;
+  --xp-primary: #2fd3c8;
+  --xp-primary-fg: #042422;
+  --xp-secondary: #1e4a56;
+  --xp-secondary-fg: #f6eee3;
+  --xp-accent: #214e58;
+  --xp-accent-fg: #c6f3ee;
+  --xp-border: #2f5b66;
+  --xp-ring: #2fd3c8;
+  --xp-input: #2f5b66;
+  --xp-destructive: #ff6b6b;
+  --xp-coral: #ff7a59;
+  --xp-lagoon: #2fd3c8;
+  --xp-sea: #5b9dff;
+  --xp-mango: #f4b942;
+  --xp-leaf: #3dce7b;
+  --xp-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 12px 28px rgb(0 0 0 / 0.4);
 }
 
 html.light {
   color-scheme: light;
-  --xp-bg: #f3eee4;
+  --xp-bg: #f6efe4;
   --xp-fg: #1c1914;
-  --xp-card: #fffbf5;
+  --xp-card: #fffaf3;
   --xp-card-fg: #1c1914;
-  --xp-muted: #ebe4d6;
-  --xp-muted-fg: #6b645a;
-  --xp-primary: #1a5f66;
+  --xp-muted: #f0e4d2;
+  --xp-muted-fg: #6b5c4a;
+  --xp-primary: #0e8a86;
   --xp-primary-fg: #f7f4ec;
-  --xp-secondary: #e7dfd0;
+  --xp-secondary: #f3d9b8;
   --xp-secondary-fg: #1c1914;
-  --xp-accent: #dfe9e8;
-  --xp-accent-fg: #154e54;
-  --xp-border: #d9d0c2;
-  --xp-ring: #1a5f66;
-  --xp-input: #d9d0c2;
-  --xp-destructive: #9b3d2f;
-  --xp-shadow: 0 1px 2px rgb(28 25 20 / 0.04), 0 8px 24px rgb(28 25 20 / 0.06);
+  --xp-accent: #d7efe8;
+  --xp-accent-fg: #0d5c56;
+  --xp-border: #e2d0b6;
+  --xp-ring: #0e8a86;
+  --xp-input: #e2d0b6;
+  --xp-destructive: #c24732;
+  --xp-coral: #e45c3a;
+  --xp-lagoon: #0e8a86;
+  --xp-sea: #2f6fdb;
+  --xp-mango: #d99412;
+  --xp-leaf: #2a9d5c;
+  --xp-shadow: 0 1px 2px rgb(28 25 20 / 0.05), 0 8px 24px rgb(28 25 20 / 0.07);
 }
 
 html.light .site-header {

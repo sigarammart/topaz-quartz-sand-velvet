@@ -245,20 +245,6 @@ function PlacePage() {
             </dl>
           )}
 
-          {(listing.weeklyHours?.length ?? 0) > 0 && (
-            <section className="mt-5">
-              <h2 className="text-sm font-semibold">Hours</h2>
-              <ul className="mt-2 divide-y divide-border overflow-hidden rounded-xl bg-card text-sm ring-1 ring-border/70">
-                {listing.weeklyHours!.map((row) => (
-                  <li key={row.day} className="flex items-baseline justify-between gap-3 px-3 py-1.5">
-                    <span className="font-medium">{row.day}</span>
-                    <span className="text-right text-xs text-muted-foreground">{row.slots.join(", ")}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
           {showDetailsSkeleton && <DetailsLoading />}
 
           {detailsLoading && listingHasDetails(listing) && (
@@ -499,6 +485,19 @@ function PlacePage() {
                 referrerPolicy="no-referrer-when-downgrade"
               />
             </div>
+          )}
+          {(listing.weeklyHours?.length ?? 0) > 0 && (
+            <section>
+              <h2 className="text-sm font-semibold">Hours</h2>
+              <ul className="mt-2 divide-y divide-border overflow-hidden rounded-xl bg-card text-sm ring-1 ring-border/70">
+                {listing.weeklyHours!.map((row) => (
+                  <li key={row.day} className="flex items-baseline justify-between gap-3 px-3 py-1.5">
+                    <span className="font-medium">{row.day}</span>
+                    <span className="text-right text-xs text-muted-foreground">{row.slots.join(", ")}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </aside>
       </div>

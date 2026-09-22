@@ -10,6 +10,7 @@ import { Stars } from "@/components/stars";
 import { Badge } from "@/components/ui/badge";
 import { cn, decodeEntities } from "@/lib/utils";
 import { useGeo } from "@/store/geo";
+import { fetchWpListing } from "@/lib/wp-api";
 
 function kindLabel(listing: Listing) {
   return decodeEntities(listing.kind || "Listing");
@@ -63,6 +64,10 @@ function Cover({
   );
 }
 
+function prefetchListing(listing: Listing) {
+  void fetchWpListing({ data: { slug: listing.slug, url: listing.siteUrl } });
+}
+
 export function ListingCard({
   listing,
   layout = "grid",
@@ -85,7 +90,13 @@ export function ListingCard({
           active ? "ring-primary" : "ring-border/70",
         )}
       >
-        <Link to="/place/$slug" params={{ slug: listing.slug }} className="flex min-w-0 flex-1 gap-2.5">
+        <Link
+          to="/place/$slug"
+          params={{ slug: listing.slug }}
+          className="flex min-w-0 flex-1 gap-2.5"
+          onPointerEnter={() => prefetchListing(listing)}
+          onPointerDown={() => prefetchListing(listing)}
+        >
           <div className="relative h-[4.75rem] w-[6.25rem] shrink-0 overflow-hidden rounded-lg sm:h-20 sm:w-28">
             <Cover listing={listing} className="size-full" />
             {pin != null && <PinMark n={pin} active={active} className="left-1 top-1" />}
@@ -131,7 +142,14 @@ export function ListingCard({
 
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-xl bg-card shadow-soft ring-1 ring-border/70 transition-transform duration-150 hover:-translate-y-0.5">
-      <Link id={`listing-card-${listing.slug}`} to="/place/$slug" params={{ slug: listing.slug }} className="flex flex-1 flex-col">
+      <Link
+        id={`listing-card-${listing.slug}`}
+        to="/place/$slug"
+        params={{ slug: listing.slug }}
+        className="flex flex-1 flex-col"
+        onPointerEnter={() => prefetchListing(listing)}
+        onPointerDown={() => prefetchListing(listing)}
+      >
         <div className={cn("relative overflow-hidden", compact ? "aspect-[16/10]" : "aspect-[4/3]")}>
           <Cover
             listing={listing}

@@ -39,32 +39,6 @@ function GetAppPage() {
         </li>
       </ul>
 
-      <div className="mt-8 rounded-2xl bg-card p-4 text-sm ring-1 ring-border/70">
-        <p className="font-semibold">Show Install on xplorepondy.com</p>
-        <p className="mt-1 text-muted-foreground">
-          Visitors on the main site see this bar. Paste the script into WordPress (Elementor HTML, footer, or WPCode):
-        </p>
-        <div className="mt-3 flex items-center gap-2.5 rounded-[18px] bg-foreground px-2.5 py-2 text-background">
-          <img src="/icon-192.png" alt="" className="size-10 rounded-xl bg-logo-bg object-cover" />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[10px] uppercase tracking-[0.14em] text-background/60">Xplore Pondy</span>
-            <span className="block text-sm font-semibold">Install XP App</span>
-          </span>
-          <span className="rounded-full bg-primary px-3.5 py-1.5 text-xs font-bold text-primary-foreground">Install</span>
-        </div>
-        <code className="mt-3 block overflow-x-auto rounded-xl bg-background px-3 py-2 text-[12px]">
-          {'<script src="https://app.xplorepondy.com/xp-install.js" defer></script>'}
-        </code>
-        <Button asChild className="mt-3 w-full">
-          <a href="/xp-app-install.zip" download="xp-app-install.zip">
-            Download WordPress plugin
-          </a>
-        </Button>
-        <p className="mt-2 text-xs text-muted-foreground">
-          WordPress → Plugins → Add New → Upload Plugin → Activate. The bar then appears on xplorepondy.com.
-        </p>
-      </div>
-
       <Button asChild variant="outline" className="mt-8 w-full">
         <Link to="/">Back to explore</Link>
       </Button>

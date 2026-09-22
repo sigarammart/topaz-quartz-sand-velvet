@@ -4,13 +4,16 @@ import {
   ArrowRight,
   BadgeCheck,
   BedDouble,
+  Beer,
   Bike,
+  Camera,
   Clock3,
   Coffee,
   Compass,
   Hourglass,
   Landmark,
   MapPinned,
+  Mountain,
   Search,
   ShoppingBag,
   Smartphone,
@@ -18,12 +21,14 @@ import {
   Umbrella,
   UtensilsCrossed,
   Wine,
+  type LucideIcon,
 } from "lucide-react";
 import { ListingCard } from "@/components/listing-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { events } from "@/data/events";
 import { CATEGORY_META, type Category } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { catalogFeatured, useCatalog } from "@/store/catalog";
 import { useSession } from "@/store/session";
 
@@ -52,17 +57,28 @@ const PILLARS = [
   },
 ];
 
-const QUICK_TILES = [
-  { label: "Activities", slug: "adventure-sports", cat: "activities" as const, icon: Hourglass },
-  { label: "Beaches", slug: "beaches", cat: "places" as const, icon: Umbrella },
-  { label: "Bike Rental", slug: "bike-rental", cat: "activities" as const, icon: Bike },
-  { label: "Cafe", slug: "cafes", cat: "food" as const, icon: Coffee },
-  { label: "Spiritual", slug: "spiritual-places", cat: "places" as const, icon: Landmark },
-  { label: "Hotels", slug: "hotels", cat: "stay" as const, icon: BedDouble },
-  { label: "Restaurants", slug: "restaurants", cat: "food" as const, icon: UtensilsCrossed },
-  { label: "Nightlife", slug: "resto-pubs", cat: "food" as const, icon: Wine },
-  { label: "Shopping", slug: "shopping-bazaars", cat: "activities" as const, icon: ShoppingBag },
-] as const;
+const TILE_TONES = ["text-coral", "text-lagoon", "text-sea", "text-mango", "text-leaf"] as const;
+
+const QUICK_TILES: Array<{
+  label: string;
+  cat: Category;
+  icon: LucideIcon;
+  slug?: string;
+  tone: (typeof TILE_TONES)[number];
+}> = [
+  { label: "Activities", cat: "activities", icon: Hourglass, tone: "text-coral" },
+  { label: "Beaches", slug: "beaches", cat: "places", icon: Umbrella, tone: "text-sea" },
+  { label: "Bike Rental", slug: "bike-rental", cat: "activities", icon: Bike, tone: "text-lagoon" },
+  { label: "Cafe", slug: "cafes", cat: "food", icon: Coffee, tone: "text-mango" },
+  { label: "Spiritual", slug: "spiritual-places", cat: "places", icon: Landmark, tone: "text-leaf" },
+  { label: "Hotels", slug: "hotels", cat: "stay", icon: BedDouble, tone: "text-coral" },
+  { label: "Restaurants", slug: "restaurants", cat: "food", icon: UtensilsCrossed, tone: "text-lagoon" },
+  { label: "Nightlife", slug: "nightlife-experiences", cat: "activities", icon: Wine, tone: "text-sea" },
+  { label: "Shopping", slug: "shopping-bazaars", cat: "activities", icon: ShoppingBag, tone: "text-mango" },
+  { label: "Attractions", cat: "places", icon: Camera, tone: "text-leaf" },
+  { label: "Adventure", slug: "adventure-sports", cat: "activities", icon: Mountain, tone: "text-coral" },
+  { label: "Resto Pubs", slug: "resto-pubs", cat: "food", icon: Beer, tone: "text-mango" },
+];
 
 const THEMES = [
   { label: "French heritage", q: "heritage", image: "/images/french-quarter.jpg" },
@@ -72,6 +88,44 @@ const THEMES = [
   { label: "Nightlife", q: "nightlife", image: "/images/nightlife.jpg" },
   { label: "Adventure", q: "scuba", image: "/images/scuba.jpg" },
 ];
+
+function HomePhotoLink({
+  image,
+  kicker,
+  label,
+  search,
+  className,
+}: {
+  image: string;
+  kicker?: string;
+  label: string;
+  search: { cat: string; q: string };
+  className?: string;
+}) {
+  return (
+    <Link
+      to="/explore"
+      search={search}
+      className={cn(
+        "group relative flex overflow-hidden rounded-2xl ring-1 ring-border/60",
+        className,
+      )}
+    >
+      <img
+        src={image}
+        alt=""
+        className="absolute inset-0 size-full object-cover transition-transform duration-500 group-hover:scale-105"
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-overlay via-overlay/60 to-overlay/15" />
+      <div className="relative mt-auto w-full p-3 sm:p-3.5">
+        {kicker ? (
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-hero/80">{kicker}</p>
+        ) : null}
+        <p className="font-display text-[15px] font-semibold leading-snug text-hero sm:text-base">{label}</p>
+      </div>
+    </Link>
+  );
+}
 
 function Home() {
   const navigate = useNavigate();
@@ -94,46 +148,46 @@ function Home() {
       <section className="relative overflow-hidden rounded-2xl">
         <img
           src="/images/promenade.jpg"
-          alt="Promenade Beach at golden hour"
-          className="h-[16.5rem] w-full object-cover sm:h-[18.5rem]"
+          alt=""
+          className="absolute inset-0 size-full object-cover object-[center_35%]"
         />
-        <div className="absolute inset-0 bg-overlay/45" />
-        <div className="absolute inset-0 flex flex-col justify-end p-4 sm:p-6">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-hero-muted">
+        <div className="absolute inset-0 bg-gradient-to-t from-overlay via-overlay/80 to-overlay/45" />
+        <div className="relative flex flex-col gap-3 px-4 py-5 sm:gap-4 sm:p-6">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-hero/75 sm:text-[11px]">
             Pondicherry travel planner
           </p>
-          <h1 className="mt-1 max-w-xl font-display text-3xl font-semibold leading-tight text-hero sm:text-4xl">
+          <h1 className="max-w-xl font-display text-[1.65rem] font-semibold leading-[1.15] text-hero sm:text-4xl">
             Explore Puducherry like never before
           </h1>
-          <p className="mt-1.5 max-w-lg text-sm text-hero/85">
+          <p className="max-w-lg text-xs leading-relaxed text-hero/90 sm:text-sm">
             Places, cafés, stays, and a trip you can actually follow — live from xplorepondy.com.
             {source === "live" ? ` ${total.toLocaleString()} listings in the directory.` : ""}
             {user ? ` Signed in as ${user.name}.` : ""}
           </p>
-          <form onSubmit={onSearch} className="mt-4 flex max-w-lg gap-2">
+          <form onSubmit={onSearch} className="flex max-w-lg flex-col gap-2 sm:flex-row">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Beaches, bakeries, Auroville…"
-                className="h-11 border-0 bg-card pl-10"
+                className="h-11 border-0 bg-card pl-10 text-foreground"
                 aria-label="Search Pondicherry"
               />
             </div>
-            <Button type="submit" size="lg" className="h-11">
+            <Button type="submit" size="lg" className="h-11 sm:w-auto">
               Search
             </Button>
           </form>
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <Link
               to="/get-app"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-hero/90 hover:text-hero"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-hero/90 hover:text-hero sm:text-sm"
             >
               <Smartphone className="size-4" />
               Get the Android app
             </Link>
-            <Link to="/trip" className="inline-flex items-center gap-1.5 text-sm font-medium text-hero/90 hover:text-hero">
+            <Link to="/trip" className="inline-flex items-center gap-1.5 text-xs font-medium text-hero/90 hover:text-hero sm:text-sm">
               <Compass className="size-4" />
               Open my itinerary
             </Link>
@@ -141,16 +195,16 @@ function Home() {
         </div>
       </section>
 
-      <section className="grid grid-cols-3 gap-2 md:grid-cols-5 md:gap-3 xl:grid-cols-6 2xl:grid-cols-7">
+      <section className="grid grid-cols-4 gap-1.5 sm:gap-2 md:grid-cols-6 md:gap-3">
         {QUICK_TILES.map((tile) => (
           <Link
-            key={tile.slug}
+            key={tile.label}
             to="/explore"
-            search={{ cat: tile.cat, type: tile.slug, q: "" }}
-            className="flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-hero px-2 py-3.5 text-overlay shadow-soft ring-1 ring-border/40 transition-transform duration-150 hover:-translate-y-0.5"
+            search={{ cat: tile.cat, q: "", ...(tile.slug ? { type: tile.slug } : {}) }}
+            className="flex flex-col items-center justify-center gap-1 rounded-sm bg-hero px-1 py-2.5 text-overlay shadow-soft ring-1 ring-overlay/10 transition-transform duration-150 hover:-translate-y-0.5 sm:px-2 sm:py-3"
           >
-            <tile.icon className="size-7 text-primary sm:size-8" strokeWidth={1.75} />
-            <span className="text-center text-[11px] font-semibold leading-tight sm:text-xs">{tile.label}</span>
+            <tile.icon className={cn("size-5 sm:size-6", tile.tone)} strokeWidth={1.85} />
+            <span className="text-center text-[10px] font-semibold leading-tight sm:text-xs">{tile.label}</span>
           </Link>
         ))}
       </section>
@@ -162,27 +216,18 @@ function Home() {
             <h2 className="mt-0.5 font-display text-xl font-semibold">Find Pondy your way</h2>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
           {(Object.keys(CATEGORY_META) as Category[]).map((key) => {
             const meta = CATEGORY_META[key];
             return (
-              <Link
+              <HomePhotoLink
                 key={key}
-                to="/explore"
                 search={{ cat: key, q: "" }}
-                className="group relative overflow-hidden rounded-xl"
-              >
-                <img
-                  src={meta.image}
-                  alt=""
-                  className="h-24 w-full object-cover transition-transform duration-500 group-hover:scale-105 sm:h-28"
-                />
-                <div className="absolute inset-0 bg-overlay/45" />
-                <div className="absolute inset-x-0 bottom-0 p-2.5">
-                  <p className="text-[10px] font-medium uppercase tracking-wide text-hero-muted">{meta.kicker}</p>
-                  <p className="font-display text-base font-semibold text-hero">{meta.label}</p>
-                </div>
-              </Link>
+                image={meta.image}
+                kicker={meta.kicker}
+                label={meta.label}
+                className="min-h-[9.5rem] sm:min-h-[11rem]"
+              />
             );
           })}
         </div>
@@ -222,20 +267,15 @@ function Home() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">By mood</p>
           <h2 className="mt-0.5 font-display text-xl font-semibold">Explore by theme</h2>
         </div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {THEMES.map((t) => (
-            <Link
+            <HomePhotoLink
               key={t.label}
-              to="/explore"
               search={{ q: t.q, cat: "all" }}
-              className="relative w-32 shrink-0 overflow-hidden rounded-xl sm:w-36"
-            >
-              <img src={t.image} alt="" className="h-20 w-full object-cover" />
-              <div className="absolute inset-0 bg-overlay/40" />
-              <span className="absolute inset-x-0 bottom-0 p-2 font-display text-sm font-semibold text-hero">
-                {t.label}
-              </span>
-            </Link>
+              image={t.image}
+              label={t.label}
+              className="min-h-[7.5rem] sm:min-h-[8.5rem]"
+            />
           ))}
         </div>
       </section>

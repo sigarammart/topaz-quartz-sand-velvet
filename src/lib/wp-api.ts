@@ -1419,22 +1419,39 @@ export const fetchWpGuides = createServerFn({ method: "GET" }).handler(async () 
   return { guides };
 });
 
-async function loadListingPageHtml(urls: string[], timeout = 10000) {
-  for (const url of urls) {
-    try {
-      const page = await fetch(url, {
-        headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 XplorePondyApp/1.0" },
-        signal: AbortSignal.timeout(timeout),
-      });
-      if (!page.ok) continue;
-      const html = await page.text();
-      if (/<title>[^<]*Page not found/i.test(html)) continue;
-      return { url, html };
-    } catch {
-      /* try next url */
-    }
+async function loadListingPageHtml(urls: string[], timeout = 8000) {
+  const unique = [...new Set(urls.filter(Boolean))];
+  if (!unique.length) return null;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeout);
+  try {
+    return await Promise.any(
+      unique.map(async (url) => {
+        const page = await fetch(url, {
+          headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 XplorePondyApp/1.0" },
+          signal: ac.signal,
+        });
+        if (!page.ok) throw new Error("not-ok");
+        const html = await page.text();
+        if (/<title>[^<]*Page not found/i.test(html)) throw new Error("404");
+        return { url, html };
+      }),
+    );
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+    ac.abort();
   }
-  return null;
+}
+
+function restSoon<T>(promise: Promise<T>, waitMs: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), waitMs);
+    }),
+  ]);
 }
 
 export const fetchWpListing = createServerFn({ method: "GET" })
@@ -1449,14 +1466,14 @@ export const fetchWpListing = createServerFn({ method: "GET" })
       `${WP_ORIGIN}/listing/${data.slug}/`,
     ].filter((url, i, all): url is string => !!url && all.indexOf(url) === i);
 
-    const [rest, page] = await Promise.all([
-      wpGet<WpListing[]>(
-        `/wp-json/wp/v2/listing?slug=${encodeURIComponent(data.slug)}&_embed=wp:term`,
-        {},
-        12000,
-      ).catch(() => null),
-      loadListingPageHtml(urls),
-    ]);
+    const restP = wpGet<WpListing[]>(
+      `/wp-json/wp/v2/listing?slug=${encodeURIComponent(data.slug)}&_fields=id,slug,title,content,excerpt,link,meta`,
+      {},
+      5000,
+    ).catch(() => null);
+    const pageP = loadListingPageHtml(urls, 6000);
+    const page = await pageP;
+    const rest = page ? await restSoon(restP, 400) : await restP;
 
     let listing: Listing | null = null;
     if (rest?.ok && Array.isArray(rest.data) && rest.data[0]) listing = mapListing(rest.data[0]);
