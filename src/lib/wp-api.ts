@@ -1858,7 +1858,7 @@ async function loadAuthorContent(authorId: number, headers: HeadersInit) {
       15000,
     ),
     wpGet<WpUserTrip[]>(
-      `/wp-json/wp/v2/user_trip?author=${authorId}&per_page=20`,
+      `/wp-json/wp/v2/user_trip?author=${authorId}&per_page=20&orderby=date&order=desc`,
       headers,
       15000,
     ),

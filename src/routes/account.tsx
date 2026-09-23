@@ -8,12 +8,47 @@ import { RedirectToSignIn } from "@/lib/auth/gates";
 import { signOut } from "@/lib/auth/client";
 import { hasGateSessionMarker } from "@/lib/auth/gate-session-marker";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { fetchWpAuthorContent } from "@/lib/wp-api";
+import { fetchWpAuthorContent, fetchWpUserTrips, type WpTrip } from "@/lib/wp-api";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useSession } from "@/store/session";
 import { useTrip } from "@/store/trip";
 
 export const Route = createFileRoute("/account")({ component: AccountPage });
+
+function TripList({ trips, loading }: { trips: WpTrip[]; loading: boolean }) {
+  if (loading) return <p className="mt-3 text-sm text-muted-foreground">Loading trips…</p>;
+  if (trips.length === 0) {
+    return (
+      <p className="mt-3 text-sm text-muted-foreground">
+        No trips yet.{" "}
+        <Link to="/trip" className="font-medium text-primary hover:underline">
+          Plan a trip
+        </Link>{" "}
+        and published user_trip posts from xplorepondy.com will appear here.
+      </p>
+    );
+  }
+  return (
+    <ul className="mt-4 space-y-2">
+      {trips.map((t) => (
+        <li key={t.slug}>
+          <a
+            href={t.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 ring-1 ring-border/70 hover:bg-muted"
+          >
+            <span>
+              <span className="block font-medium">{t.title}</span>
+              {t.date && <span className="text-xs text-muted-foreground">{t.date}</span>}
+            </span>
+            <ExternalLink className="size-4 shrink-0 text-primary" />
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function AccountPage() {
   const hydrated = useHydrated();
@@ -29,7 +64,38 @@ function AccountPage() {
   const tripStarted = useTrip((s) => s.started);
   const [refreshing, setRefreshing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [recentTrips, setRecentTrips] = useState<WpTrip[]>([]);
+  const [tripsLoading, setTripsLoading] = useState(true);
   const gateSession = typeof document !== "undefined" && hasGateSessionMarker();
+
+  useEffect(() => {
+    if (!hydrated) return;
+    let cancelled = false;
+    setTripsLoading(true);
+    void (async () => {
+      try {
+        if (user?.id) {
+          const result = await fetchWpAuthorContent({ data: { authorId: user.id } });
+          if (cancelled) return;
+          setSession({
+            user,
+            myListings: result.myListings,
+            myTrips: result.myTrips,
+            method: method ?? "application-password",
+          });
+        }
+        const recent = await fetchWpUserTrips();
+        if (!cancelled) setRecentTrips(recent.trips);
+      } catch {
+        /* keep whatever we already have */
+      } finally {
+        if (!cancelled) setTripsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, user?.id]);
 
   if (isPending || !hydrated) {
     return <div className="py-16 text-center text-sm text-muted-foreground">Loading account…</div>;
@@ -130,52 +196,32 @@ function AccountPage() {
       </div>
 
       {user && (
-        <>
-          <section className="mt-10">
-            <h2 className="font-display text-2xl font-semibold">Your listings</h2>
-            {myListings.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                No listings are attached to this WordPress user. Published directory listings still
-                appear under Explore for everyone.
-              </p>
-            ) : (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {myListings.map((l) => (
-                  <ListingCard key={l.slug} listing={l} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="mt-10">
-            <h2 className="font-display text-2xl font-semibold">Your WordPress trips</h2>
-            {myTrips.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">
-                No trips on the website yet. Build one here, or on xplorepondy.com.
-              </p>
-            ) : (
-              <ul className="mt-4 space-y-2">
-                {myTrips.map((t) => (
-                  <li key={t.slug}>
-                    <a
-                      href={t.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 ring-1 ring-border/70 hover:bg-muted"
-                    >
-                      <span>
-                        <span className="block font-medium">{t.title}</span>
-                        {t.date && <span className="text-xs text-muted-foreground">{t.date}</span>}
-                      </span>
-                      <ExternalLink className="size-4 shrink-0 text-primary" />
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </>
+        <section className="mt-10">
+          <h2 className="font-display text-2xl font-semibold">Your listings</h2>
+          {myListings.length === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              No listings are attached to this WordPress user. Published directory listings still
+              appear under Explore for everyone.
+            </p>
+          ) : (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {myListings.map((l) => (
+                <ListingCard key={l.slug} listing={l} />
+              ))}
+            </div>
+          )}
+        </section>
       )}
+
+      <section className="mt-10">
+        <h2 className="font-display text-2xl font-semibold">
+          {myTrips.length ? "Your trips" : "Recently created trips"}
+        </h2>
+        <TripList
+          trips={myTrips.length ? myTrips : recentTrips}
+          loading={tripsLoading && myTrips.length === 0 && recentTrips.length === 0}
+        />
+      </section>
 
       <p className="mt-10 text-sm">
         <Link to="/explore" className="font-medium text-primary hover:underline">
