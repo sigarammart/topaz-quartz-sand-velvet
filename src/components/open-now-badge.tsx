@@ -23,7 +23,7 @@ export function OpenNowBadge({
     <span
       className={cn(
         "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
-        badge.open ? "bg-[#e6f6ea] text-[#0a7a32] dark:bg-emerald-500/20 dark:text-emerald-300" : "bg-[#fdecea] text-[#b42318] dark:bg-destructive/20 dark:text-destructive",
+        badge.open ? "bg-open text-white" : "bg-closed text-white",
         compact && "max-w-[12rem] truncate",
         className,
       )}

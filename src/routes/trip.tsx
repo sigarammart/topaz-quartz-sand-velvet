@@ -22,6 +22,7 @@ import {
 } from "@/lib/trip-form";
 import { attachTravel, buildTripItinerary, travelLabel } from "@/lib/itinerary";
 import { ANNA_SALAI } from "@/lib/geo";
+import { elasticSearch } from "@/lib/es-search";
 import { cn } from "@/lib/utils";
 import type { Listing } from "@/lib/types";
 import { useGeo } from "@/store/geo";
@@ -125,15 +126,11 @@ function TripPage() {
         .map((slug) => resolveListing(slug, catalog))
         .filter((l): l is NonNullable<typeof l> => !!l);
       if (!q.trim()) return rows;
-      const needle = q.toLowerCase();
-      return rows.filter((l) => `${l.name} ${l.kind} ${l.location}`.toLowerCase().includes(needle));
+      return elasticSearch(rows, q);
     }
     let rows = catalog;
     if (tab === "interests") rows = catalog.filter((l) => listingMatchesInterest(l, activeChip));
-    if (q.trim()) {
-      const needle = q.toLowerCase();
-      rows = rows.filter((l) => `${l.name} ${l.kind} ${l.location}`.toLowerCase().includes(needle));
-    }
+    if (q.trim()) rows = elasticSearch(rows, q);
     return rows.slice(0, 24);
   }, [catalog, tab, tempTrip, activeChip, q]);
 

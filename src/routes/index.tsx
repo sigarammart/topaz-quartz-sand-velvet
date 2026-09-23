@@ -57,7 +57,7 @@ const PILLARS = [
   },
 ];
 
-const TILE_TONES = ["text-coral", "text-lagoon", "text-sea", "text-mango", "text-leaf"] as const;
+const TILE_TONES = ["text-tile-coral", "text-tile-lagoon", "text-tile-sea", "text-tile-mango", "text-tile-leaf"] as const;
 
 const QUICK_TILES: Array<{
   label: string;
@@ -66,18 +66,18 @@ const QUICK_TILES: Array<{
   slug?: string;
   tone: (typeof TILE_TONES)[number];
 }> = [
-  { label: "Activities", cat: "activities", icon: Hourglass, tone: "text-coral" },
-  { label: "Beaches", slug: "beaches", cat: "places", icon: Umbrella, tone: "text-sea" },
-  { label: "Bike Rental", slug: "bike-rental", cat: "activities", icon: Bike, tone: "text-lagoon" },
-  { label: "Cafe", slug: "cafes", cat: "food", icon: Coffee, tone: "text-mango" },
-  { label: "Spiritual", slug: "spiritual-places", cat: "places", icon: Landmark, tone: "text-leaf" },
-  { label: "Hotels", slug: "hotels", cat: "stay", icon: BedDouble, tone: "text-coral" },
-  { label: "Restaurants", slug: "restaurants", cat: "food", icon: UtensilsCrossed, tone: "text-lagoon" },
-  { label: "Nightlife", slug: "nightlife-experiences", cat: "activities", icon: Wine, tone: "text-sea" },
-  { label: "Shopping", slug: "shopping-bazaars", cat: "activities", icon: ShoppingBag, tone: "text-mango" },
-  { label: "Attractions", cat: "places", icon: Camera, tone: "text-leaf" },
-  { label: "Adventure", slug: "adventure-sports", cat: "activities", icon: Mountain, tone: "text-coral" },
-  { label: "Resto Pubs", slug: "resto-pubs", cat: "food", icon: Beer, tone: "text-mango" },
+  { label: "Activities", cat: "activities", icon: Hourglass, tone: "text-tile-coral" },
+  { label: "Beaches", slug: "beaches", cat: "places", icon: Umbrella, tone: "text-tile-sea" },
+  { label: "Bike Rental", slug: "bike-rental", cat: "activities", icon: Bike, tone: "text-tile-lagoon" },
+  { label: "Cafe", slug: "cafes", cat: "food", icon: Coffee, tone: "text-tile-mango" },
+  { label: "Spiritual", slug: "spiritual-places", cat: "places", icon: Landmark, tone: "text-tile-leaf" },
+  { label: "Hotels", slug: "hotels", cat: "stay", icon: BedDouble, tone: "text-tile-coral" },
+  { label: "Restaurants", slug: "restaurants", cat: "food", icon: UtensilsCrossed, tone: "text-tile-lagoon" },
+  { label: "Nightlife", slug: "nightlife-experiences", cat: "activities", icon: Wine, tone: "text-tile-sea" },
+  { label: "Shopping", slug: "shopping-bazaars", cat: "activities", icon: ShoppingBag, tone: "text-tile-mango" },
+  { label: "Attractions", cat: "places", icon: Camera, tone: "text-tile-leaf" },
+  { label: "Adventure", slug: "adventure-sports", cat: "activities", icon: Mountain, tone: "text-tile-coral" },
+  { label: "Resto Pubs", slug: "resto-pubs", cat: "food", icon: Beer, tone: "text-tile-mango" },
 ];
 
 const THEMES = [

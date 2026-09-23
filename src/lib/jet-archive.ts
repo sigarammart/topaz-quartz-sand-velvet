@@ -1,6 +1,7 @@
 import { parseOpenHoursHtml } from "@/lib/hours";
 import { archiveCategory, DEEP_ARCHIVE_SLUGS, WP_PARENT_ARCHIVES } from "@/lib/listing-categories";
 import type { Category, DayHours, ListingMetaGroup, ListingTaxGroup, ListingTaxTerm } from "@/lib/types";
+import { cachedOriginText } from "@/lib/origin-cache";
 import { decodeEntities } from "@/lib/utils";
 
 export type JetArchiveHit = {
@@ -305,12 +306,14 @@ async function resolveListingSlugs(ids: number[]): Promise<Map<number, string>> 
   for (let i = 0; i < unique.length; i += 80) {
     const chunk = unique.slice(i, i + 80);
     try {
-      const res = await fetch(
+      const res = await cachedOriginText(
         `https://xplorepondy.com/wp-json/wp/v2/listing?include=${chunk.join(",")}&per_page=100&_fields=id,slug`,
-        { headers: { Accept: "application/json", "User-Agent": "XplorePondyApp/1.0" }, signal: AbortSignal.timeout(15000) },
+        20 * 60 * 1000,
+        15000,
+        { Accept: "application/json", "User-Agent": "XplorePondyApp/1.0" },
       );
       if (!res.ok) continue;
-      const rows = (await res.json()) as Array<{ id?: number; slug?: string }>;
+      const rows = JSON.parse(res.body) as Array<{ id?: number; slug?: string }>;
       for (const row of rows) if (row.id && row.slug) map.set(row.id, row.slug);
     } catch {
       /* ignore */
@@ -320,12 +323,15 @@ async function resolveListingSlugs(ids: number[]): Promise<Map<number, string>> 
 }
 
 async function fetchHtml(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: { Accept: "text/html", "User-Agent": "XplorePondyApp/1.0" },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!res.ok) return "";
-  return res.text();
+  try {
+    const res = await cachedOriginText(url, 20 * 60 * 1000, 15000, {
+      Accept: "text/html",
+      "User-Agent": "XplorePondyApp/1.0",
+    });
+    return res.ok ? res.body : "";
+  } catch {
+    return "";
+  }
 }
 
 export function parseIsOpenNowCount(html: string): number {

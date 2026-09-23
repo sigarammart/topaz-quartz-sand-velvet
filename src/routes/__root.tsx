@@ -1,6 +1,7 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { CacheWorker } from "@/components/cache-worker";
 import { AppShell } from "@/components/layout";
 import { NotFound } from "@/components/not-found";
 import { Toaster } from "sonner";
@@ -59,6 +60,7 @@ function RootDocument() {
       </head>
       <body>
         <PreviewHostBridge />
+        <CacheWorker />
         <AuthProvider>
           <AppShell>
             <Outlet />

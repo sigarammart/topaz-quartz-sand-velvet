@@ -31,6 +31,13 @@
   --color-sea: var(--xp-sea);
   --color-mango: var(--xp-mango);
   --color-leaf: var(--xp-leaf);
+  --color-tile-coral: #b33a1c;
+  --color-tile-lagoon: #0a5f5c;
+  --color-tile-sea: #1853b0;
+  --color-tile-mango: #7a5200;
+  --color-tile-leaf: #187a3c;
+  --color-open: #0e7a42;
+  --color-closed: #b42318;
 
   --radius-sm: 0.5rem;
   --radius-md: 0.75rem;
@@ -78,18 +85,18 @@ html.light {
   --xp-card-fg: #1c1914;
   --xp-muted: #f0e4d2;
   --xp-muted-fg: #6b5c4a;
-  --xp-primary: #0e8a86;
+  --xp-primary: #0b6e6a;
   --xp-primary-fg: #f7f4ec;
   --xp-secondary: #f3d9b8;
   --xp-secondary-fg: #1c1914;
   --xp-accent: #d7efe8;
   --xp-accent-fg: #0d5c56;
   --xp-border: #e2d0b6;
-  --xp-ring: #0e8a86;
+  --xp-ring: #0b6e6a;
   --xp-input: #e2d0b6;
   --xp-destructive: #c24732;
   --xp-coral: #e45c3a;
-  --xp-lagoon: #0e8a86;
+  --xp-lagoon: #0b6e6a;
   --xp-sea: #2f6fdb;
   --xp-mango: #d99412;
   --xp-leaf: #2a9d5c;

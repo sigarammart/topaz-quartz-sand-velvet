@@ -1,6 +1,7 @@
 import type { Category } from "@/lib/types";
 import { categoryFromKindName } from "@/lib/listing-categories";
 import { pickListingImage, uniqueImages } from "@/lib/media";
+import { cachedOriginText } from "@/lib/origin-cache";
 import { decodeEntities } from "@/lib/utils";
 
 export type ListeoGeo = {
@@ -98,12 +99,12 @@ async function fetchListeoPage(
   const empty = { html: "", pages: 1, total: 0 };
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(url, {
-        headers: { Accept: "application/json", "User-Agent": "XplorePondyApp/1.0" },
-        signal: AbortSignal.timeout(12000),
+      const res = await cachedOriginText(url, 20 * 60 * 1000, 12000, {
+        Accept: "application/json",
+        "User-Agent": "XplorePondyApp/1.0",
       });
       if (!res.ok) continue;
-      const data = (await res.json()) as {
+      const data = JSON.parse(res.body) as {
         html?: string;
         max_num_pages?: number | string;
         total_found?: number | string;

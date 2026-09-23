@@ -7,11 +7,19 @@ import { parseOpenHoursHtml } from "@/lib/hours";
 import { bookmarkIdsFromUserMeta } from "@/lib/jet-store";
 import { ARCHIVE_SLUGS, categoryFromKindName } from "@/lib/listing-categories";
 import { loadJetArchiveMeta, loadOpenNowSnapshot, type JetArchiveHit } from "@/lib/jet-archive";
+import { contactFromListeoMeta, preferListeoAddress } from "@/lib/listeo";
+import { cachedOriginText } from "@/lib/origin-cache";
 import { loadListeoGeo, type ListeoGeo } from "@/lib/listeo-geo";
+import { filterListingGroups, headingMatchesProfile, profileFromSlugs, profileKeys, type ListingFieldProfile } from "@/lib/listing-layouts";
 import { extractOgImage, pickListingImage, uncropImage, uniqueImages } from "@/lib/media";
 
 export const WP_ORIGIN = "https://xplorepondy.com";
 export const WP_APP_PASSWORD_URL = `${WP_ORIGIN}/wp-admin/authorize-application.php?app_name=Xplore%20Pondy%20App`;
+const WP_HTML_HEADERS = {
+  Accept: "text/html",
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+};
 
 export type WpUser = {
   id: number;
@@ -45,6 +53,13 @@ type WpListingMeta = {
   _trip_itinerary?: unknown;
   _trip_faqs?: unknown;
   _trip_pricing_table?: unknown;
+  _phone?: string;
+  _email?: string;
+  _website?: string;
+  _address?: string;
+  _friendly_address?: string;
+  _geolocation_lat?: string;
+  _geolocation_long?: string;
 };
 type WpListing = {
   id: number;
@@ -393,11 +408,14 @@ function extractMenuImages(raw: unknown): string[] {
 function extractJsonLd(html: string) {
   const blocks = [...html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
   const out: {
+    name?: string;
     phone?: string;
+    website?: string;
     address?: string;
     rating?: number;
     reviews?: number;
     priceRange?: string;
+    description?: string;
   } = {};
   for (const block of blocks) {
     try {
@@ -411,6 +429,12 @@ function extractJsonLd(html: string) {
         }
         const phone = String(node.telephone ?? "").trim();
         if (phone) out.phone = phone;
+        const nodeName = decodeHtml(String(node.name ?? "")).trim();
+        if (nodeName) out.name = nodeName;
+        const nodeUrl = String(node.url ?? "").trim();
+        if (/^https?:\/\//i.test(nodeUrl) && !/xplorepondy\.com/i.test(nodeUrl)) out.website = nodeUrl;
+        const nodeDesc = decodeHtml(String(node.description ?? "")).replace(/\[&hellip;\]|&hellip;|…/g, "").trim();
+        if (nodeDesc.length > (out.description?.length ?? 0)) out.description = nodeDesc;
         const addr = node.address;
         if (addr && typeof addr === "object") {
           const a = addr as Record<string, unknown>;
@@ -445,60 +469,216 @@ function extractJsonLd(html: string) {
 }
 
 function parseCheckItem(raw: string): ListingMetaItem | null {
-  const text = decodeHtml(raw).replace(/\s+/g, " ").trim();
+  const text = decodeHtml(raw)
+    .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (!text) return null;
   if (/^[✅✔✓]/.test(text)) return { label: text.replace(/^[✅✔✓]\s*/, "").trim(), included: true };
   if (/^[❌✖✗]/.test(text)) return { label: text.replace(/^[❌✖✗]\s*/, "").trim(), included: false };
+  if (text.length < 2 || text.length > 180) return null;
+  if (/^https?:\/\//i.test(text)) return null;
   return { label: text };
 }
 
-function extractJetMetaGroups(html: string): { groups: ListingMetaGroup[]; price?: string } {
+function extractCheckItems(html: string): ListingMetaItem[] {
+  const cleaned = html.replace(/<svg[\s\S]*?<\/svg>/gi, " ");
+  const seen = new Set<string>();
+  const items: ListingMetaItem[] = [];
+  for (const row of cleaned.matchAll(/jet-check-list__item-content[^>]*>([\s\S]*?)<\/div>/gi)) {
+    const item = parseCheckItem(row[1] ?? "");
+    if (!item) continue;
+    const key = item.label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push(item);
+  }
+  return items;
+}
+
+function clipContactSection(html: string) {
+  const cut = html.search(/Claim this listing|Popular Cafes|Popular Restopubs|jet-listing-grid|Nothing found/i);
+  return cut >= 0 ? html.slice(0, cut) : html;
+}
+
+function clipListingSection(html: string) {
+  const cut = html.search(
+    /CONTACT\s*\/\s*ADDRESS|Claim this listing|Popular Cafes|Popular Restopubs|jet-listing-grid|Invalid post IDs|Nothing found|Login \/ Register/i,
+  );
+  return cut >= 0 ? html.slice(0, cut) : html;
+}
+
+function isJunkListingText(text: string) {
+  return /Invalid post IDs|Search Results|See all results|Claim this listing|Login \/ Register|Continue with Google|<div clas/i.test(
+    text,
+  );
+}
+
+function extractJetMetaGroups(html: string, profile: ListingFieldProfile | null = null): { groups: ListingMetaGroup[]; price?: string } {
   const groups: ListingMetaGroup[] = [];
   let price: string | undefined;
-  const headingRe = /<h3 class="listing-field-heading">([\s\S]*?)<\/h3>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = headingRe.exec(html))) {
-    const title = decodeHtml(match[1]).replace(/\s+/g, " ").trim();
-    if (!title || /nearby|related|popular locations/i.test(title)) continue;
+  const headingRe = /<h[2-4][^>]*class="[^"]*listing-field-heading[^"]*"[^>]*>([\s\S]*?)<\/h[2-4]>/gi;
+  const matches = [...html.matchAll(headingRe)];
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
+    const title = decodeHtml(match[1] ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!title || /nearby|related|popular |contact\s*\/\s*address|sponsored|share this|review/i.test(title)) continue;
+    if (profile && !/price for two/i.test(title) && !headingMatchesProfile(profile, title)) continue;
     const priceMatch = title.match(/^price for two\s*:?\s*(.+)$/i);
     if (priceMatch) {
       price = priceMatch[1].trim();
       continue;
     }
-    let after = html.slice(match.index + match[0].length, match.index + match[0].length + 7000);
-    const nextHeading = after.search(/<h3 class="listing-field-heading">/i);
-    if (nextHeading >= 0) after = after.slice(0, nextHeading);
-    const items = [...after.matchAll(/jet-check-list__item-content">([\s\S]*?)<\/div>/g)]
-      .map((row) => parseCheckItem(row[1] ?? ""))
-      .filter((item): item is ListingMetaItem => !!item && item.label.length > 1 && item.label.length < 80);
-    if (!items.length) continue;
-    groups.push({ title, items });
+    const start = (match.index ?? 0) + match[0].length;
+    const nextAt = i + 1 < matches.length ? (matches[i + 1].index ?? start) : start + 12000;
+    const after = clipListingSection(html.slice(start, Math.min(nextAt, start + 12000)));
+    const items = extractCheckItems(after);
+    if (items.length) {
+      groups.push({ title, items });
+      continue;
+    }
+    const checks = [...after.matchAll(/[✅✔]\s*([^✅✔<\n]{2,80})/g)]
+      .map((row) => parseCheckItem(`✅ ${row[1] ?? ""}`))
+      .filter((item): item is ListingMetaItem => !!item);
+    if (checks.length) {
+      groups.push({ title, items: checks });
+      continue;
+    }
+    const text = htmlToRichText(after.replace(/<svg[\s\S]*?<\/svg>/gi, " "))
+      .replace(/\*\*/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+      .slice(0, 1200);
+    if (text.length > 8 && !isJunkListingText(text)) groups.push({ title, items: [], text });
   }
   const merged: ListingMetaGroup[] = [];
   for (const group of groups) {
     const existing = merged.find((g) => g.title.toLowerCase() === group.title.toLowerCase());
     if (!existing) {
-      merged.push({ title: group.title, items: [...group.items] });
+      merged.push({ title: group.title, items: [...group.items], text: group.text });
       continue;
     }
     const seen = new Set(existing.items.map((i) => i.label.toLowerCase()));
     for (const item of group.items) {
       if (!seen.has(item.label.toLowerCase())) existing.items.push(item);
     }
+    if (!existing.text && group.text) existing.text = group.text;
   }
   return { groups: merged, price };
+}
+
+function extractLabeledFacts(html: string): { fields: { label: string; value: string }[]; duration?: string } {
+  const fields: { label: string; value: string }[] = [];
+  const seen = new Set<string>();
+  for (const row of html.matchAll(
+    /<div class="heading-(?:break|sameline)">([\s\S]*?)<\/div>([\s\S]*?)<\/div>/gi,
+  )) {
+    const label = decodeHtml(row[1] ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/[:\s]+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const value = htmlToRichText(row[2] ?? "")
+      .replace(/\*\*/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!label || value.length < 1 || value.length > 400) continue;
+    if (/nearby|popular|share this|contact|get directions/i.test(label)) continue;
+    if (isJunkListingText(value)) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    fields.push({ label, value });
+  }
+  for (const row of html.matchAll(
+    /<span class="field-values">([\s\S]*?)<\/span>\s*([\s\S]*?)<\/span>/gi,
+  )) {
+    const label = decodeHtml(row[1] ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/[:\s]+$/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const value = decodeHtml(row[2] ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!label || value.length < 1 || value.length > 1600) continue;
+    if (/nearby|popular|share this|contact|get directions/i.test(label)) continue;
+    if (isJunkListingText(value)) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    fields.push({ label, value });
+  }
+  const duration = fields.find((f) => /^duration$/i.test(f.label))?.value;
+  return { fields, duration };
+}
+
+function extractListingOverview(html: string, _name?: string): string {
+  const inner =
+    html.match(
+      /id="overview"[^>]*>[\s\S]*?<div class="elementor-widget-container">([\s\S]*?)<\/div>\s*<\/div>/i,
+    )?.[1] ||
+    html.match(
+      /elementor-widget-theme-post-content[\s\S]*?<div class="elementor-widget-container">([\s\S]*?)<\/div>/i,
+    )?.[1] ||
+    "";
+  if (!inner) return "";
+  const text = htmlToRichText(inner.replace(/<svg[\s\S]*?<\/svg>/gi, " ").replace(/<script[\s\S]*?<\/script>/gi, " "))
+    .replace(/\*\*/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+    .slice(0, 8000);
+  return isJunkListingText(text) ? "" : text;
 }
 
 function extractListingGeo(html: string): { lat?: number; lng?: number } {
   const mapBlock = html.match(/listeo-listing-map[\s\S]{0,2500}/i)?.[0] ?? html;
   const pair =
     mapBlock.match(/data-latitude="([\d.-]+)"[\s\S]{0,200}?data-longitude="([\d.-]+)"/i) ||
-    html.match(/data-latitude="([\d.-]+)"[\s\S]{0,200}?data-longitude="([\d.-]+)"/i);
+    html.match(/data-latitude="([\d.-]+)"[\s\S]{0,200}?data-longitude="([\d.-]+)"/i) ||
+    html.match(/destination=([\d.-]+),([\d.-]+)/i);
   if (!pair) return {};
   const lat = Number(pair[1]);
   const lng = Number(pair[2]);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return {};
   return { lat, lng };
+}
+
+function extractListeoContact(html: string): { website?: string; phone?: string; address?: string; lat?: number; lng?: number } {
+  const start = html.search(/CONTACT\s*\/\s*ADDRESS/i);
+  const block = start >= 0 ? clipContactSection(html.slice(start, start + 12000)) : html;
+  const website = [...block.matchAll(/href="(https?:\/\/[^"]+)"/gi)]
+    .map((m) => decodeHtml(m[1] ?? "").replace(/&#038;/g, "&").trim())
+    .find(
+      (url) =>
+        /^https?:\/\//i.test(url) &&
+        !/xplorepondy\.com|google\.(com|co)|maps\.app\.goo|facebook\.com|instagram\.com|wa\.me/i.test(url),
+    );
+  const tel = block.match(/href="tel:([^"]+)"/i);
+  const phone = tel ? decodeURIComponent(tel[1]).replace(/%20/g, " ").trim() : undefined;
+  const descriptions = [...block.matchAll(/elementor-icon-box-description[^>]*>([\s\S]*?)<\/p>/gi)].map((row) =>
+    decodeHtml(row[1] ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+  const listingAddr = decodeHtml(block.match(/<p[^>]*listing-address[^>]*>([\s\S]*?)<\/p>/i)?.[1] ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const address = preferListeoAddress(...descriptions, listingAddr);
+  const geo = extractListingGeo(block);
+  return {
+    website,
+    phone: phone || undefined,
+    address,
+    lat: geo.lat,
+    lng: geo.lng,
+  };
 }
 
 function extractGallery(html: string, featured?: string): string[] {
@@ -530,27 +710,64 @@ function extractGallery(html: string, featured?: string): string[] {
 
 function enrichListingFromHtml(listing: Listing, html: string): Listing {
   const extra = extractJsonLd(html);
-  const jet = extractJetMetaGroups(html);
+  const contact = extractListeoContact(html);
+  const facts = extractLabeledFacts(html);
   const geo = extractListingGeo(html);
   const og = extractOgImage(html);
   const gallery = uniqueImages(extractGallery(html, og || listing.image), listing.gallery);
   const hoursInfo = parseOpenHoursHtml(html);
-  const telFromPage = html.match(/href="tel:([^"]+)"/i);
-  const phoneFromPage = telFromPage ? decodeURIComponent(telFromPage[1]).replace(/%20/g, " ").trim() : "";
+  const overview = extractListingOverview(html, listing.name);
+  const categorySlugs = [
+    ...new Set([
+      ...(listing.categorySlugs ?? []),
+      ...[...html.matchAll(/listing_category-([a-z0-9-]+)/gi)].map((m) => m[1].toLowerCase()),
+    ]),
+  ];
+  const profile = profileFromSlugs(categorySlugs);
+  const jet = extractJetMetaGroups(html, profile);
+  const groups = [...(jet.groups.length ? jet.groups : listing.metaGroups ?? [])];
+  if (!profile && facts.fields.length && !groups.some((g) => /^features$/i.test(g.title))) {
+    groups.unshift({
+      title: "Features",
+      items: facts.fields.map((f) => ({ label: `${f.label}: ${f.value}` })),
+    });
+  }
+  if (profile) {
+    for (const fact of facts.fields) {
+      if (!headingMatchesProfile(profile, fact.label)) continue;
+      if (groups.some((g) => g.title.toLowerCase() === fact.label.toLowerCase())) continue;
+      groups.push({ title: fact.label, items: [], text: fact.value });
+    }
+  }
+  const price = listing.price || jet.price || extra.priceRange;
+  if (profile && profileKeys(profile).includes("price_for_two") && price && !groups.some((g) => /price for two/i.test(g.title))) {
+    groups.push({ title: "Price for two", items: [], text: price });
+  }
+  const ordered = filterListingGroups(profile, groups);
+  const cafeFromGroups = ordered.find((g) => /cafe type/i.test(g.title));
+  const liveDesc =
+    (overview && !isJunkListingText(overview) ? overview : "") ||
+    (extra.description && !isJunkListingText(extra.description) ? extra.description : "");
   return {
     ...listing,
-    phone: extra.phone || phoneFromPage || listing.phone,
-    address: extra.address || listing.address,
-    rating: listing.rating || extra.rating || 0,
-    reviews: listing.reviews || extra.reviews || 0,
-    price: listing.price || jet.price || extra.priceRange,
+    name: extra.name || listing.name,
+    phone: contact.phone || extra.phone || listing.phone,
+    website: contact.website || extra.website || listing.website,
+    address: preferListeoAddress(contact.address, listing.address, extra.address),
+    rating: extra.rating || listing.rating || 0,
+    reviews: extra.reviews || listing.reviews || 0,
+    price,
     hours: hoursInfo.hours || listing.hours,
     openNow: hoursInfo.openNow ?? listing.openNow,
     weeklyHours: hoursInfo.weeklyHours.length ? hoursInfo.weeklyHours : listing.weeklyHours,
     location: listing.location === "Pondicherry" && extra.address ? extra.address : listing.location,
-    lat: listing.lat ?? geo.lat,
-    lng: listing.lng ?? geo.lng,
-    metaGroups: jet.groups.length ? jet.groups : listing.metaGroups,
+    lat: listing.lat ?? contact.lat ?? geo.lat,
+    lng: listing.lng ?? contact.lng ?? geo.lng,
+    duration: facts.duration || listing.duration,
+    description: liveDesc.length > (listing.description?.length ?? 0) ? liveDesc : liveDesc || listing.description,
+    cafeTypes: listing.cafeTypes?.length ? listing.cafeTypes : cafeFromGroups?.items.map((i) => i.label),
+    categorySlugs,
+    metaGroups: ordered.length ? ordered : profile ? [] : listing.metaGroups,
     gallery: gallery.length ? gallery : listing.gallery,
     image: pickListingImage(og, listing.image, gallery[0]) || listing.image,
   };
@@ -607,6 +824,7 @@ function mapListing(
   const tripDays = itinerary.length || groupSize ? tripDaysRaw : "";
   const taxonomies = extractTaxonomies(raw, extras?.taxMaps);
   const menuImages = extractMenuImages(meta.dining_menu_images);
+  const listeo = contactFromListeoMeta(meta as Record<string, unknown>);
   return {
     slug: raw.slug,
     name,
@@ -624,18 +842,24 @@ function mapListing(
     image,
     siteUrl: raw.link ?? `${WP_ORIGIN}/listing/${raw.slug}/`,
     wpId: raw.id,
-    lat: local?.lat,
-    lng: local?.lng,
+    lat: listeo.lat ?? local?.lat,
+    lng: listeo.lng ?? local?.lng,
     price: local?.price,
     mustTry: local?.mustTry,
     duration: local?.duration || tripDays,
     entry: local?.entry,
     featured: undefined,
+    phone: listeo.phone,
+    website: listeo.website,
+    address: listeo.address,
     cafeTypes,
     accessibility,
     tripDays,
     groupSize,
     taxonomies,
+    categorySlugs: (raw.class_list ?? [])
+      .filter((c) => c.startsWith("listing_category-"))
+      .map((c) => c.slice("listing_category-".length)),
     itinerary,
     faqs,
     menuImages,
@@ -933,9 +1157,12 @@ function guideSlugCandidates(slug: string, url?: string) {
 function mapGuide(raw: WpGuide): Guide {
   const local = localGuides.find((g) => g.slug === raw.slug);
   const terms = (raw._embedded?.["wp:term"] ?? []).flat();
-  const topicTerm =
-    terms.find((t) => t.taxonomy === "guide-category") ||
-    terms.find((t) => t.taxonomy === "guide-type");
+  const categories = terms.filter((t) => t.taxonomy === "guide-category");
+  const topicTerm = categories[0] || terms.find((t) => t.taxonomy === "guide-type");
+  const tags = terms
+    .filter((t) => t.taxonomy && t.taxonomy !== "guide-category")
+    .flatMap((t) => [t.name, t.slug])
+    .filter((value): value is string => Boolean(value));
   const html = raw.content?.rendered ?? "";
   const sections = parseGuideSections(html);
   const words = sections
@@ -954,6 +1181,8 @@ function mapGuide(raw: WpGuide): Guide {
     readTime: `${Math.max(1, Math.round(words / 200) || 6)} min`,
     image: mediaUrl(raw._embedded?.["wp:featuredmedia"]?.[0]) || local?.image || "/images/french-quarter.jpg",
     topic: topicTerm?.name ? decodeHtml(topicTerm.name) : local?.topic ?? "Guide",
+    categories: categories.map((t) => decodeHtml(t.name ?? "")).filter(Boolean),
+    tags: [...new Set(tags.map((tag) => decodeHtml(tag)))],
     siteUrl: raw.link ?? `${WP_ORIGIN}/guide/${raw.slug}/`,
     sections: sections.length ? sections : (local?.sections ?? [{ body: "" }]),
   };
@@ -1088,6 +1317,25 @@ async function fetchMeWithCookie(cookie: string): Promise<WpMe | null> {
 }
 
 async function wpGet<T>(path: string, headers: HeadersInit = {}, timeout = 20000): Promise<{ headers: Headers; data: T; ok: boolean; status: number }> {
+  const headerMap = new Headers(headers);
+  const authed = headerMap.has("cookie") || headerMap.has("authorization") || headerMap.has("x-wp-nonce");
+  if (!authed) {
+    const hit = await cachedOriginText(`${WP_ORIGIN}${path}`, CATALOG_TTL, timeout, {
+      Accept: "application/json",
+      ...headers,
+    }).catch(() => null);
+    if (!hit) return { headers: new Headers(), data: [] as T, ok: false, status: 0 };
+    let data = [] as T;
+    try {
+      data = JSON.parse(hit.body) as T;
+    } catch {
+      data = [] as T;
+    }
+    const wpHeaders = new Headers();
+    if (hit.total) wpHeaders.set("X-WP-Total", hit.total);
+    if (hit.pages) wpHeaders.set("X-WP-TotalPages", hit.pages);
+    return { headers: wpHeaders, data, ok: hit.ok, status: hit.status };
+  }
   const res = await fetch(`${WP_ORIGIN}${path}`, {
     headers: { Accept: "application/json", ...headers },
     signal: AbortSignal.timeout(timeout),
@@ -1192,8 +1440,10 @@ let catalogCache: { at: number; listings: Listing[]; total: number; v: number } 
 let guidesCache: { at: number; guides: Guide[] } | null = null;
 let openNowCache: { at: number; snapshot: Awaited<ReturnType<typeof loadOpenNowSnapshot>> } | null = null;
 const listingPageCache = new Map<string, { at: number; listing: Listing }>();
-const CATALOG_TTL = 5 * 60 * 1000;
-const LISTING_PAGE_TTL = 10 * 60 * 1000;
+const CATALOG_TTL = 20 * 60 * 1000;
+const CATALOG_STALE = 2 * 60 * 60 * 1000;
+const LISTING_PAGE_TTL = 30 * 60 * 1000;
+const HTML_TTL = 30 * 60 * 1000;
 const CATALOG_VERSION = 24;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
@@ -1323,9 +1573,30 @@ async function loadGuidesFromWp(): Promise<Guide[]> {
   return [...mapped, ...extras];
 }
 
+let catalogRefresh: Promise<void> | null = null;
+
+function refreshCatalog() {
+  if (catalogRefresh) return catalogRefresh;
+  catalogRefresh = loadCatalogFromWp()
+    .then((fresh) => {
+      if (fresh.listings.length >= 300) {
+        catalogCache = { at: Date.now(), v: CATALOG_VERSION, ...fresh };
+      }
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      catalogRefresh = null;
+    });
+  return catalogRefresh;
+}
+
 export const fetchWpCatalog = createServerFn({ method: "GET" }).handler(async () => {
   const now = Date.now();
   if (catalogCache && catalogCache.v === CATALOG_VERSION && now - catalogCache.at < CATALOG_TTL) {
+    return { listings: catalogCache.listings, total: catalogCache.total };
+  }
+  if (catalogCache && catalogCache.v === CATALOG_VERSION && now - catalogCache.at < CATALOG_STALE) {
+    void refreshCatalog();
     return { listings: catalogCache.listings, total: catalogCache.total };
   }
   try {
@@ -1419,61 +1690,64 @@ export const fetchWpGuides = createServerFn({ method: "GET" }).handler(async () 
   return { guides };
 });
 
-async function loadListingPageHtml(urls: string[], timeout = 8000) {
+async function loadListingPageHtml(urls: string[], timeout = 10000) {
   const unique = [...new Set(urls.filter(Boolean))];
-  if (!unique.length) return null;
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), timeout);
-  try {
-    return await Promise.any(
-      unique.map(async (url) => {
-        const page = await fetch(url, {
-          headers: { Accept: "text/html", "User-Agent": "Mozilla/5.0 XplorePondyApp/1.0" },
-          signal: ac.signal,
-        });
-        if (!page.ok) throw new Error("not-ok");
-        const html = await page.text();
-        if (/<title>[^<]*Page not found/i.test(html)) throw new Error("404");
-        return { url, html };
-      }),
-    );
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-    ac.abort();
+  let fallback: { url: string; html: string; score: number } | null = null;
+  for (const url of unique) {
+    try {
+      const page = await cachedOriginText(url, HTML_TTL, timeout, WP_HTML_HEADERS);
+      if (!page.ok) continue;
+      const html = page.body;
+      if (/<title>[^<]*Page not found/i.test(html)) continue;
+      const score =
+        (html.match(/field-values/gi)?.length ?? 0) * 8 +
+        (html.match(/listing-field-heading/gi)?.length ?? 0) * 10 +
+        (html.match(/jet-check-list__item-content/gi)?.length ?? 0) +
+        (html.match(/heading-(?:break|sameline)/gi)?.length ?? 0) * 4;
+      const hit = { url, html, score };
+      if (score > 0) return hit;
+      fallback ??= hit;
+    } catch {
+      /* try the next url */
+    }
   }
+  return fallback;
 }
 
-function restSoon<T>(promise: Promise<T>, waitMs: number): Promise<T | null> {
-  return Promise.race([
-    promise,
-    new Promise<null>((resolve) => {
-      setTimeout(() => resolve(null), waitMs);
-    }),
-  ]);
+function listingAliases(slug: string, url?: string) {
+  const tail = url ? url.split("/").filter(Boolean).pop() ?? "" : "";
+  return [...new Set([tail, slug].filter((s) => s.length > 2))];
 }
 
 export const fetchWpListing = createServerFn({ method: "GET" })
   .validator(z.object({ slug: z.string().min(1), url: z.string().optional() }))
   .handler(async ({ data }) => {
     const cached = listingPageCache.get(data.slug);
-    if (cached && Date.now() - cached.at < LISTING_PAGE_TTL) return cached.listing;
+    if (cached && Date.now() - cached.at < LISTING_PAGE_TTL && (cached.listing.metaGroups?.length || cached.listing.reviews > 0)) {
+      if (cached.listing.metaGroups?.length) return cached.listing;
+    }
 
+    const aliases = listingAliases(data.slug, data.url);
     const urls = [
-      data.url,
-      `${WP_ORIGIN}/listing/service/${data.slug}/`,
-      `${WP_ORIGIN}/listing/${data.slug}/`,
+      data.url?.includes("/listing/") ? data.url : undefined,
+      ...aliases.flatMap((s) => [`${WP_ORIGIN}/listing/service/${s}/`, `${WP_ORIGIN}/listing/${s}/`]),
     ].filter((url, i, all): url is string => !!url && all.indexOf(url) === i);
 
-    const restP = wpGet<WpListing[]>(
-      `/wp-json/wp/v2/listing?slug=${encodeURIComponent(data.slug)}&_fields=id,slug,title,content,excerpt,link,meta`,
-      {},
-      5000,
-    ).catch(() => null);
-    const pageP = loadListingPageHtml(urls, 6000);
-    const page = await pageP;
-    const rest = page ? await restSoon(restP, 400) : await restP;
+    const page = await loadListingPageHtml(urls, 10000);
+    let rest: { ok: boolean; data: WpListing[] } | null = null;
+    if (!page || page.score === 0) {
+      for (const s of aliases) {
+        const res = await wpGet<WpListing[]>(
+          `/wp-json/wp/v2/listing?slug=${encodeURIComponent(s)}`,
+          {},
+          8000,
+        ).catch(() => null);
+        if (res?.ok && Array.isArray(res.data) && res.data[0]) {
+          rest = res;
+          break;
+        }
+      }
+    }
 
     let listing: Listing | null = null;
     if (rest?.ok && Array.isArray(rest.data) && rest.data[0]) listing = mapListing(rest.data[0]);
@@ -1502,7 +1776,7 @@ export const fetchWpListing = createServerFn({ method: "GET" })
         } satisfies Listing);
       result = enrichListingFromHtml({ ...base, siteUrl: base.siteUrl || page.url }, page.html);
     }
-    if (result) listingPageCache.set(data.slug, { at: Date.now(), listing: result });
+    if (result && (page || rest?.ok)) listingPageCache.set(data.slug, { at: Date.now(), listing: result });
     return result;
   });
 
@@ -1567,6 +1841,8 @@ export const fetchWpGuide = createServerFn({ method: "GET" })
           title: mapped?.title || fromHtml.title,
           date: mapped?.date || fromHtml.date,
           topic: mapped?.topic || fromHtml.topic,
+          categories: mapped?.categories,
+          tags: mapped?.tags,
           image: pickListingImage(mapped?.image, fromHtml.image, local?.image),
         };
       }

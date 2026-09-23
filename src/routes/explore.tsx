@@ -85,6 +85,7 @@ function Explore() {
   );
   const results = useMemo(() => {
     const rows = catalogSearch(items, q, category, filters);
+    if (q.trim()) return rows;
     return sortListings(rows, { origin, nearMe });
   }, [items, q, category, filters, origin, nearMe]);
   const meta = isCategory(category) ? CATEGORY_META[category] : null;

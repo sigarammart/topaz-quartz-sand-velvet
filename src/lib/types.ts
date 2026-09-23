@@ -32,6 +32,7 @@ export type ListingMetaItem = {
 export type ListingMetaGroup = {
   title: string;
   items: ListingMetaItem[];
+  text?: string;
 };
 
 export type DayHours = {
@@ -67,12 +68,14 @@ export type Listing = {
   featured?: boolean;
   listingPackage?: number;
   phone?: string;
+  website?: string;
   address?: string;
   cafeTypes?: string[];
   accessibility?: string[];
   tripDays?: string;
   groupSize?: string;
   taxonomies?: ListingTaxGroup[];
+  categorySlugs?: string[];
   itinerary?: ListingStop[];
   faqs?: ListingFaq[];
   menuImages?: string[];
@@ -105,6 +108,8 @@ export type Guide = {
   readTime: string;
   image: string;
   topic: string;
+  categories?: string[];
+  tags?: string[];
   siteUrl?: string;
   sections: GuideSection[];
 };

@@ -5,6 +5,7 @@ import { getGuide } from "@/data/guides";
 import type { Guide, GuideBlock, GuideSection } from "@/lib/types";
 import { fetchWpGuide } from "@/lib/wp-api";
 import { catalogGuide, useCatalog } from "@/store/catalog";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/guides/$slug")({
@@ -38,6 +39,8 @@ function mergeGuide(base?: Guide | null, extra?: Guide | null): Guide | null {
     excerpt: extra.excerpt || base.excerpt,
     image: extra.image || base.image,
     topic: extra.topic || base.topic,
+    categories: extra.categories?.length ? extra.categories : base.categories,
+    tags: extra.tags?.length ? extra.tags : base.tags,
     date: extra.date || base.date,
     readTime: extra.readTime || base.readTime,
     siteUrl: extra.siteUrl || base.siteUrl,
@@ -52,6 +55,39 @@ function headingId(heading: string, index: number) {
     .replace(/^-|-$/g, "")
     .slice(0, 48);
   return slug || `section-${index}`;
+}
+
+function guideKeys(guide: Guide) {
+  const keys = new Set<string>();
+  const add = (value?: string) => {
+    const key = value?.trim().toLowerCase();
+    if (key && key.length > 1 && key !== "guide") keys.add(key);
+  };
+  add(guide.topic);
+  for (const value of guide.categories ?? []) add(value);
+  for (const value of guide.tags ?? []) add(value);
+  return keys;
+}
+
+function relatedGuides(current: Guide, all: Guide[]) {
+  const mine = guideKeys(current);
+  return all
+    .filter((guide) => guide.slug !== current.slug)
+    .map((guide) => {
+      const theirs = guideKeys(guide);
+      const sameCategory =
+        (current.topic && guide.topic.toLowerCase() === current.topic.toLowerCase()) ||
+        (current.categories ?? []).some((category) =>
+          (guide.categories ?? []).some((other) => other.toLowerCase() === category.toLowerCase()),
+        );
+      let overlap = 0;
+      for (const key of theirs) if (mine.has(key)) overlap += 1;
+      if (!sameCategory && overlap === 0) return null;
+      return { guide, score: (sameCategory ? 4 : 0) + overlap };
+    })
+    .filter((row): row is { guide: Guide; score: number } => !!row)
+    .sort((a, b) => b.score - a.score || a.guide.title.localeCompare(b.guide.title))
+    .map((row) => row.guide);
 }
 
 function splitNumbered(heading: string) {
@@ -69,11 +105,13 @@ function GuidePage() {
     slug,
     guide: cachedDetail(slug),
   }));
+  const [relatedShown, setRelatedShown] = useState(6);
 
   useEffect(() => {
     let cancelled = false;
     const cached = cachedDetail(slug);
     setFetched({ slug, guide: cached });
+    setRelatedShown(6);
     if (cached) return;
     void fetchWpGuide({
       data: {
@@ -122,7 +160,7 @@ function GuidePage() {
         .filter((s): s is { heading: string; id: string } => Boolean(s.heading && s.id)),
     [guide.sections],
   );
-  const others = guides.filter((g) => g.slug !== slug).slice(0, 3);
+  const related = relatedGuides(guide, guides);
 
   return (
     <article className="mx-auto max-w-3xl" aria-busy={detailsLoading}>
@@ -182,25 +220,36 @@ function GuidePage() {
         </p>
       )}
 
-      {others.length > 0 && (
+      {related.length > 0 && (
         <section className="mt-12 border-t border-border pt-8">
           <h2 className="font-display text-xl font-semibold">Keep reading</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-3">
-            {others.map((g) => (
+          <div className="mt-3 flex flex-col gap-2 sm:mt-4 sm:grid sm:grid-cols-3 sm:gap-3">
+            {related.slice(0, relatedShown).map((g) => (
               <Link
                 key={g.slug}
                 to="/guides/$slug"
                 params={{ slug: g.slug }}
-                className="overflow-hidden rounded-xl bg-card ring-1 ring-border/70 transition-transform duration-150 hover:-translate-y-0.5"
+                className="flex gap-2.5 overflow-hidden rounded-xl bg-card p-1.5 ring-1 ring-border/70 transition-transform duration-150 hover:-translate-y-0.5 sm:flex-col sm:p-0"
               >
-                <img src={g.image} alt="" className="aspect-[16/10] w-full object-cover" />
-                <div className="p-3">
+                <img
+                  src={g.image}
+                  alt=""
+                  className="aspect-[16/9] w-[7.25rem] shrink-0 rounded-lg object-cover sm:w-full sm:rounded-none"
+                />
+                <div className="min-w-0 py-0.5 pr-1.5 sm:p-3">
                   <p className="text-[11px] text-muted-foreground">{g.topic} · {g.readTime}</p>
-                  <p className="mt-0.5 text-sm font-semibold leading-snug">{g.title}</p>
+                  <p className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug">{g.title}</p>
                 </div>
               </Link>
             ))}
           </div>
+          {relatedShown < related.length && (
+            <div className="mt-4 flex justify-center">
+              <Button variant="outline" onClick={() => setRelatedShown((count) => count + 6)}>
+                Load more · {related.length - relatedShown} left
+              </Button>
+            </div>
+          )}
         </section>
       )}
     </article>

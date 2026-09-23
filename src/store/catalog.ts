@@ -7,6 +7,7 @@ import {
 } from "@/data/listings";
 import { applySmartFilters, type SmartFilters } from "@/lib/filters";
 import { listingDistanceKm, type LatLng } from "@/lib/geo";
+import { elasticSearch } from "@/lib/es-search";
 import { fetchWpCatalog, fetchWpGuides, fetchWpOpenNowForSlugs, fetchWpOpenNowSnapshot } from "@/lib/wp-api";
 import type { Category, DayHours, Guide, Listing } from "@/lib/types";
 
@@ -39,6 +40,48 @@ const hoursDone = new Set<string>();
 const hoursQueued = new Set<string>();
 const pendingSlugs = new Set<string>();
 let slugTimer: ReturnType<typeof setTimeout> | undefined;
+const SESSION_KEY = "xp-catalog-v25";
+const SESSION_TTL = 20 * 60 * 1000;
+
+type SessionSnap = {
+  at: number;
+  listings: Listing[];
+  total: number;
+  openNowTotal: number;
+  openNowByCategory: Record<Category, number>;
+};
+
+function readSession(): SessionSnap | null {
+  if (typeof sessionStorage === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const snap = JSON.parse(raw) as SessionSnap;
+    if (!snap || Date.now() - snap.at > SESSION_TTL) return null;
+    if (!Array.isArray(snap.listings) || snap.listings.length < 300) return null;
+    return snap;
+  } catch {
+    return null;
+  }
+}
+
+function persistSession() {
+  if (typeof sessionStorage === "undefined") return;
+  const state = useCatalog.getState();
+  if (state.source !== "live" || state.items.length < 300) return;
+  try {
+    const snap: SessionSnap = {
+      at: Date.now(),
+      listings: state.items,
+      total: state.total,
+      openNowTotal: state.openNowTotal,
+      openNowByCategory: state.openNowByCategory,
+    };
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(snap));
+  } catch {
+    /* quota */
+  }
+}
 
 function urlTail(url: string) {
   return url.split("/").filter(Boolean).pop() ?? "";
@@ -68,6 +111,7 @@ async function hydrateHours(apply: (rows: HoursPatch[]) => void, _items: Listing
     });
     if (snapshot.rows.length) apply(snapshot.rows);
     for (const row of snapshot.rows) hoursDone.add(row.slug);
+    persistSession();
   } catch {
     hoursStarted = 0;
     useCatalog.setState({ openNowStatus: "idle" });
@@ -86,6 +130,23 @@ export const useCatalog = create<CatalogState>((set, get) => ({
   openNowStatus: "idle",
   ensure: async () => {
     const current = get();
+    if (current.source !== "live") {
+      const snap = readSession();
+      if (snap) {
+        set({
+          items: snap.listings,
+          source: "live",
+          status: "ready",
+          total: snap.total,
+          error: null,
+          openNowTotal: snap.openNowTotal ?? 0,
+          openNowByCategory: snap.openNowByCategory ?? { places: 0, activities: 0, food: 0, stay: 0 },
+          openNowStatus: (snap.openNowTotal ?? 0) > 0 ? "ready" : "idle",
+        });
+        if ((snap.openNowTotal ?? 0) === 0) void hydrateHours(get().applyHours, snap.listings);
+        return;
+      }
+    }
     if (current.status === "loading" && Date.now() - loadStarted < 25000) return;
     if (current.openNowStatus !== "ready") void hydrateHours(get().applyHours, current.items);
     if (current.source === "live" && current.items.length >= 350 && current.items.some((item) => item.wpId)) {
@@ -119,6 +180,7 @@ export const useCatalog = create<CatalogState>((set, get) => ({
         total,
         error: null,
       });
+      persistSession();
       void hydrateHours(get().applyHours, listings);
       void fetchWpGuides()
         .then((guideResult) => {
@@ -195,6 +257,7 @@ export function resolveListing(slug: string, items: Listing[]) {
   return (
     items.find((l) => l.slug === slug) ||
     items.find((l) => l.siteUrl.includes(`/${slug}/`)) ||
+    items.find((l) => l.slug.startsWith(`${slug}-`) || slug.startsWith(`${l.slug}-`)) ||
     getListing(slug)
   );
 }
@@ -209,30 +272,10 @@ export function catalogSearch(
   category: Category | "all",
   filters: SmartFilters = {},
 ) {
-  const q = query.trim().toLowerCase();
-  const scoped = items.filter((l) => {
-    if (category !== "all" && l.category !== category) return false;
-    if (!q) return true;
-    const hay = [
-      l.name,
-      l.kind,
-      l.location,
-      l.area,
-      l.description,
-      l.address ?? "",
-      l.phone ?? "",
-      ...(l.tags ?? []),
-      ...(l.bestFor ?? []),
-      ...(l.cafeTypes ?? []),
-      ...(l.taxonomies ?? []).flatMap((g) => [g.label, ...g.terms.map((t) => t.name)]),
-      ...(l.metaFacets ?? []).flatMap((g) => [g.label, ...g.terms.map((t) => t.name)]),
-      ...(l.metaGroups ?? []).flatMap((g) => [g.title, ...g.items.map((i) => i.label)]),
-    ]
-      .join(" ")
-      .toLowerCase();
-    return hay.includes(q);
-  });
-  return applySmartFilters(scoped, filters);
+  const q = query.trim();
+  const scoped = items.filter((l) => category === "all" || l.category === category);
+  const matched = q ? elasticSearch(scoped, q) : scoped;
+  return applySmartFilters(matched, filters);
 }
 
 function archiveRank(listing: Listing): number {
@@ -277,12 +320,47 @@ export function catalogFeatured(items: Listing[]) {
   return [...marked, ...items.filter((l) => !l.featured)].slice(0, 6);
 }
 
+function relatedKeys(listing: Listing) {
+  const keys = new Set<string>();
+  const add = (value?: string) => {
+    const key = value?.trim().toLowerCase();
+    if (key && key.length > 1) keys.add(key);
+  };
+  for (const tag of listing.tags ?? []) add(tag);
+  for (const tag of listing.bestFor ?? []) add(tag);
+  for (const slug of listing.categorySlugs ?? []) add(slug);
+  for (const group of [...(listing.taxonomies ?? []), ...(listing.metaFacets ?? [])]) {
+    for (const term of group.terms) {
+      add(term.name);
+      add(term.slug);
+    }
+  }
+  return keys;
+}
+
 export function catalogNearby(slug: string, items: Listing[]) {
   const current = catalogListing(slug, items);
   if (!current) return localNearby(slug);
-  return items
-    .filter((l) => l.slug !== slug && (l.area === current.area || l.category === current.category))
-    .slice(0, 4);
+  const mine = relatedKeys(current);
+  const ranked = items
+    .filter((item) => item.slug !== current.slug && item.slug !== slug)
+    .map((item) => {
+      const sameCategory = item.category === current.category;
+      let overlap = 0;
+      for (const key of relatedKeys(item)) if (mine.has(key)) overlap += 1;
+      if (!sameCategory && overlap === 0) return null;
+      const score =
+        (sameCategory ? 3 : 0) +
+        overlap * 2 +
+        (current.area && item.area === current.area ? 1 : 0) +
+        (current.kind && item.kind.toLowerCase() === current.kind.toLowerCase() ? 2 : 0);
+      return { item, score };
+    })
+    .filter((row): row is { item: Listing; score: number } => !!row)
+    .sort((a, b) => b.score - a.score || b.item.rating - a.item.rating || a.item.name.localeCompare(b.item.name));
+  const picked = ranked.slice(0, 24).map((row) => row.item);
+  if (picked.length) return picked;
+  return items.filter((item) => item.slug !== slug && item.category === current.category).slice(0, 24);
 }
 
 export function catalogGuide(slug: string, guides: Guide[]) {

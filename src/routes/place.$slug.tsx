@@ -32,22 +32,47 @@ import { catalogListing, catalogNearby, useCatalog } from "@/store/catalog";
 import { useGeo } from "@/store/geo";
 import { formatDistance, listingDistanceKm } from "@/lib/geo";
 import { decodeEntities } from "@/lib/utils";
+import { preferListeoAddress, websiteHref } from "@/lib/listeo";
+import { filterListingGroups, orderListingGroups, profileFromSlugs } from "@/lib/listing-layouts";
 
 export const Route = createFileRoute("/place/$slug")({
   component: PlacePage,
 });
 
-const DETAIL_TTL = 10 * 60 * 1000;
+const DETAIL_TTL = 30 * 60 * 1000;
 const detailCache = new Map<string, { at: number; listing: Listing }>();
+
+function placeKey(slug: string) {
+  return `xp-place-v1:${slug}`;
+}
 
 function cachedDetail(slug: string) {
   const hit = detailCache.get(slug);
-  if (!hit) return undefined;
-  if (Date.now() - hit.at > DETAIL_TTL) {
-    detailCache.delete(slug);
+  if (hit) {
+    if (Date.now() - hit.at > DETAIL_TTL) detailCache.delete(slug);
+    else return hit.listing;
+  }
+  if (typeof sessionStorage === "undefined") return undefined;
+  try {
+    const raw = sessionStorage.getItem(placeKey(slug));
+    if (!raw) return undefined;
+    const saved = JSON.parse(raw) as { at: number; listing: Listing };
+    if (!saved?.listing || Date.now() - saved.at > DETAIL_TTL) return undefined;
+    detailCache.set(slug, saved);
+    return saved.listing;
+  } catch {
     return undefined;
   }
-  return hit.listing;
+}
+
+function rememberDetail(slug: string, listing: Listing) {
+  const saved = { at: Date.now(), listing };
+  detailCache.set(slug, saved);
+  try {
+    sessionStorage.setItem(placeKey(slug), JSON.stringify(saved));
+  } catch {
+    /* quota */
+  }
 }
 
 function mergeListing(base?: Listing | null, extra?: Listing | null): Listing | null {
@@ -56,7 +81,8 @@ function mergeListing(base?: Listing | null, extra?: Listing | null): Listing | 
   return {
     ...base,
     ...extra,
-    description: extra.description || base.description,
+    name: extra.name || base.name,
+    description: (extra.description?.length ?? 0) >= (base.description?.length ?? 0) ? extra.description : extra.description || base.description,
     rating: extra.rating || base.rating,
     reviews: extra.reviews || base.reviews,
     hours: extra.hours || base.hours,
@@ -67,7 +93,8 @@ function mergeListing(base?: Listing | null, extra?: Listing | null): Listing | 
     entry: extra.entry || base.entry,
     price: extra.price || base.price,
     phone: extra.phone || base.phone,
-    address: extra.address || base.address,
+    website: extra.website || base.website,
+    address: preferListeoAddress(extra.address, base.address),
     lat: extra.lat ?? base.lat,
     lng: extra.lng ?? base.lng,
     tags: extra.tags.length ? extra.tags : base.tags,
@@ -75,6 +102,7 @@ function mergeListing(base?: Listing | null, extra?: Listing | null): Listing | 
     cafeTypes: extra.cafeTypes?.length ? extra.cafeTypes : base.cafeTypes,
     accessibility: extra.accessibility?.length ? extra.accessibility : base.accessibility,
     taxonomies: extra.taxonomies?.length ? extra.taxonomies : base.taxonomies,
+    categorySlugs: extra.categorySlugs?.length ? extra.categorySlugs : base.categorySlugs,
     itinerary: extra.itinerary?.length ? extra.itinerary : base.itinerary,
     faqs: extra.faqs?.length ? extra.faqs : base.faqs,
     menuImages: extra.menuImages?.length ? extra.menuImages : base.menuImages,
@@ -108,11 +136,13 @@ function PlacePage() {
     slug,
     listing: cachedDetail(slug),
   }));
+  const [relatedShown, setRelatedShown] = useState(6);
 
   useEffect(() => {
     let cancelled = false;
     const cached = cachedDetail(slug);
     setFetched({ slug, listing: cached });
+    setRelatedShown(6);
     if (cached) return;
     const url = catalogListing(slug, useCatalog.getState().items)?.siteUrl;
     void fetchWpListing({ data: { slug, url } })
@@ -120,6 +150,7 @@ function PlacePage() {
         if (cancelled) return;
         if (row) {
           detailCache.set(slug, { at: Date.now(), listing: row });
+          rememberDetail(slug, row);
           useCatalog.getState().patchListing(row);
         }
         setFetched({ slug, listing: row ?? null });
@@ -153,17 +184,33 @@ function PlacePage() {
     listing.lat && listing.lng
       ? `https://www.google.com/maps?q=${listing.lat},${listing.lng}&z=16&output=embed`
       : "";
-  const taxonomies = listing.taxonomies ?? [];
   const cafeTypes = listing.cafeTypes ?? [];
   const accessibility = listing.accessibility ?? [];
   const itinerary = listing.itinerary ?? [];
   const faqs = listing.faqs ?? [];
   const menuImages = listing.menuImages ?? [];
-  const metaGroups = listing.metaGroups ?? [];
+  const profile = profileFromSlugs([
+    ...(listing.categorySlugs ?? []),
+    ...(listing.taxonomies ?? []).flatMap((g) => g.terms.map((t) => t.slug)),
+    listing.kind,
+  ]);
+  const metaGroups = profile
+    ? filterListingGroups(profile, listing.metaGroups ?? [])
+    : orderListingGroups(listing.category, listing.metaGroups ?? []);
   const photos = listingPhotos(listing);
   const tel = listing.phone?.replace(/[^\d+]/g, "") ?? "";
   const metaTitles = new Set(metaGroups.map((g) => g.title.toLowerCase()));
+  const metaLabels = new Set(metaGroups.flatMap((g) => g.items.map((i) => i.label.toLowerCase())));
   const showCafeTypes = cafeTypes.length > 0 && !metaTitles.has("cafe type");
+  const showAccessibility = accessibility.length > 0 && !metaTitles.has("accessibility");
+  const taxonomies = (listing.taxonomies ?? [])
+    .map((group) => ({
+      ...group,
+      terms: group.terms.filter(
+        (term) => !metaLabels.has(term.name.toLowerCase()) && !metaTitles.has(group.label.toLowerCase()),
+      ),
+    }))
+    .filter((group) => group.terms.length);
   const where = listing.address || listing.location;
   const showDetailsSkeleton = detailsLoading && !listingHasDetails(listing);
 
@@ -207,34 +254,33 @@ function PlacePage() {
           </div>
           {listing.price && <p className="mt-1.5 text-sm font-medium">{listing.price}</p>}
 
-          <div className="mt-3 flex flex-wrap gap-2 lg:hidden">
-            <AddToTrip slug={listing.slug} name={listing.name} wpId={listing.wpId} />
-            <Button variant="outline" size="sm" asChild className="h-10">
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:hidden">
+            <AddToTrip slug={listing.slug} name={listing.name} wpId={listing.wpId} className="w-full" />
+            <Button variant="outline" size="sm" asChild className="h-10 w-full">
               <a href={maps} target="_blank" rel="noreferrer">
                 <Navigation />
                 Directions
               </a>
             </Button>
             {tel && (
-              <Button variant="outline" size="sm" asChild className="h-10">
+              <Button variant="outline" size="sm" asChild className="h-10 w-full">
                 <a href={`tel:${tel}`}>
                   <Phone />
                   Call
                 </a>
               </Button>
             )}
-            <a
-              href={listing.siteUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex h-10 items-center gap-1.5 px-2 text-xs font-medium text-primary hover:underline"
-            >
-              Website
-              <ExternalLink className="size-3.5" />
-            </a>
+            {listing.website && (
+              <Button variant="outline" size="sm" asChild className="h-10 w-full">
+                <a href={websiteHref(listing.website)} target="_blank" rel="noreferrer">
+                  <ExternalLink />
+                  Website
+                </a>
+              </Button>
+            )}
           </div>
 
-          <p className="mt-4 text-sm leading-relaxed text-foreground/90">{listing.description}</p>
+          <ListingBody text={listing.description} />
 
           {(listing.hours || listing.duration || listing.entry || listing.groupSize) && (
             <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -258,10 +304,36 @@ function PlacePage() {
             <div className="mt-5 space-y-5">
               {metaGroups.map((group) => {
                 const scored = group.items.some((i) => i.included !== undefined);
+                const asFacts =
+                  /^features$/i.test(group.title) ||
+                  group.items.some((i) => i.label.includes(": ") && i.label.length > 36);
                 return (
                   <section key={group.title}>
                     <h2 className="text-sm font-semibold">{group.title}</h2>
-                    {scored ? (
+                    {group.text ? (
+                      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-foreground/90">{group.text}</p>
+                    ) : null}
+                    {group.items.length > 0 && asFacts ? (
+                      <dl className="mt-2 space-y-2">
+                        {group.items.map((item) => {
+                          const split = item.label.match(/^([^:]{2,40}):\s*(.+)$/);
+                          return (
+                            <div key={item.label} className="rounded-lg bg-card px-2.5 py-1.5 text-sm ring-1 ring-border/70">
+                              {split ? (
+                                <>
+                                  <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                    {split[1]}
+                                  </dt>
+                                  <dd className="mt-0.5">{split[2]}</dd>
+                                </>
+                              ) : (
+                                <dd>{item.label}</dd>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </dl>
+                    ) : group.items.length > 0 && scored ? (
                       <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
                         {group.items.map((item) => (
                           <li
@@ -277,7 +349,7 @@ function PlacePage() {
                           </li>
                         ))}
                       </ul>
-                    ) : (
+                    ) : group.items.length > 0 ? (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {group.items.map((item) => (
                           <Badge key={item.label} className="text-[11px]">
@@ -285,7 +357,7 @@ function PlacePage() {
                           </Badge>
                         ))}
                       </div>
-                    )}
+                    ) : null}
                   </section>
                 );
               })}
@@ -305,7 +377,7 @@ function PlacePage() {
             </section>
           )}
 
-          {accessibility.length > 0 && (
+          {showAccessibility && (
             <section className="mt-5">
               <h2 className="flex items-center gap-2 text-sm font-semibold">
                 <Accessibility className="size-3.5 text-primary" />
@@ -321,7 +393,7 @@ function PlacePage() {
             </section>
           )}
 
-          {taxonomies.length > 0 && (
+          {taxonomies.length > 0 && !profile && (
             <section className="mt-5">
               <h2 className="text-sm font-semibold">Listing details</h2>
               <div className="mt-3 space-y-3">
@@ -442,15 +514,14 @@ function PlacePage() {
                   </a>
                 </Button>
               )}
-              <a
-                href={listing.siteUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex h-9 items-center justify-center gap-1.5 text-xs font-medium text-primary hover:underline"
-              >
-                View on xplorepondy.com
-                <ExternalLink className="size-3.5" />
-              </a>
+              {listing.website && (
+                <Button variant="outline" size="sm" asChild className="h-10 w-full">
+                  <a href={websiteHref(listing.website)} target="_blank" rel="noreferrer">
+                    <ExternalLink />
+                    Website
+                  </a>
+                </Button>
+              )}
             </div>
             {(listing.hours || where) && (
               <dl className="mt-3 space-y-1.5 border-t border-border pt-3 text-xs">
@@ -475,6 +546,64 @@ function PlacePage() {
               </dl>
             )}
           </div>
+          {(listing.website || tel || listing.address) && (
+            <section className="rounded-2xl bg-card p-4 shadow-soft ring-1 ring-border/70">
+              <h2 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                Contact / Address
+              </h2>
+              <ul className="mt-3 divide-y divide-border overflow-hidden rounded-xl ring-1 ring-border/70">
+                {listing.website && (
+                  <li>
+                    <a
+                      href={websiteHref(listing.website)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm hover:bg-muted/50"
+                    >
+                      <span>
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Website
+                        </span>
+                        <span className="mt-0.5 block truncate font-medium">{listing.website.replace(/^https?:\/\//, "")}</span>
+                      </span>
+                      <ExternalLink className="size-3.5 shrink-0 text-primary" />
+                    </a>
+                  </li>
+                )}
+                {tel && (
+                  <li>
+                    <a href={`tel:${tel}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm hover:bg-muted/50">
+                      <span>
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Phone number
+                        </span>
+                        <span className="mt-0.5 block font-medium">{listing.phone}</span>
+                      </span>
+                      <Phone className="size-3.5 shrink-0 text-primary" />
+                    </a>
+                  </li>
+                )}
+                {listing.address && (
+                  <li>
+                    <a
+                      href={maps}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm hover:bg-muted/50"
+                    >
+                      <span>
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Google Maps address
+                        </span>
+                        <span className="mt-0.5 block font-medium leading-snug">{listing.address}</span>
+                      </span>
+                      <Navigation className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                    </a>
+                  </li>
+                )}
+              </ul>
+            </section>
+          )}
           {embed && (
             <div className="overflow-hidden rounded-2xl ring-1 ring-border/70">
               <iframe
@@ -499,20 +628,59 @@ function PlacePage() {
               </ul>
             </section>
           )}
+          <a
+            href={listing.siteUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-center gap-1.5 py-1 text-xs font-medium text-primary hover:underline"
+          >
+            View on xplorepondy.com
+            <ExternalLink className="size-3.5" />
+          </a>
         </aside>
       </div>
 
       {nearby.length > 0 && (
         <section className="mt-8">
           <h2 className="font-display text-lg font-semibold">Nearby & related</h2>
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {nearby.map((l) => (
-              <ListingCard key={l.slug} listing={l} layout="compact" />
+          <div className="mt-3 flex flex-col gap-2">
+            {nearby.slice(0, relatedShown).map((l) => (
+              <ListingCard key={l.slug} listing={l} layout="row" />
             ))}
           </div>
+          {relatedShown < nearby.length && (
+            <div className="mt-4 flex justify-center">
+              <Button variant="outline" onClick={() => setRelatedShown((count) => count + 6)}>
+                Load more · {nearby.length - relatedShown} left
+              </Button>
+            </div>
+          )}
         </section>
       )}
     </article>
+  );
+}
+
+function ListingBody({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  if (!text.trim()) return null;
+  const long = text.length > 480;
+  const shown = open || !long ? text : `${text.slice(0, 420).replace(/\s+\S*$/, "")}…`;
+  return (
+    <div className="mt-4">
+      <div className="space-y-2 text-sm leading-relaxed text-foreground/90">
+        {shown.split(/\n{2,}/).map((p, i) => (
+          <p key={i} className="whitespace-pre-line">
+            {p}
+          </p>
+        ))}
+      </div>
+      {long ? (
+        <button type="button" className="mt-1.5 text-xs font-semibold text-primary hover:underline" onClick={() => setOpen((v) => !v)}>
+          {open ? "Read less" : "Read more"}
+        </button>
+      ) : null}
+    </div>
   );
 }
 

@@ -150,8 +150,8 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
                 <span
                   className={cn(
                     "flex size-8 items-center justify-center rounded-full border-2 text-sm font-semibold",
-                    i === step && "border-[#1aa56a] bg-card text-[#1aa56a]",
-                    i < step && "border-[#1aa56a] bg-[#1aa56a] text-white",
+                    i === step && "border-primary bg-card text-primary",
+                    i < step && "border-primary bg-primary text-primary-foreground",
                     i > step && "border-border text-muted-foreground",
                   )}
                 >
@@ -160,20 +160,20 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
                 <span
                   className={cn(
                     "mt-1 text-center text-[11px] font-medium",
-                    i === step ? "text-[#1aa56a]" : "text-muted-foreground",
+                    i === step ? "text-primary" : "text-muted-foreground",
                   )}
                 >
                   {page.label}
                 </span>
               </button>
               {i < JETFORM_PAGES.length - 1 && (
-                <span className={cn("mt-4 h-0.5 flex-1", i < step ? "bg-[#1aa56a]" : "bg-border")} />
+                <span className={cn("mt-4 h-0.5 flex-1", i < step ? "bg-primary" : "bg-border")} />
               )}
             </li>
           ))}
         </ol>
 
-        <div className="rounded-md bg-[#7ed9b8] px-4 py-3 text-center text-sm font-semibold text-foreground sm:text-base">
+        <div className="rounded-md bg-[#7ed9b8] px-4 py-3 text-center text-sm font-semibold text-[#08372c] sm:text-base">
           {JETFORM_PAGES[step].title}
         </div>
 
@@ -293,11 +293,11 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
                       {TRIP_MONTHS.map((m) => (
                         <Choice
                           key={m}
-                          type="checkbox"
-                          name="when_are_you_going[]"
+                          type="radio"
+                          name="when_are_you_going"
                           value={m}
-                          checked={months.includes(m)}
-                          onChange={() => setMonths(toggle(months, m))}
+                          checked={months[0] === m}
+                          onChange={() => setMonths([m])}
                         >
                           {m}
                         </Choice>
