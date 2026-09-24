@@ -109,6 +109,7 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
       const result = await saveWpUserTrip({
         data: {
           email: accountEmail,
+          wpId: current.wpId,
           fromPlace,
           fromLat,
           fromLng,
