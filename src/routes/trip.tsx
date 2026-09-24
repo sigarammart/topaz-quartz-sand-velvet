@@ -226,6 +226,9 @@ function TripPage() {
           interests,
           items: syncItems,
           itinerary: itinerary ?? [],
+          savedListingIds: tempTrip
+            .map((slug) => resolveListing(slug, catalog)?.wpId)
+            .filter((id): id is number => typeof id === "number"),
         },
       }).then((result) => {
         if (!result.ok) {
