@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import {
   JETFORM_PAGES,
   TRIP_BUDGETS,
@@ -18,8 +19,9 @@ import {
   todayISO,
 } from "@/lib/trip-form";
 import { LocationAutocomplete } from "@/components/location-autocomplete";
-import { fetchWpUserTrips, type WpTrip } from "@/lib/wp-api";
+import { fetchWpUserTrips, saveWpUserTrip, type WpTrip } from "@/lib/wp-api";
 import { useTrip } from "@/store/trip";
+import { useAppLoggedIn } from "@/lib/app-session";
 
 function Choice({
   type,
@@ -59,6 +61,9 @@ function Choice({
 export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
   const applyPlan = useTrip((s) => s.applyPlan);
   const current = useTrip((s) => s);
+  const { wpUser, grokUser } = useAppLoggedIn();
+  const accountEmail = wpUser?.email || grokUser?.primaryEmail || "";
+  const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(0);
   const [fromPlace, setFromPlace] = useState(current.started ? current.fromPlace : "");
   const [fromLat, setFromLat] = useState<number | undefined>(current.started ? current.fromLat : undefined);
@@ -76,10 +81,11 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
   const [wpTrips, setWpTrips] = useState<WpTrip[]>([]);
 
   useEffect(() => {
-    void fetchWpUserTrips()
+    if (!accountEmail) return;
+    void fetchWpUserTrips({ data: { email: accountEmail } })
       .then((r) => setWpTrips(r.trips))
       .catch(() => undefined);
-  }, []);
+  }, [accountEmail]);
 
   const draft = { fromPlace, locations, datesKnown, start, end, months, days, tripType, interests };
   const canNext = jetformPageComplete(step, draft);
@@ -93,41 +99,92 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
     return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
   }
 
-  function save() {
-    applyPlan({
-      fromPlace,
-      fromLat,
-      fromLng,
-      locations,
-      budget,
-      tripType,
-      datesKnown,
-      start,
-      end,
-      months,
-      days: computedDays,
-      interests,
-      notes,
-      title: liveTitle,
-    });
-    afterSave?.();
+  async function save() {
+    if (!accountEmail) {
+      toast.error("Your signed-in email could not be determined.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await saveWpUserTrip({
+        data: {
+          email: accountEmail,
+          fromPlace,
+          fromLat,
+          fromLng,
+          locations,
+          budget,
+          tripType,
+          datesKnown,
+          start,
+          end,
+          months,
+          days: computedDays,
+          interests,
+          notes,
+          title: liveTitle,
+          code: current.code || `XP-${Date.now().toString(36).toUpperCase()}`,
+          items: current.items,
+          itinerary: current.itinerary ?? [],
+        },
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      applyPlan({
+        fromPlace,
+        fromLat,
+        fromLng,
+        locations,
+        budget,
+        tripType,
+        datesKnown,
+        start,
+        end,
+        months,
+        days: computedDays,
+        interests,
+        notes,
+        title: liveTitle,
+        wpId: result.trip.id,
+        wpUrl: result.trip.url,
+        code: result.trip.id ? String(result.trip.id) : undefined,
+      });
+      toast.success("Trip saved to your xplorepondy.com account");
+      afterSave?.();
+    } catch {
+      toast.error("Could not save the trip to xplorepondy.com.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   function openWp(trip: WpTrip) {
-    const seed = seedFromWpTitle(trip.title);
-    applyPlan({
-      ...seed,
-      fromPlace: fromPlace || "Anna Salai, Puducherry",
-      datesKnown: true,
-      start,
-      end,
-      months: [],
-      notes: "",
-      wpId: trip.id,
-      wpUrl: trip.url,
-      code: trip.id ? String(trip.id) : undefined,
-      title: trip.title,
-    });
+    if (trip.data) {
+      applyPlan({
+        ...trip.data,
+        title: trip.title,
+        wpId: trip.id,
+        wpUrl: trip.url,
+        code: trip.data.code || (trip.id ? String(trip.id) : undefined),
+      });
+    } else {
+      const seed = seedFromWpTitle(trip.title);
+      applyPlan({
+        ...seed,
+        fromPlace: fromPlace || "Anna Salai, Puducherry",
+        datesKnown: true,
+        start,
+        end,
+        months: [],
+        notes: "",
+        wpId: trip.id,
+        wpUrl: trip.url,
+        code: trip.id ? String(trip.id) : undefined,
+        title: trip.title,
+      });
+    }
     afterSave?.();
   }
 
@@ -415,8 +472,8 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
                 Next
               </Button>
             ) : (
-              <Button className="bg-foreground text-background hover:bg-foreground/90" onClick={save}>
-                Choose listings
+              <Button className="bg-foreground text-background hover:bg-foreground/90" disabled={saving} onClick={save}>
+                {saving ? "Saving trip…" : "Choose listings"}
               </Button>
             )}
           </div>
