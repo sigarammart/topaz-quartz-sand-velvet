@@ -9,7 +9,7 @@ import { TripPaneBar, type TripPane } from "@/components/trip-pane-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { fetchWpTripStore, syncWpUserTrip, updateWpTripStore, WP_ORIGIN } from "@/lib/wp-api";
+import { fetchWpTripStore, fetchWpUserTripState, syncWpUserTrip, updateWpTripStore, WP_ORIGIN } from "@/lib/wp-api";
 import { generateAiItinerary } from "@/lib/ai-itinerary";
 import {
   formatTripDates,
@@ -90,6 +90,62 @@ function TripPage() {
   const tripStoreSynced = useRef("");
   const tripSyncReady = useRef(false);
   const tripSyncSignature = useRef("");
+  const tripRemoteHydrated = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!hydrated || !loggedIn || !accountEmail || !wpId || catalog.length === 0) return;
+    if (tripRemoteHydrated.current === wpId) return;
+
+    tripRemoteHydrated.current = wpId;
+
+    void fetchWpUserTripState({
+      data: { email: accountEmail, wpId },
+    }).then((result) => {
+      if (!result.ok) {
+        tripRemoteHydrated.current = null;
+        return;
+      }
+
+      const byWpId = new Map<number, Listing>();
+      for (const listing of catalog) {
+        if (typeof listing.wpId === "number") byWpId.set(listing.wpId, listing);
+      }
+
+      const remoteItems = result.items
+        .map((item) => {
+          const listing = byWpId.get(item.listingId);
+          return listing ? { slug: listing.slug, day: item.day } : null;
+        })
+        .filter((item): item is { slug: string; day: number } => !!item);
+
+      const remoteItinerary = Array.isArray(result.itinerary) ? result.itinerary : [];
+
+      useTrip.setState({
+        started: true,
+        code: result.code || useTrip.getState().code,
+        interests: result.interests.length ? result.interests : useTrip.getState().interests,
+        items: remoteItems,
+        itinerary: remoteItinerary as typeof itinerary,
+        itineraryPolished: remoteItinerary.length > 0,
+      });
+
+      tripSyncReady.current = true;
+      tripSyncSignature.current = JSON.stringify({
+        wpId,
+        code: result.code || useTrip.getState().code,
+        interests: result.interests.length ? result.interests : useTrip.getState().interests,
+        items: remoteItems.map((item) => ({
+          listingId: byWpId.get(
+            catalog.find((listing) => listing.slug === item.slug)?.wpId ?? 0,
+          )?.wpId,
+          day: item.day,
+        })),
+        itinerary: remoteItinerary,
+      });
+    }).catch(() => {
+      tripRemoteHydrated.current = null;
+    });
+  }, [hydrated, loggedIn, accountEmail, wpId, catalog]);
 
   useEffect(() => {
     if (!hydrated || !loggedIn || !accountEmail || !wpId || catalog.length === 0) return;
@@ -108,6 +164,7 @@ function TripPage() {
 
     const signature = JSON.stringify({
       wpId,
+      code,
       interests,
       items: syncItems,
       itinerary,
@@ -142,6 +199,7 @@ function TripPage() {
     loggedIn,
     accountEmail,
     wpId,
+    code,
     catalog,
     items,
     tempTrip,
