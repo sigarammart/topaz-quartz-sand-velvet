@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useAppLoggedIn } from "@/lib/app-session";
 import { useAuthModal } from "@/store/auth-modal";
-import { useCatalog } from "@/store/catalog";
-import { resolveListing, useTrip } from "@/store/trip";
+import { resolveListing, useCatalog } from "@/store/catalog";
+import { useTrip } from "@/store/trip";
 
 export const Route = createFileRoute("/saved")({ component: SavedPage });
 
