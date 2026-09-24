@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ExternalLink, LogOut, RefreshCw } from "lucide-react";
+import { ArrowRight, LogOut, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ListingCard } from "@/components/listing-card";
@@ -32,18 +32,32 @@ function TripList({ trips, loading }: { trips: WpTrip[]; loading: boolean }) {
     <ul className="mt-4 space-y-2">
       {trips.map((t) => (
         <li key={t.slug}>
-          <a
-            href={t.url}
-            target="_blank"
-            rel="noreferrer"
-            className="flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 ring-1 ring-border/70 hover:bg-muted"
-          >
-            <span>
-              <span className="block font-medium">{t.title}</span>
-              {t.date && <span className="text-xs text-muted-foreground">{t.date}</span>}
-            </span>
-            <ExternalLink className="size-4 shrink-0 text-primary" />
-          </a>
+          {typeof t.id === "number" ? (
+            <Link
+              to="/trip"
+              search={{ wpId: t.id }}
+              className="flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 ring-1 ring-border/70 hover:bg-muted"
+            >
+              <span>
+                <span className="block font-medium">{t.title}</span>
+                {t.date && <span className="text-xs text-muted-foreground">{t.date}</span>}
+              </span>
+              <ArrowRight className="size-4 shrink-0 text-primary" />
+            </Link>
+          ) : (
+            <a
+              href={t.url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center justify-between gap-3 rounded-xl bg-card px-4 py-3 ring-1 ring-border/70 hover:bg-muted"
+            >
+              <span>
+                <span className="block font-medium">{t.title}</span>
+                {t.date && <span className="text-xs text-muted-foreground">{t.date}</span>}
+              </span>
+              <ArrowRight className="size-4 shrink-0 text-primary" />
+            </a>
+          )}
         </li>
       ))}
     </ul>
