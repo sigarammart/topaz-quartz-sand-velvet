@@ -120,6 +120,5 @@ export const useGeo = create<GeoState>((set, get) => ({
       .catch(() => {
         requestGps();
       });
-  }
   },
 }));
