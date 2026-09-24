@@ -9,7 +9,7 @@ import { TripPaneBar, type TripPane } from "@/components/trip-pane-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { fetchWpTripStore, updateWpTripStore, WP_ORIGIN } from "@/lib/wp-api";
+import { fetchWpTripStore, syncWpUserTrip, updateWpTripStore, WP_ORIGIN } from "@/lib/wp-api";
 import { generateAiItinerary } from "@/lib/ai-itinerary";
 import {
   formatTripDates,
@@ -87,6 +87,65 @@ function TripPage() {
   const seeded = useRef(false);
   const tabSeeded = useRef(false);
   const tripStoreSynced = useRef("");
+  const tripSyncReady = useRef(false);
+  const tripSyncSignature = useRef("");
+
+  useEffect(() => {
+    if (!hydrated || !loggedIn || !accountEmail || !wpId || catalog.length === 0) return;
+
+    const selected = [...new Set([...items.map((item) => item.slug), ...tempTrip])]
+      .map((slug) => resolveListing(slug, catalog))
+      .filter((listing): listing is NonNullable<typeof listing> => !!listing && typeof listing.wpId === "number");
+
+    const syncItems = selected.map((listing) => {
+      const assigned = items.find((item) => item.slug === listing.slug);
+      return {
+        listingId: listing.wpId!,
+        day: assigned?.day ?? 1,
+      };
+    });
+
+    const signature = JSON.stringify({
+      wpId,
+      interests,
+      items: syncItems,
+      itinerary,
+    });
+
+    if (!tripSyncReady.current || tripSyncSignature.current === signature) return;
+
+    const timer = window.setTimeout(() => {
+      void syncWpUserTrip({
+        data: {
+          email: accountEmail,
+          wpId,
+          interests,
+          items: syncItems,
+          itinerary: itinerary ?? [],
+        },
+      }).then((result) => {
+        if (!result.ok) {
+          toast.error(result.error || "Could not sync your trip to xplorepondy.com.");
+          return;
+        }
+        tripSyncSignature.current = signature;
+      }).catch(() => {
+        toast.error("Could not sync your trip to xplorepondy.com.");
+      });
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [
+    hydrated,
+    loggedIn,
+    accountEmail,
+    wpId,
+    catalog,
+    items,
+    tempTrip,
+    interests,
+    itinerary,
+  ]);
 
   useEffect(() => {
     if (tabParam) {
@@ -149,7 +208,10 @@ function TripPage() {
         },
       });
       jetTempWriteAll(result.listingIds);
-    }).catch(() => undefined);
+      tripSyncReady.current = true;
+    }).catch(() => {
+      tripSyncReady.current = true;
+    });
   }, [hydrated, loggedIn, accountEmail, catalog.length]);
 
   const interestChips = interests.length ? interests : ["cafes", "activities", "beaches"];
