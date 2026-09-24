@@ -106,6 +106,7 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
     }
     setSaving(true);
     try {
+      const tripCode = current.code || `XP-${Date.now().toString(36).toUpperCase()}`;
       const result = await saveWpUserTrip({
         data: {
           email: accountEmail,
@@ -124,7 +125,7 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
           interests,
           notes,
           title: liveTitle,
-          code: current.code || `XP-${Date.now().toString(36).toUpperCase()}`,
+          code: tripCode,
           items: current.items,
           itinerary: current.itinerary ?? [],
         },
@@ -150,7 +151,7 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
         title: liveTitle,
         wpId: result.trip.id,
         wpUrl: result.trip.url,
-        code: result.trip.id ? String(result.trip.id) : undefined,
+        code: tripCode,
       });
       toast.success("Trip saved to your xplorepondy.com account");
       afterSave?.();
