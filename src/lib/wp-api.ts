@@ -1865,6 +1865,89 @@ async function wpTripSyncCredentials() {
   };
 }
 
+export type WpTripStoreResult = {
+  ok: boolean;
+  configured: boolean;
+  userId?: number;
+  listingIds?: number[];
+  error?: string;
+};
+
+async function wpTripStoreRequest(
+  email: string,
+  payload?: { operation: "add" | "remove" | "replace"; listingId?: number; listingIds?: number[] },
+) {
+  const headers = await wpTripSyncCredentials();
+  if (!headers) {
+    return {
+      ok: false as const,
+      configured: false as const,
+      error: "WordPress trip sync is not configured on the PWA server.",
+    };
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) {
+    return { ok: false as const, configured: true as const, error: "A signed-in email is required." };
+  }
+
+  const res = await fetch(`${WP_ORIGIN}/wp-json/xplore/v1/pwa/trip-store`, {
+    method: payload ? "POST" : "GET",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      ...headers,
+    },
+    ...(payload
+      ? {
+          body: JSON.stringify({
+            email: normalizedEmail,
+            ...payload,
+          }),
+        }
+      : undefined),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const body = (await res.json().catch(() => null)) as
+    | { ok?: boolean; user_id?: number; listing_ids?: unknown; message?: string; code?: string }
+    | null;
+
+  const listingIds = Array.isArray(body?.listing_ids)
+    ? body!.listing_ids.map(Number).filter((id) => Number.isFinite(id) && id > 0)
+    : [];
+
+  if (!res.ok || body?.ok === false) {
+    return {
+      ok: false as const,
+      configured: true as const,
+      error: body?.message || body?.code || `WordPress returned HTTP ${res.status}.`,
+    };
+  }
+
+  return {
+    ok: true as const,
+    configured: true as const,
+    userId: typeof body?.user_id === "number" ? body.user_id : undefined,
+    listingIds,
+  };
+}
+
+export const fetchWpTripStore = createServerFn({ method: "GET" })
+  .validator(z.object({ email: z.string().email() }))
+  .handler(async ({ data }) => wpTripStoreRequest(data.email));
+
+export const updateWpTripStore = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      email: z.string().email(),
+      operation: z.enum(["add", "remove", "replace"]),
+      listingId: z.number().int().positive().optional(),
+      listingIds: z.array(z.number().int().positive()).optional(),
+    }),
+  )
+  .handler(async ({ data }) => wpTripStoreRequest(data.email, data));
+
 async function resolveWpUserByEmail(email: string, headers: HeadersInit) {
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
