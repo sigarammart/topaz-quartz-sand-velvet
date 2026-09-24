@@ -29,9 +29,9 @@ import { useSession } from "@/store/session";
 import { useTheme } from "@/store/theme";
 import { isStandaloneDisplay } from "@/lib/android";
 import { useAppLoggedIn } from "@/lib/app-session";
-import { fetchWpBookmarks, fetchWpTripStore } from "@/lib/wp-api";
+import { fetchWpTripStore } from "@/lib/wp-api";
 import { useTrip } from "@/store/trip";
-import { JET_BOOKMARK_STORAGE_KEY, JET_TEMP_STORAGE_KEY } from "@/lib/jet-store";
+import { JET_TEMP_STORAGE_KEY } from "@/lib/jet-store";
 
 const NAV = [
   { to: "/", label: "Home", icon: House },
@@ -53,7 +53,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const tripBadge = hydrated ? tempCount || tripCount : 0;
   const hideAppNav = pathname === "/trip" && (tripStarted || tripCount > 0 || tempCount > 0);
   const user = useSession((s) => s.user);
-  const bookmarkIds = useSession((s) => s.bookmarkIds);
   const showLogin = useAuthModal((s) => s.show);
   const { loggedIn, wpUser, grokUser } = useAppLoggedIn();
   const ensureCatalog = useCatalog((s) => s.ensure);
@@ -62,9 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const hydrateGeo = useGeo((s) => s.hydrate);
   const hydrateTheme = useTheme((s) => s.hydrate);
   const syncJetTemp = useTrip((s) => s.syncJetTemp);
-  const syncBookmarks = useTrip((s) => s.syncBookmarks);
   const wide = pathname === "/trip" || pathname.startsWith("/explore");
-  const bookmarkHydrationKey = useRef("");
   const tripStoreHydrationKey = useRef("");
 
   function onTripNav(e: MouseEvent) {
@@ -133,54 +130,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       });
     }).catch(() => {
       tripStoreHydrationKey.current = "";
-    });
-  }, [hydrated, loggedIn, wpUser?.email, grokUser?.primaryEmail, catalog.length, catalog[0]?.wpId]);
-
-  useEffect(() => {
-    if (!hydrated || !loggedIn || !catalog.length) return;
-
-    const email = wpUser?.email || grokUser?.primaryEmail || "";
-    if (!email) return;
-
-    const key = `${email.toLowerCase()}:${catalog.length}:${catalog[0]?.wpId ?? ""}`;
-    if (bookmarkHydrationKey.current === key) return;
-    bookmarkHydrationKey.current = key;
-
-    void fetchWpBookmarks({ data: { email } }).then((result) => {
-      if (!result.ok) {
-        bookmarkHydrationKey.current = "";
-        return;
-      }
-
-      const byWpId = new Map<number, string>();
-      const nextMap = { ...(useTrip.getState().wpIdsBySlug ?? {}) };
-
-      for (const listing of catalog) {
-        if (typeof listing.wpId === "number") {
-          byWpId.set(listing.wpId, listing.slug);
-          nextMap[listing.slug] = listing.wpId;
-        }
-      }
-
-      const nextSaved = result.bookmarkIds
-        .map((id) => byWpId.get(id))
-        .filter((slug): slug is string => !!slug);
-
-      const currentSaved = useTrip.getState().saved;
-      const same =
-        currentSaved.length === nextSaved.length &&
-        currentSaved.every((slug, index) => slug === nextSaved[index]);
-
-      if (!same) {
-        useTrip.setState({
-          saved: nextSaved,
-          wpIdsBySlug: nextMap,
-        });
-      } else {
-        useTrip.setState({ wpIdsBySlug: nextMap });
-      }
-    }).catch(() => {
-      bookmarkHydrationKey.current = "";
     });
   }, [hydrated, loggedIn, wpUser?.email, grokUser?.primaryEmail, catalog.length, catalog[0]?.wpId]);
 
