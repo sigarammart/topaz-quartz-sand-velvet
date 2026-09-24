@@ -9,7 +9,7 @@ import { TripPaneBar, type TripPane } from "@/components/trip-pane-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { WP_ORIGIN } from "@/lib/wp-api";
+import { fetchWpTripStore, updateWpTripStore, WP_ORIGIN } from "@/lib/wp-api";
 import { generateAiItinerary } from "@/lib/ai-itinerary";
 import {
   formatTripDates,
@@ -30,6 +30,7 @@ import { resolveListing, useCatalog } from "@/store/catalog";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useAppLoggedIn } from "@/lib/app-session";
 import { useAuthModal } from "@/store/auth-modal";
+import { jetTempWriteAll } from "@/lib/jet-store";
 import { useTrip } from "@/store/trip";
 
 type TripTab = "interests" | "saved" | "all";
@@ -43,7 +44,8 @@ export const Route = createFileRoute("/trip")({
 
 function TripPage() {
   const hydrated = useHydrated();
-  const { loggedIn, isPending } = useAppLoggedIn();
+  const { loggedIn, isPending, wpUser, grokUser } = useAppLoggedIn();
+  const accountEmail = wpUser?.email || grokUser?.primaryEmail || "";
   const showLogin = useAuthModal((s) => s.show);
   const { tab: tabParam } = Route.useSearch();
   const catalog = useCatalog((s) => s.items);
@@ -84,6 +86,7 @@ function TripPage() {
   const addDay = useAddDayModal();
   const seeded = useRef(false);
   const tabSeeded = useRef(false);
+  const tripStoreSynced = useRef("");
 
   useEffect(() => {
     if (tabParam) {
@@ -114,6 +117,40 @@ function TripPage() {
       useTrip.setState({ items: picks });
     }
   }, [hydrated, catalog.length, interests, items.length, days]);
+
+  useEffect(() => {
+    if (!hydrated || !loggedIn || !accountEmail || catalog.length === 0) return;
+    if (tripStoreSynced.current === accountEmail) return;
+    tripStoreSynced.current = accountEmail;
+
+    void fetchWpTripStore({ data: { email: accountEmail } }).then((result) => {
+      if (!result.ok) return;
+
+      const byWpId = new Map<number, Listing>();
+      for (const listing of catalog) {
+        if (typeof listing.wpId === "number") byWpId.set(listing.wpId, listing);
+      }
+
+      const resolved = result.listingIds
+        .map((id) => byWpId.get(id))
+        .filter((listing): listing is Listing => !!listing);
+
+      const nextTempTrip = resolved.map((listing) => listing.slug);
+      const nextWpIds: Record<string, number> = {};
+      for (const listing of resolved) {
+        if (typeof listing.wpId === "number") nextWpIds[listing.slug] = listing.wpId;
+      }
+
+      useTrip.setState({
+        tempTrip: nextTempTrip,
+        wpIdsBySlug: {
+          ...(useTrip.getState().wpIdsBySlug ?? {}),
+          ...nextWpIds,
+        },
+      });
+      jetTempWriteAll(result.listingIds);
+    }).catch(() => undefined);
+  }, [hydrated, loggedIn, accountEmail, catalog.length]);
 
   const interestChips = interests.length ? interests : ["cafes", "activities", "beaches"];
   const activeChip = chip || interestChips[0];
@@ -572,10 +609,40 @@ function TripPage() {
         items={items}
         tempTrip={tempTrip}
         days={days}
-        onReorder={reorderSelected}
+        onReorder={(slugs) => {
+          reorderSelected(slugs);
+          const nextTempTrip = useTrip.getState().tempTrip;
+          const listingIds = nextTempTrip
+            .map((slug) => resolveListing(slug, catalog)?.wpId)
+            .filter((id): id is number => typeof id === "number");
+
+          if (accountEmail) {
+            void updateWpTripStore({
+              data: {
+                email: accountEmail,
+                operation: "replace",
+                listingIds,
+              },
+            }).then((result) => {
+              if (!result.ok) toast.error(result.error || "Could not save trip order.");
+            }).catch(() => toast.error("Could not save trip order."));
+          }
+        }}
         onRemove={(slug) => {
           removeItem(slug);
           useTrip.getState().removeTempTrip(slug);
+          const postId = resolveListing(slug, catalog)?.wpId;
+          if (accountEmail && typeof postId === "number") {
+            void updateWpTripStore({
+              data: {
+                email: accountEmail,
+                operation: "remove",
+                listingId: postId,
+              },
+            }).then((result) => {
+              if (!result.ok) toast.error(result.error || "Could not remove the listing.");
+            }).catch(() => toast.error("Could not remove the listing."));
+          }
         }}
         onMoveDay={(slug, nextDay) => {
           addToDay(slug, nextDay);
