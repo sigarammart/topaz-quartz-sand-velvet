@@ -82,6 +82,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     showLogin({ reason: "trip", next: "/saved" });
   }
 
+  // Request/check GPS permission as early as possible during app startup.
+  useEffect(() => {
+    hydrateGeo();
+  }, [hydrateGeo]);
+
   useEffect(() => {
     hydrateTheme();
   }, [hydrateTheme]);
@@ -89,10 +94,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     void ensureCatalog();
   }, [ensureCatalog]);
-
-  useEffect(() => {
-    hydrateGeo();
-  }, [hydrateGeo]);
 
   useEffect(() => {
     if (!hydrated || !loggedIn || !catalog.length) return;
