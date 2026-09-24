@@ -154,7 +154,8 @@ export function TripFormWizard({ afterSave, fresh = false }: { afterSave?: () =>
         title: liveTitle,
         wpId: result.trip.id,
         wpUrl: result.trip.url,
-        code: tripCode,
+        // The WordPress user_trip post ID is the canonical trip code.
+        code: String(result.trip.id),
       });
       toast.success("Trip saved to your xplorepondy.com account");
       afterSave?.();
