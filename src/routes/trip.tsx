@@ -120,6 +120,7 @@ function TripPage() {
         data: {
           email: accountEmail,
           wpId,
+          code,
           interests,
           items: syncItems,
           itinerary: itinerary ?? [],
