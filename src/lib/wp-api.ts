@@ -1401,7 +1401,7 @@ async function loadListingPages() {
     "activity-type,property-type,property-category,by-theme,explore-type",
   ].join(",");
   const first = await wpGet<WpListing[]>(
-    `/wp-json/wp/v2/listing?per_page=100&page=1&_fields=${fields}`,
+    `/wp-json/wp/v2/listing?per_page=100&page=1&_embed=1&_fields=${fields},_embedded`,
     {},
     12000,
   );
@@ -1415,7 +1415,7 @@ async function loadListingPages() {
       ? await Promise.all(
           Array.from({ length: pages - 1 }, (_, i) =>
             wpGet<WpListing[]>(
-              `/wp-json/wp/v2/listing?per_page=100&page=${i + 2}&_fields=${fields}`,
+              `/wp-json/wp/v2/listing?per_page=100&page=${i + 2}&_embed=1&_fields=${fields},_embedded`,
               {},
               12000,
             ).then((r) => (r.ok && Array.isArray(r.data) ? r.data : [])),
@@ -1444,11 +1444,20 @@ const CATALOG_TTL = 20 * 60 * 1000;
 const CATALOG_STALE = 2 * 60 * 60 * 1000;
 const LISTING_PAGE_TTL = 30 * 60 * 1000;
 const HTML_TTL = 30 * 60 * 1000;
-const CATALOG_VERSION = 24;
+const CATALOG_VERSION = 25;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   const { map: listeoGeo, total: listeoTotal } = await loadListeoGeo();
   if (listeoGeo.size < 8) throw new Error("listeo-empty");
+
+  // WordPress REST is the authoritative source for taxonomy membership.
+  // Listeo geo data is still used below to enrich listings with coordinates,
+  // ratings, images, hours, etc.
+  const wpCatalog = await loadListingPages();
+  const wpBySlug = new Map<string, WpListing>();
+  for (const row of wpCatalog.rows) {
+    if (row.slug) wpBySlug.set(row.slug, row);
+  }
 
   const jetMeta = new Map<string, JetArchiveHit>();
 
@@ -1490,36 +1499,54 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
   for (const geo of listeoGeo.values()) {
     if (seen.has(geo.slug)) continue;
     seen.add(geo.slug);
-    const category = geo.category ?? "places";
+
+    const wpRaw = wpBySlug.get(geo.slug);
+    const wpListing = wpRaw ? mapListing(wpRaw) : null;
+    const category = wpListing?.category ?? geo.category ?? "places";
     const local = findLocal(geo.slug);
+
     listings.push(
       applyLive(
-        {
-          slug: geo.slug,
-          name: geo.name,
-          category,
-          kind: decodeHtml(geo.kind ?? local?.kind ?? "Listing"),
-          rating: geo.rating ?? 0,
-          reviews: geo.reviews ?? 0,
-          location: geo.address ?? "Pondicherry",
-          area: geo.address ?? "Pondicherry",
-          distance: "",
-          hours: local?.hours ?? "",
-          description: local?.description ?? "",
-          tags: geo.kind ? [decodeHtml(geo.kind)] : (local?.tags ?? []),
-          bestFor: local?.bestFor ?? [],
-          image: geo.image ?? FALLBACK_IMAGE[category],
-          gallery: geo.gallery,
-          siteUrl: `${WP_ORIGIN}/listing/${geo.slug}/`,
-          wpId: geo.id ?? local?.wpId,
-          lat: geo.lat,
-          lng: geo.lng,
-          address: geo.address,
-          featured: geo.featured,
-        },
+        wpListing
+          ? {
+              ...wpListing,
+              image: wpListing.image || geo.image || FALLBACK_IMAGE[category],
+              gallery: geo.gallery ?? wpListing.gallery,
+            }
+          : {
+              slug: geo.slug,
+              name: geo.name,
+              category,
+              kind: decodeHtml(geo.kind ?? local?.kind ?? "Listing"),
+              rating: geo.rating ?? 0,
+              reviews: geo.reviews ?? 0,
+              location: geo.address ?? "Pondicherry",
+              area: geo.address ?? "Pondicherry",
+              distance: "",
+              hours: local?.hours ?? "",
+              description: local?.description ?? "",
+              tags: geo.kind ? [decodeHtml(geo.kind)] : (local?.tags ?? []),
+              bestFor: local?.bestFor ?? [],
+              image: geo.image ?? FALLBACK_IMAGE[category],
+              gallery: geo.gallery,
+              siteUrl: `${WP_ORIGIN}/listing/${geo.slug}/`,
+              wpId: geo.id ?? local?.wpId,
+              lat: geo.lat,
+              lng: geo.lng,
+              address: geo.address,
+              featured: geo.featured,
+            },
         geo.slug,
       ),
     );
+  }
+
+  // Add published WordPress listings that are missing from the Listeo geo feed.
+  // This prevents taxonomy archives from being silently truncated by the geo endpoint.
+  for (const raw of wpCatalog.rows) {
+    if (seen.has(raw.slug)) continue;
+    seen.add(raw.slug);
+    listings.push(applyLive(mapListing(raw), raw.slug));
   }
 
   for (const [slug, hit] of jetMeta) {
@@ -1557,7 +1584,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
   }
 
   const merged = mergeLocal(listings);
-  return { listings: merged, total: Math.max(merged.length, listeoGeo.size, listeoTotal) };
+  return { listings: merged, total: Math.max(merged.length, wpCatalog.total, listeoGeo.size, listeoTotal) };
 }
 
 async function loadGuidesFromWp(): Promise<Guide[]> {
