@@ -119,13 +119,32 @@ function TripPage() {
         })
         .filter((item): item is { slug: string; day: number } => !!item);
 
+      const remoteSaved = Array.isArray(result.savedListingIds)
+        ? result.savedListingIds
+            .map((listingId) => byWpId.get(listingId))
+            .filter((listing): listing is Listing => !!listing)
+        : [];
+
       const remoteItinerary = Array.isArray(result.itinerary) ? result.itinerary : [];
+      const remoteWpIdsBySlug: Record<string, number> = {};
+      for (const listing of remoteSaved) {
+        if (typeof listing.wpId === "number") remoteWpIdsBySlug[listing.slug] = listing.wpId;
+      }
 
       useTrip.setState({
         started: true,
         code: result.code || useTrip.getState().code,
         interests: result.interests.length ? result.interests : useTrip.getState().interests,
         items: remoteItems,
+        ...(Array.isArray(result.savedListingIds)
+          ? {
+              tempTrip: remoteSaved.map((listing) => listing.slug),
+              wpIdsBySlug: {
+                ...(useTrip.getState().wpIdsBySlug ?? {}),
+                ...remoteWpIdsBySlug,
+              },
+            }
+          : {}),
         itinerary: remoteItinerary as typeof itinerary,
         itineraryPolished: remoteItinerary.length > 0,
       });
@@ -180,6 +199,9 @@ function TripPage() {
       interests,
       items: syncItems,
       itinerary,
+      savedListingIds: tempTrip
+        .map((slug) => resolveListing(slug, catalog)?.wpId)
+        .filter((id): id is number => typeof id === "number"),
     });
 
     if (!tripSyncReady.current || tripSyncSignature.current === signature) return;
@@ -271,6 +293,9 @@ function TripPage() {
 
   useEffect(() => {
     if (!hydrated || !loggedIn || !accountEmail || catalog.length === 0) return;
+    // Existing trips are restored from their WordPress trip state, which includes saved listings.
+    // Keep the standalone datastore bootstrap for new trips that do not yet have a WP trip.
+    if (wpId) return;
     if (tripStoreSynced.current === accountEmail) return;
     tripStoreSynced.current = accountEmail;
 
@@ -304,7 +329,7 @@ function TripPage() {
     }).catch(() => {
       tripSyncReady.current = true;
     });
-  }, [hydrated, loggedIn, accountEmail, catalog.length]);
+  }, [hydrated, loggedIn, accountEmail, catalog.length, wpId]);
 
   const interestChips = interests.length ? interests : ["cafes", "activities", "beaches"];
   const activeChip = chip || interestChips[0];
