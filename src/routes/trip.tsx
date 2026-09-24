@@ -52,6 +52,7 @@ function TripPage() {
   const started = useTrip((s) => s.started);
   const title = useTrip((s) => s.title);
   const code = useTrip((s) => s.code);
+  const wpId = useTrip((s) => s.wpId);
   const days = useTrip((s) => s.days);
   const locations = useTrip((s) => s.locations);
   const budget = useTrip((s) => s.budget);
