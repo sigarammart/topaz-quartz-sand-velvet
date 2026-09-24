@@ -2,7 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Bookmark } from "lucide-react";
 import { ListingCard } from "@/components/listing-card";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 import { useHydrated } from "@/lib/use-hydrated";
+import { fetchWpBookmarks } from "@/lib/wp-api";
 import { useAppLoggedIn } from "@/lib/app-session";
 import { resolveListing, useCatalog } from "@/store/catalog";
 import { useAuthModal } from "@/store/auth-modal";
@@ -15,9 +17,31 @@ function SavedPage() {
   const saved = useTrip((s) => s.saved);
   const wpIds = useTrip((s) => s.wpIdsBySlug);
   const items = useCatalog((s) => s.items);
-  const bookmarkIds = useTrip((s) => s.saved.map((slug) => s.wpIdsBySlug?.[slug]).filter((id): id is number => typeof id === "number"));
+  const [remoteBookmarkIds, setRemoteBookmarkIds] = useState<number[]>([]);
+  const { wpUser, grokUser } = useAppLoggedIn();
+  const accountEmail = wpUser?.email || grokUser?.primaryEmail || "";
   const showLogin = useAuthModal((s) => s.show);
   const { loggedIn, isPending } = useAppLoggedIn();
+  useEffect(() => {
+    if (!hydrated || !loggedIn || !accountEmail) return;
+    let cancelled = false;
+
+    void fetchWpBookmarks({ data: { email: accountEmail } }).then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setRemoteBookmarkIds(result.bookmarkIds);
+      } else {
+        setRemoteBookmarkIds([]);
+      }
+    }).catch(() => {
+      if (!cancelled) setRemoteBookmarkIds([]);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, loggedIn, accountEmail]);
+
   const listings = hydrated
     ? saved
         .map((slug) => {
@@ -29,12 +53,13 @@ function SavedPage() {
         .filter((l): l is NonNullable<typeof l> => l != null)
     : [];
 
-  const extraFromMeta =
-    hydrated && loggedIn
-      ? bookmarkIds
-          .map((id) => items.find((row) => row.wpId === id))
-          .filter((l): l is NonNullable<typeof l> => !!l && !listings.some((row) => row.slug === l.slug))
-      : [];
+  const remoteListings = remoteBookmarkIds
+    .map((id) => items.find((row) => row.wpId === id))
+    .filter((l): l is NonNullable<typeof l> => !!l);
+
+  const extraFromMeta = remoteListings.filter(
+    (l) => !listings.some((row) => row.slug === l.slug),
+  );
   const shown = [...listings, ...extraFromMeta];
 
   return (
