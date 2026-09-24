@@ -37,7 +37,7 @@ const NAV = [
   { to: "/explore", label: "Explore", icon: Compass },
   { to: "/guides", label: "Guides", icon: BookOpen },
   { to: "/trip", label: "Trip", icon: CalendarDays },
-  { to: "/saved", label: "Bookmark", icon: Bookmark },
+  { to: "/saved", label: "Saved", icon: CalendarDays },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -73,7 +73,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   function onBookmarkNav(e: MouseEvent) {
     if (loggedIn) return;
     e.preventDefault();
-    showLogin({ reason: "bookmark", next: "/saved" });
+    showLogin({ reason: "bookmark", next: "/bookmarks" });
+  }
+
+  function onSavedNav(e: MouseEvent) {
+    if (loggedIn) return;
+    e.preventDefault();
+    showLogin({ reason: "trip", next: "/saved" });
   }
 
   useEffect(() => {
@@ -128,7 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   key={item.to}
                   to={item.to}
                   onClick={
-                    item.to === "/trip" ? onTripNav : item.to === "/saved" ? onBookmarkNav : undefined
+                    item.to === "/trip" ? onTripNav : item.to === "/saved" ? onSavedNav : undefined
                   }
                   className={cn(
                     "rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
@@ -147,6 +153,16 @@ export function AppShell({ children }: { children: ReactNode }) {
               )}
             >
               Events
+            </Link>
+            <Link
+              to="/bookmarks"
+              onClick={onBookmarkNav}
+              className={cn(
+                "rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground",
+                pathname.startsWith("/bookmarks") && "bg-muted text-foreground",
+              )}
+            >
+              Bookmark
             </Link>
           </nav>
           <div className="ml-auto flex items-center gap-1.5">
@@ -183,6 +199,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {[
                     ...NAV,
                     { to: "/events", label: "Events", icon: CalendarDays },
+                    { to: "/bookmarks", label: "Bookmark", icon: Bookmark },
                     { to: "/plan", label: "Custom trip", icon: Compass },
                     { to: "/get-app", label: "Android app", icon: Smartphone },
                     {
@@ -202,7 +219,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                         }
                         if (item.to === "/saved" && !loggedIn) {
                           e.preventDefault();
-                          showLogin({ reason: "bookmark", next: "/saved" });
+                          showLogin({ reason: "trip", next: "/saved" });
+                          return;
+                        }
+                        if (item.to === "/bookmarks" && !loggedIn) {
+                          e.preventDefault();
+                          showLogin({ reason: "bookmark", next: "/bookmarks" });
                           return;
                         }
                         setOpen(false);
@@ -265,7 +287,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <Link
                   to={item.to}
                   onClick={
-                    item.to === "/trip" ? onTripNav : item.to === "/saved" ? onBookmarkNav : undefined
+                    item.to === "/trip" ? onTripNav : item.to === "/saved" ? onSavedNav : undefined
                   }
                   className={cn(
                     "relative flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium text-muted-foreground",
