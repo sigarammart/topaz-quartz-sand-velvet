@@ -6,8 +6,9 @@
  * in ../migrations to DATABASE_URL. Each file is applied in one transaction and
  * recorded in a `_migrations` table, so it runs once and is safe to re-run.
  *
- * The read is non-recursive, so the opt-in auth schema under migrations/auth/
- * is not applied to an app that never asked for sign-in.
+ * The auth schema under migrations/auth/ is included when VITE_AUTH_ENABLED=true.
+ * This keeps the auth tables opt-in while allowing deployed apps to use the
+ * Better Auth schema with an external Postgres database.
  *
  * No DATABASE_URL (local / preview builds) -> skip; the PGLite fallback applies
  * the same files at startup instead (see src/lib/db.ts).
@@ -28,6 +29,11 @@ if (!databaseUrl) {
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
+function pathForMigration(name, entries) {
+  const authPath = "auth/" + name;
+  return entries.includes(authPath) ? authPath : name;
+}
+
 async function main() {
   let entries;
   try {
@@ -35,6 +41,24 @@ async function main() {
   } catch {
     console.log("[migrate] no migrations/ directory — nothing to do.");
     return;
+  }
+
+  // The auth schema is intentionally kept under migrations/auth/ so apps that
+  // do not enable authentication do not create Better Auth tables. When auth is
+  // enabled, include those SQL files in the same migration bookkeeping.
+  const authEnabled = process.env.VITE_AUTH_ENABLED === "true";
+  if (authEnabled) {
+    try {
+      const authEntries = await readdir(join(migrationsDir, "auth"));
+      entries = [
+        ...entries,
+        ...authEntries
+          .filter((entry) => entry.endsWith(".sql"))
+          .map((entry) => "auth/" + entry),
+      ];
+    } catch {
+      console.log("[migrate] auth migrations directory not found — continuing without auth schema.");
+    }
   }
   // An app with no schema of its own must not pay for a database connection.
   if (pendingMigrations(entries, []).length === 0) {
@@ -54,7 +78,10 @@ async function main() {
 
     let count = 0;
     for (const { name } of pendingMigrations(entries, applied)) {
-      const text = await readFile(join(migrationsDir, name), "utf8");
+      const text = await readFile(
+        join(migrationsDir, pathForMigration(name, entries)),
+        "utf8",
+      );
       try {
         await client.query("BEGIN");
         // pg's simple-query protocol runs a whole multi-statement file at once.
