@@ -104,7 +104,9 @@ function TripPage() {
         wpId: requestedWpId,
         started: true,
         items: [],
-        tempTrip: [],
+        // Keep the user's global Added to Trip / Saved collection intact.
+        // Opening an existing user_trip must not clear it while the trip
+        // state is being fetched from WordPress.
         itinerary: null,
         itineraryPolished: false,
       });
