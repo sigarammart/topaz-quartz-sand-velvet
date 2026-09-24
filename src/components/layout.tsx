@@ -161,6 +161,17 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
             <InstallHeaderButton />
             <HeaderAuth />
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              className="hidden md:inline-flex"
+            >
+              <Link to="/account">
+                <UserRound className="size-4" />
+                My Account
+              </Link>
+            </Button>
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="md:hidden" aria-label="Menu">
@@ -176,7 +187,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     { to: "/get-app", label: "Android app", icon: Smartphone },
                     {
                       to: user ? "/account" : "/login",
-                      label: user ? "Account" : "Sign in",
+                      label: user ? "My Account" : "Sign in",
                       icon: user ? UserRound : LogIn,
                     },
                   ].map((item) => (
