@@ -2090,6 +2090,17 @@ export type WpTripSyncInput = {
   email: string;
   wpId: number;
   code: string;
+  locations: string[];
+  fromPlace: string;
+  fromLat?: number;
+  fromLng?: number;
+  budget: string;
+  tripType: string;
+  datesKnown: boolean;
+  start: string;
+  end: string;
+  months: string[];
+  days: number;
   interests: string[];
   items: { listingId: number; day: number }[];
   itinerary: unknown[];
@@ -2111,6 +2122,17 @@ export const syncWpUserTrip = createServerFn({ method: "POST" })
       email: z.string().email(),
       wpId: z.number().int().positive(),
       code: z.string().min(1).max(100),
+      locations: z.array(z.string()),
+      fromPlace: z.string().max(300),
+      fromLat: z.number().finite().optional(),
+      fromLng: z.number().finite().optional(),
+      budget: z.string(),
+      tripType: z.string(),
+      datesKnown: z.boolean(),
+      start: z.string(),
+      end: z.string(),
+      months: z.array(z.string()),
+      days: z.number().int().min(1).max(7),
       interests: z.array(z.string()),
       items: z.array(
         z.object({
@@ -2144,6 +2166,17 @@ export const syncWpUserTrip = createServerFn({ method: "POST" })
         body: JSON.stringify({
           email: normalizedEmail,
           code: data.code,
+          locations: data.locations,
+          fromPlace: data.fromPlace,
+          fromLat: data.fromLat,
+          fromLng: data.fromLng,
+          budget: data.budget,
+          tripType: data.tripType,
+          datesKnown: data.datesKnown,
+          start: data.start,
+          end: data.end,
+          months: data.months,
+          days: data.days,
           interests: data.interests,
           items: data.items,
           itinerary: data.itinerary,
