@@ -1471,7 +1471,7 @@ const CATALOG_TTL = 20 * 60 * 1000;
 const CATALOG_STALE = 2 * 60 * 60 * 1000;
 const LISTING_PAGE_TTL = 30 * 60 * 1000;
 const HTML_TTL = 30 * 60 * 1000;
-const CATALOG_VERSION = 25;
+const CATALOG_VERSION = 26;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   const { map: listeoGeo, total: listeoTotal } = await loadListeoGeo();
@@ -1787,21 +1787,23 @@ export const fetchWpListing = createServerFn({ method: "GET" })
       ...aliases.flatMap((s) => [`${WP_ORIGIN}/listing/service/${s}/`, `${WP_ORIGIN}/listing/${s}/`]),
     ].filter((url, i, all): url is string => !!url && all.indexOf(url) === i);
 
-    const page = await loadListingPageHtml(urls, 10000);
-    let rest: { ok: boolean; data: WpListing[] } | null = null;
-    if (!page || page.score === 0) {
-      for (const s of aliases) {
-        const res = await wpGet<WpListing[]>(
-          `/wp-json/wp/v2/listing?slug=${encodeURIComponent(s)}`,
-          {},
-          8000,
-        ).catch(() => null);
-        if (res?.ok && Array.isArray(res.data) && res.data[0]) {
-          rest = res;
-          break;
-        }
-      }
-    }
+    const [page, restHits] = await Promise.all([
+      loadListingPageHtml(urls, 10000),
+      Promise.all(
+        aliases.map((s) =>
+          wpGet<WpListing[]>(
+            `/wp-json/wp/v2/listing?slug=${encodeURIComponent(s)}&_fields=id,slug,title,link,featured_media,listing_category,region,listing_feature,class_list,yoast_head_json,meta,_embedded`,
+            {},
+            8000,
+          ).catch(() => null),
+        ),
+      ),
+    ]);
+
+    const rest =
+      restHits.find(
+        (res) => res?.ok && Array.isArray(res.data) && res.data[0],
+      ) ?? null;
 
     let listing: Listing | null = null;
     if (rest?.ok && Array.isArray(rest.data) && rest.data[0]) listing = mapListing(rest.data[0]);
