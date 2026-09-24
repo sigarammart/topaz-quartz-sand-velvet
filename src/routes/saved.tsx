@@ -2,7 +2,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { CalendarCheck, CalendarPlus } from "lucide-react";
 import { ListingCard } from "@/components/listing-card";
 import { Button } from "@/components/ui/button";
+import { useEffect, useState } from "react";
 import { useHydrated } from "@/lib/use-hydrated";
+import { fetchWpTripStore } from "@/lib/wp-api";
 import { useAppLoggedIn } from "@/lib/app-session";
 import { useAuthModal } from "@/store/auth-modal";
 import { resolveListing, useCatalog } from "@/store/catalog";
@@ -18,8 +20,36 @@ function SavedPage() {
   const showLogin = useAuthModal((s) => s.show);
   const { loggedIn, isPending } = useAppLoggedIn();
 
+  const [remoteTempIds, setRemoteTempIds] = useState<number[]>([]);
+  const { wpUser, grokUser } = useAppLoggedIn();
+  const accountEmail = wpUser?.email || grokUser?.primaryEmail || "";
+
+  useEffect(() => {
+    if (!hydrated || !loggedIn || !accountEmail) return;
+    let cancelled = false;
+
+    void fetchWpTripStore({ data: { email: accountEmail } }).then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setRemoteTempIds(result.listingIds);
+      } else {
+        setRemoteTempIds([]);
+      }
+    }).catch(() => {
+      if (!cancelled) setRemoteTempIds([]);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, loggedIn, accountEmail]);
+
+  const remoteListings = remoteTempIds
+    .map((id) => items.find((row) => row.wpId === id))
+    .filter((l): l is NonNullable<typeof l> => !!l);
+
   const listings = hydrated
-    ? tempTrip
+    ? [...tempTrip
         .map((slug) => {
           const hit = resolveListing(slug, items);
           if (hit) return hit;
@@ -28,6 +58,11 @@ function SavedPage() {
         })
         .filter((l): l is NonNullable<typeof l> => l != null)
     : [];
+
+  const shownListings = [
+    ...remoteListings,
+    ...listings.filter((listing) => !remoteListings.some((remote) => remote.slug === listing.slug)),
+  ];
 
   return (
     <div>
@@ -49,7 +84,7 @@ function SavedPage() {
             Sign in
           </Button>
         </div>
-      ) : listings.length === 0 ? (
+       ) : shownListings.length === 0 ? (
         <div className="mt-16 flex flex-col items-center text-center">
           <CalendarPlus className="size-8 text-primary" />
           <p className="mt-3 max-w-sm text-sm text-muted-foreground">
@@ -62,7 +97,7 @@ function SavedPage() {
       ) : (
         <>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {listings.map((listing) => (
+            {shownListings.map((listing) => (
               <ListingCard key={listing.slug} listing={listing} />
             ))}
           </div>
