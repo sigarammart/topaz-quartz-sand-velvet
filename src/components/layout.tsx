@@ -12,7 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import type { MouseEvent, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/logo";
 import { LoginDialog } from "@/components/login-dialog";
 import { HeaderAuth } from "@/components/header-auth";
@@ -29,7 +29,7 @@ import { useSession } from "@/store/session";
 import { useTheme } from "@/store/theme";
 import { isStandaloneDisplay } from "@/lib/android";
 import { useAppLoggedIn } from "@/lib/app-session";
-import { fetchWpBookmarks, syncWpBookmarks } from "@/lib/wp-api";
+import { fetchWpBookmarks } from "@/lib/wp-api";
 import { useTrip } from "@/store/trip";
 import { JET_BOOKMARK_STORAGE_KEY, JET_TEMP_STORAGE_KEY } from "@/lib/jet-store";
 
@@ -64,6 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const syncJetTemp = useTrip((s) => s.syncJetTemp);
   const syncBookmarks = useTrip((s) => s.syncBookmarks);
   const wide = pathname === "/trip" || pathname.startsWith("/explore");
+  const bookmarkHydrationKey = useRef("");
 
   function onTripNav(e: MouseEvent) {
     if (loggedIn) return;
@@ -97,35 +98,51 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!hydrated || !loggedIn || !catalog.length) return;
+
     const email = wpUser?.email || grokUser?.primaryEmail || "";
     if (!email) return;
 
-    void fetchWpBookmarks({ data: { email } }).then((result) => {
-      if (!result.ok) return;
+    const key = `${email.toLowerCase()}:${catalog.length}:${catalog[0]?.wpId ?? ""}`;
+    if (bookmarkHydrationKey.current === key) return;
+    bookmarkHydrationKey.current = key;
 
-      const byWpId = new Map<number, string>();
-      for (const listing of catalog) {
-        if (typeof listing.wpId === "number") byWpId.set(listing.wpId, listing.slug);
+    void fetchWpBookmarks({ data: { email } }).then((result) => {
+      if (!result.ok) {
+        bookmarkHydrationKey.current = "";
+        return;
       }
 
-      const saved = result.bookmarkIds
+      const byWpId = new Map<number, string>();
+      const nextMap = { ...(useTrip.getState().wpIdsBySlug ?? {}) };
+
+      for (const listing of catalog) {
+        if (typeof listing.wpId === "number") {
+          byWpId.set(listing.wpId, listing.slug);
+          nextMap[listing.slug] = listing.wpId;
+        }
+      }
+
+      const nextSaved = result.bookmarkIds
         .map((id) => byWpId.get(id))
         .filter((slug): slug is string => !!slug);
 
-      const currentMap = useTrip.getState().wpIdsBySlug ?? {};
-      const nextMap = { ...currentMap };
-      for (const listing of catalog) {
-        if (typeof listing.wpId === "number") nextMap[listing.slug] = listing.wpId;
-      }
+      const currentSaved = useTrip.getState().saved;
+      const same =
+        currentSaved.length === nextSaved.length &&
+        currentSaved.every((slug, index) => slug === nextSaved[index]);
 
-      useTrip.setState({
-        saved,
-        wpIdsBySlug: nextMap,
-      });
+      if (!same) {
+        useTrip.setState({
+          saved: nextSaved,
+          wpIdsBySlug: nextMap,
+        });
+      } else {
+        useTrip.setState({ wpIdsBySlug: nextMap });
+      }
     }).catch(() => {
-      /* keep local bookmarks if WordPress is temporarily unavailable */
+      bookmarkHydrationKey.current = "";
     });
-  }, [hydrated, loggedIn, wpUser?.email, grokUser?.primaryEmail, catalog]);
+  }, [hydrated, loggedIn, wpUser?.email, grokUser?.primaryEmail, catalog.length, catalog[0]?.wpId]);
 
   useEffect(() => {
     if (catalogStatus === "ready" || catalog.length > 8) {
