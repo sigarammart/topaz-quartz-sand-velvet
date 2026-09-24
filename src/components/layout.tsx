@@ -29,6 +29,7 @@ import { useSession } from "@/store/session";
 import { useTheme } from "@/store/theme";
 import { isStandaloneDisplay } from "@/lib/android";
 import { useAppLoggedIn } from "@/lib/app-session";
+import { fetchWpBookmarks, syncWpBookmarks } from "@/lib/wp-api";
 import { useTrip } from "@/store/trip";
 import { JET_BOOKMARK_STORAGE_KEY, JET_TEMP_STORAGE_KEY } from "@/lib/jet-store";
 
@@ -54,7 +55,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const user = useSession((s) => s.user);
   const bookmarkIds = useSession((s) => s.bookmarkIds);
   const showLogin = useAuthModal((s) => s.show);
-  const { loggedIn } = useAppLoggedIn();
+  const { loggedIn, wpUser, grokUser } = useAppLoggedIn();
   const ensureCatalog = useCatalog((s) => s.ensure);
   const catalog = useCatalog((s) => s.items);
   const catalogStatus = useCatalog((s) => s.status);
@@ -93,6 +94,38 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     hydrateGeo();
   }, [hydrateGeo]);
+
+  useEffect(() => {
+    if (!hydrated || !loggedIn || !catalog.length) return;
+    const email = wpUser?.email || grokUser?.primaryEmail || "";
+    if (!email) return;
+
+    void fetchWpBookmarks({ data: { email } }).then((result) => {
+      if (!result.ok) return;
+
+      const byWpId = new Map<number, string>();
+      for (const listing of catalog) {
+        if (typeof listing.wpId === "number") byWpId.set(listing.wpId, listing.slug);
+      }
+
+      const saved = result.bookmarkIds
+        .map((id) => byWpId.get(id))
+        .filter((slug): slug is string => !!slug);
+
+      const currentMap = useTrip.getState().wpIdsBySlug ?? {};
+      const nextMap = { ...currentMap };
+      for (const listing of catalog) {
+        if (typeof listing.wpId === "number") nextMap[listing.slug] = listing.wpId;
+      }
+
+      useTrip.setState({
+        saved,
+        wpIdsBySlug: nextMap,
+      });
+    }).catch(() => {
+      /* keep local bookmarks if WordPress is temporarily unavailable */
+    });
+  }, [hydrated, loggedIn, wpUser?.email, grokUser?.primaryEmail, catalog]);
 
   useEffect(() => {
     if (catalogStatus === "ready" || catalog.length > 8) {
