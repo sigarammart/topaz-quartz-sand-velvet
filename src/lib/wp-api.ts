@@ -1832,7 +1832,199 @@ export const fetchWpListing = createServerFn({ method: "GET" })
     return result;
   });
 
-export const fetchWpUserTrips = createServerFn({ method: "GET" }).handler(async () => {
+export type WpTripSaveInput = {
+  email: string;
+  title: string;
+  code: string;
+  fromPlace: string;
+  fromLat?: number;
+  fromLng?: number;
+  locations: string[];
+  budget: string;
+  tripType: string;
+  datesKnown: boolean;
+  start: string;
+  end: string;
+  months: string[];
+  days: number;
+  interests: string[];
+  notes: string;
+  items: { slug: string; day: number }[];
+  itinerary?: unknown;
+};
+
+async function wpTripSyncCredentials() {
+  const username = process.env.WP_TRIP_SYNC_USERNAME?.trim() ?? "";
+  const appPassword = process.env.WP_TRIP_SYNC_APP_PASSWORD?.trim() ?? "";
+  if (!username || !appPassword) return null;
+  return {
+    Authorization: `Basic ${Buffer.from(`${username}:${appPassword.replace(/\\s+/g, " ")}`, "utf8").toString("base64")}`,
+  };
+}
+
+async function resolveWpUserByEmail(email: string, headers: HeadersInit) {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  const res = await wpGet<Array<{ id?: number; email?: string; name?: string }>>(
+    `/wp-json/wp/v2/users?search=${encodeURIComponent(normalized)}&per_page=100&_fields=id,email,name`,
+    headers,
+    12000,
+  );
+  if (!res.ok || !Array.isArray(res.data)) return null;
+  return res.data.find((u) => String(u.email ?? "").trim().toLowerCase() === normalized) ?? null;
+}
+
+function tripMeta(data: WpTripSaveInput) {
+  const selected = data.items.map((item) => ({ slug: item.slug, day: item.day }));
+  return {
+    trip_location: data.locations,
+    trips_dates: data.datesKnown ? "dates_known" : "dates_unknown",
+    trip_start: data.start,
+    trip_end: data.end,
+    when_are_you_going: data.months,
+    trip_days: String(data.days),
+    trip_type: data.tripType,
+    trip_budget: data.budget,
+    trip_interest: data.interests,
+    trip_from_place: data.fromPlace,
+    trip_from_lat: data.fromLat ?? "",
+    trip_from_lng: data.fromLng ?? "",
+    trip_notes: data.notes,
+    _trip_code: data.code,
+    _trip_duration: String(data.days),
+    _trip_dates: data.datesKnown ? `${data.start} to ${data.end}` : data.months.join(", "),
+    _trip_itinerary: JSON.stringify(data.itinerary ?? []),
+    _xplore_pwa_selected_listings: JSON.stringify(selected),
+    _xplore_pwa_trip_data: JSON.stringify(data),
+  };
+}
+
+export const saveWpUserTrip = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      email: z.string().email(),
+      title: z.string().min(1).max(200),
+      code: z.string().min(1).max(100),
+      fromPlace: z.string().max(300),
+      fromLat: z.number().finite().optional(),
+      fromLng: z.number().finite().optional(),
+      locations: z.array(z.string()),
+      budget: z.string(),
+      tripType: z.string(),
+      datesKnown: z.boolean(),
+      start: z.string(),
+      end: z.string(),
+      months: z.array(z.string()),
+      days: z.number().int().min(1).max(7),
+      interests: z.array(z.string()),
+      notes: z.string().max(5000),
+      items: z.array(z.object({ slug: z.string(), day: z.number().int().min(1).max(7) })),
+      itinerary: z.unknown().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const headers = await wpTripSyncCredentials();
+    if (!headers) {
+      return {
+        ok: false as const,
+        error: "WordPress trip sync is not configured on the PWA server.",
+      };
+    }
+
+    const wpUser = await resolveWpUserByEmail(data.email, headers);
+    if (!wpUser?.id) {
+      return {
+        ok: false as const,
+        error: "No matching xplorepondy.com WordPress user was found for this signed-in email.",
+      };
+    }
+
+    const meta = tripMeta(data);
+    const content = [
+      "<!-- xplore-pwa-trip -->",
+      `<p><strong>Trip code:</strong> ${data.code}</p>`,
+      `<p><strong>From:</strong> ${data.fromPlace || "Not specified"}</p>`,
+      `<p><strong>Dates:</strong> ${data.datesKnown ? `${data.start} to ${data.end}` : data.months.join(", ") || "Flexible"}</p>`,
+      `<p><strong>Days:</strong> ${data.days}</p>`,
+      `<p><strong>Budget:</strong> ${data.budget || "Any"}</p>`,
+      `<p><strong>Trip type:</strong> ${data.tripType || "Any"}</p>`,
+      `<p><strong>Interests:</strong> ${data.interests.join(", ") || "Any"}</p>`,
+      `<p><strong>Locations:</strong> ${data.locations.join(", ") || "Pondicherry"}</p>`,
+      data.notes ? `<p><strong>Notes:</strong> ${data.notes}</p>` : "",
+      `<!-- xplore-pwa-trip-data:${Buffer.from(JSON.stringify({ ...data, wpUserId: wpUser.id }), "utf8").toString("base64")} -->`,
+    ].filter(Boolean).join("\n");
+
+    const res = await fetch(`${WP_ORIGIN}/wp-json/wp/v2/user_trip`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      body: JSON.stringify({
+        title: data.title,
+        content,
+        status: "publish",
+        author: wpUser.id,
+        meta,
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+
+    const body = (await res.json().catch(() => null)) as
+      | { id?: number; slug?: string; link?: string; title?: { rendered?: string }; message?: string; code?: string }
+      | null;
+
+    if (!res.ok || !body?.id) {
+      return {
+        ok: false as const,
+        error: body?.message || body?.code || `WordPress returned HTTP ${res.status}.`,
+      };
+    }
+
+    return {
+      ok: true as const,
+      trip: {
+        id: body.id,
+        slug: body.slug ?? "",
+        title: decodeHtml(body.title?.rendered ?? data.title),
+        date: "",
+        url: body.link ?? `${WP_ORIGIN}/user_trip/${body.slug ?? ""}/`,
+      } satisfies WpTrip,
+    };
+  });
+
+export const fetchWpUserTrips = createServerFn({ method: "GET" })
+  .validator(z.object({ email: z.string().email() }))
+  .handler(async ({ data }) => {
+    const headers = await wpTripSyncCredentials();
+    if (!headers) return { trips: [] as WpTrip[], configured: false as const };
+
+    const wpUser = await resolveWpUserByEmail(data.email, headers);
+    if (!wpUser?.id) return { trips: [] as WpTrip[], configured: true as const };
+
+    const res = await wpGet<WpUserTrip[]>(
+      `/wp-json/wp/v2/user_trip?author=${wpUser.id}&per_page=20&orderby=date&order=desc&_fields=id,slug,title,date,link`,
+      headers,
+      15000,
+    );
+    if (!res.ok || !Array.isArray(res.data)) return { trips: [] as WpTrip[], configured: true as const };
+
+    return {
+      configured: true as const,
+      trips: res.data.map((t) => ({
+        id: t.id,
+        slug: t.slug,
+        title: decodeHtml(t.title?.rendered ?? t.slug),
+        date: t.date
+          ? new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+          : "",
+        url: t.link ?? `${WP_ORIGIN}/user_trip/${t.slug}/`,
+      })),
+    };
+  });
+
+
   const res = await wpGet<WpUserTrip[]>(
     "/wp-json/wp/v2/user_trip?per_page=12&orderby=date&order=desc&_fields=id,slug,title,date,link",
     {},
