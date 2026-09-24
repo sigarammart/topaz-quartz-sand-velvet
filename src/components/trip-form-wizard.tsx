@@ -58,30 +58,30 @@ function Choice({
   );
 }
 
-export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
+export function TripFormWizard({ afterSave, fresh = false }: { afterSave?: () => void; fresh?: boolean }) {
   const applyPlan = useTrip((s) => s.applyPlan);
   const current = useTrip((s) => s);
   const { wpUser, grokUser } = useAppLoggedIn();
   const accountEmail = wpUser?.email || grokUser?.primaryEmail || "";
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState(0);
-  const [fromPlace, setFromPlace] = useState(current.started ? current.fromPlace : "");
-  const [fromLat, setFromLat] = useState<number | undefined>(current.started ? current.fromLat : undefined);
-  const [fromLng, setFromLng] = useState<number | undefined>(current.started ? current.fromLng : undefined);
-  const [locations, setLocations] = useState<string[]>(current.started ? current.locations : []);
-  const [budget, setBudget] = useState(current.started ? current.budget : "");
-  const [datesKnown, setDatesKnown] = useState(current.datesKnown);
-  const [start, setStart] = useState(current.start);
-  const [end, setEnd] = useState(current.end);
-  const [months, setMonths] = useState<string[]>(current.months);
-  const [days, setDays] = useState(current.days || 2);
-  const [tripType, setTripType] = useState(current.started ? current.tripType : "");
-  const [interests, setInterests] = useState<string[]>(current.started ? current.interests : []);
-  const [notes, setNotes] = useState(current.notes);
+  const [fromPlace, setFromPlace] = useState(fresh ? "" : current.started ? current.fromPlace : "");
+  const [fromLat, setFromLat] = useState<number | undefined>(fresh ? undefined : current.started ? current.fromLat : undefined);
+  const [fromLng, setFromLng] = useState<number | undefined>(fresh ? undefined : current.started ? current.fromLng : undefined);
+  const [locations, setLocations] = useState<string[]>(fresh ? [] : current.started ? current.locations : []);
+  const [budget, setBudget] = useState(fresh ? "" : current.started ? current.budget : "");
+  const [datesKnown, setDatesKnown] = useState(fresh ? true : current.datesKnown);
+  const [start, setStart] = useState(fresh ? "" : current.start);
+  const [end, setEnd] = useState(fresh ? "" : current.end);
+  const [months, setMonths] = useState<string[]>(fresh ? [] : current.months);
+  const [days, setDays] = useState(fresh ? 2 : current.days || 2);
+  const [tripType, setTripType] = useState(fresh ? "" : current.started ? current.tripType : "");
+  const [interests, setInterests] = useState<string[]>(fresh ? [] : current.started ? current.interests : []);
+  const [notes, setNotes] = useState(fresh ? "" : current.notes);
   const [wpTrips, setWpTrips] = useState<WpTrip[]>([]);
 
   useEffect(() => {
-    if (!accountEmail) return;
+    if (fresh || !accountEmail) return;
     void fetchWpUserTrips({ data: { email: accountEmail } })
       .then((r) => setWpTrips(r.trips))
       .catch(() => undefined);
@@ -110,7 +110,7 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
       const result = await saveWpUserTrip({
         data: {
           email: accountEmail,
-          wpId: current.wpId,
+          wpId: fresh ? undefined : current.wpId,
           fromPlace,
           fromLat,
           fromLng,
@@ -126,13 +126,16 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
           notes,
           title: liveTitle,
           code: tripCode,
-          items: current.items,
-          itinerary: current.itinerary ?? [],
+          items: fresh ? [] : current.items,
+          itinerary: fresh ? [] : current.itinerary ?? [],
         },
       });
       if (!result.ok) {
         toast.error(result.error);
         return;
+      }
+      if (fresh) {
+        useTrip.setState({ items: [], itinerary: null, itineraryPolished: false });
       }
       applyPlan({
         fromPlace,
@@ -438,7 +441,7 @@ export function TripFormWizard({ afterSave }: { afterSave?: () => void }) {
                 scramble — start from this sketch.
               </p>
               <p className="rounded-xl bg-muted/70 px-4 py-3 text-sm font-medium">{liveTitle}</p>
-              {wpTrips.length > 0 && (
+              {!fresh && wpTrips.length > 0 && (
                 <div>
                   <p className="text-sm font-semibold">Latest trips on xplorepondy.com</p>
                   <ul className="mt-2 space-y-2">
