@@ -68,7 +68,14 @@ async function main() {
 
   const pool = new pg.Pool({ connectionString: databaseUrl, max: 1 });
   const client = await pool.connect();
+  let migrationLockHeld = false;
   try {
+    // Serialize deploys sharing the same database. Hostinger can briefly run
+    // overlapping builds/restarts, and without a database-level lock two
+    // migrators can both observe a migration as pending and race on _migrations.
+    await client.query("SELECT pg_advisory_lock(hashtext('xplore-pondy-migrations'))");
+    migrationLockHeld = true;
+
     await client.query(
       "CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())",
     );
@@ -102,6 +109,13 @@ async function main() {
     }
     console.log(count ? `[migrate] done — ${count} migration(s) applied.` : "[migrate] up to date.");
   } finally {
+    if (migrationLockHeld) {
+      try {
+        await client.query("SELECT pg_advisory_unlock(hashtext('xplore-pondy-migrations'))");
+      } catch {
+        // The connection is already being released; nothing else to do.
+      }
+    }
     client.release();
     await pool.end();
   }
