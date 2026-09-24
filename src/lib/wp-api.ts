@@ -2089,9 +2089,20 @@ export const saveWpUserTrip = createServerFn({ method: "POST" })
 export type WpTripSyncInput = {
   email: string;
   wpId: number;
+  code: string;
   interests: string[];
   items: { listingId: number; day: number }[];
   itinerary: unknown[];
+};
+
+export type WpTripRemoteState = {
+  ok: boolean;
+  tripId: number;
+  code: string;
+  interests: string[];
+  items: { listingId: number; day: number }[];
+  itinerary: unknown[];
+  error?: string;
 };
 
 export const syncWpUserTrip = createServerFn({ method: "POST" })
@@ -2099,6 +2110,7 @@ export const syncWpUserTrip = createServerFn({ method: "POST" })
     z.object({
       email: z.string().email(),
       wpId: z.number().int().positive(),
+      code: z.string().min(1).max(100),
       interests: z.array(z.string()),
       items: z.array(
         z.object({
@@ -2131,6 +2143,7 @@ export const syncWpUserTrip = createServerFn({ method: "POST" })
         },
         body: JSON.stringify({
           email: normalizedEmail,
+          code: data.code,
           interests: data.interests,
           items: data.items,
           itinerary: data.itinerary,
@@ -2154,6 +2167,82 @@ export const syncWpUserTrip = createServerFn({ method: "POST" })
     return {
       ok: true as const,
       configured: true as const,
+    };
+  });
+
+export const fetchWpUserTripState = createServerFn({ method: "GET" })
+  .validator(
+    z.object({
+      email: z.string().email(),
+      wpId: z.number().int().positive(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const headers = await wpTripSyncCredentials();
+    if (!headers) {
+      return {
+        ok: false as const,
+        error: "WordPress trip sync is not configured on the PWA server.",
+      };
+    }
+
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const res = await fetch(
+      `${WP_ORIGIN}/wp-json/xplore/v1/pwa/trip/${data.wpId}/state?email=${encodeURIComponent(normalizedEmail)}`,
+      {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          ...headers,
+        },
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+
+    const body = (await res.json().catch(() => null)) as
+      | {
+          ok?: boolean;
+          trip_id?: number;
+          trip_code?: string;
+          interests?: unknown;
+          items?: unknown;
+          itinerary?: unknown;
+          message?: string;
+          code?: string;
+        }
+      | null;
+
+    if (!res.ok || body?.ok === false) {
+      return {
+        ok: false as const,
+        error: body?.message || body?.code || `WordPress returned HTTP ${res.status}.`,
+      };
+    }
+
+    const interests = Array.isArray(body?.interests)
+      ? body.interests.map(String).map((value) => value.trim()).filter(Boolean)
+      : [];
+    const items = Array.isArray(body?.items)
+      ? body.items
+          .map((item) => {
+            if (!item || typeof item !== "object") return null;
+            const row = item as Record<string, unknown>;
+            const listingId = Number(row.listingId ?? row.listing_id ?? 0);
+            const day = Math.max(1, Math.min(7, Number(row.day ?? 1)));
+            return Number.isFinite(listingId) && listingId > 0
+              ? { listingId, day }
+              : null;
+          })
+          .filter((item): item is { listingId: number; day: number } => !!item)
+      : [];
+
+    return {
+      ok: true as const,
+      tripId: Number(body?.trip_id ?? data.wpId),
+      code: String(body?.trip_code ?? ""),
+      interests,
+      items,
+      itinerary: Array.isArray(body?.itinerary) ? body.itinerary : [],
     };
   });
 
