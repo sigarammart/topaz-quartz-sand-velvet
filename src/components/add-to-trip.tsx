@@ -8,7 +8,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { useAppLoggedIn } from "@/lib/app-session";
 import { useAuthModal } from "@/store/auth-modal";
 import { useCatalog } from "@/store/catalog";
-import { updateWpTripStore } from "@/lib/wp-api";
+import { fetchWpListing, updateWpTripStore } from "@/lib/wp-api";
 import { useTrip } from "@/store/trip";
 
 export function AddToTrip({
@@ -45,8 +45,21 @@ export function AddToTrip({
       showLogin({ reason: "add-trip", slug, name, wpId: postId, next: "/trip" });
       return;
     }
-    if (!accountEmail || !postId) {
-      toast.error("Your trip account could not be synchronized.");
+    if (!accountEmail) {
+      toast.error("Your signed-in account email is not available.");
+      return;
+    }
+
+    let resolvedPostId = postId;
+    if (!resolvedPostId) {
+      const liveListing = await fetchWpListing({
+        data: { slug },
+      }).catch(() => null);
+      resolvedPostId = liveListing?.wpId;
+    }
+
+    if (!resolvedPostId) {
+      toast.error("This listing could not be linked to WordPress.");
       return;
     }
 
@@ -56,7 +69,7 @@ export function AddToTrip({
       data: {
         email: accountEmail,
         operation,
-        listingId: postId,
+        listingId: resolvedPostId,
       },
     });
 
@@ -66,7 +79,7 @@ export function AddToTrip({
     }
 
     const added = !wasAdded;
-    toggle(slug, postId);
+    toggle(slug, resolvedPostId);
     if (added) {
       toast.success(`Saved ${name} for your trip`, {
         description: "It’s in Trip. Tap Add there to put it on a day.",
