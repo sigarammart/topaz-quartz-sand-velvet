@@ -85,7 +85,7 @@ export function TripFormWizard({ afterSave, fresh = false }: { afterSave?: () =>
     void fetchWpUserTrips({ data: { email: accountEmail } })
       .then((r) => setWpTrips(r.trips))
       .catch(() => undefined);
-  }, [accountEmail]);
+  }, [accountEmail, fresh]);
 
   const draft = { fromPlace, locations, datesKnown, start, end, months, days, tripType, interests };
   const canNext = jetformPageComplete(step, draft);
@@ -106,7 +106,7 @@ export function TripFormWizard({ afterSave, fresh = false }: { afterSave?: () =>
     }
     setSaving(true);
     try {
-      const tripCode = current.code || `XP-${Date.now().toString(36).toUpperCase()}`;
+      const tripCode = fresh ? `XP-${Date.now().toString(36).toUpperCase()}` : current.code || `XP-${Date.now().toString(36).toUpperCase()}`;
       const result = await saveWpUserTrip({
         data: {
           email: accountEmail,
