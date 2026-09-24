@@ -216,9 +216,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                     { to: "/plan", label: "Custom trip", icon: Compass },
                     { to: "/get-app", label: "Android app", icon: Smartphone },
                     {
-                      to: user ? "/account" : "/login",
-                      label: user ? "My Account" : "Sign in",
-                      icon: user ? UserRound : LogIn,
+                      to: loggedIn ? "/account" : "/login",
+                      label: loggedIn ? "My Account" : "Sign in",
+                      icon: loggedIn ? UserRound : LogIn,
                     },
                   ].map((item) => (
                     <Link
