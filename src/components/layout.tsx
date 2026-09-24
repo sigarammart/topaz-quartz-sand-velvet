@@ -29,7 +29,7 @@ import { useSession } from "@/store/session";
 import { useTheme } from "@/store/theme";
 import { isStandaloneDisplay } from "@/lib/android";
 import { useAppLoggedIn } from "@/lib/app-session";
-import { fetchWpBookmarks } from "@/lib/wp-api";
+import { fetchWpBookmarks, fetchWpTripStore } from "@/lib/wp-api";
 import { useTrip } from "@/store/trip";
 import { JET_BOOKMARK_STORAGE_KEY, JET_TEMP_STORAGE_KEY } from "@/lib/jet-store";
 
@@ -65,6 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const syncBookmarks = useTrip((s) => s.syncBookmarks);
   const wide = pathname === "/trip" || pathname.startsWith("/explore");
   const bookmarkHydrationKey = useRef("");
+  const tripStoreHydrationKey = useRef("");
 
   function onTripNav(e: MouseEvent) {
     if (loggedIn) return;
@@ -95,6 +96,45 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     hydrateGeo();
   }, [hydrateGeo]);
+
+  useEffect(() => {
+    if (!hydrated || !loggedIn || !catalog.length) return;
+
+    const email = wpUser?.email || grokUser?.primaryEmail || "";
+    if (!email) return;
+
+    const key = `${email.toLowerCase()}:${catalog.length}:${catalog[0]?.wpId ?? ""}`;
+    if (tripStoreHydrationKey.current === key) return;
+    tripStoreHydrationKey.current = key;
+
+    void fetchWpTripStore({ data: { email } }).then((result) => {
+      if (!result.ok) {
+        tripStoreHydrationKey.current = "";
+        return;
+      }
+
+      const byWpId = new Map<number, string>();
+      const nextMap = { ...(useTrip.getState().wpIdsBySlug ?? {}) };
+
+      for (const listing of catalog) {
+        if (typeof listing.wpId === "number") {
+          byWpId.set(listing.wpId, listing.slug);
+          nextMap[listing.slug] = listing.wpId;
+        }
+      }
+
+      const tempTrip = result.listingIds
+        .map((id) => byWpId.get(id))
+        .filter((slug): slug is string => !!slug);
+
+      useTrip.setState({
+        tempTrip,
+        wpIdsBySlug: nextMap,
+      });
+    }).catch(() => {
+      tripStoreHydrationKey.current = "";
+    });
+  }, [hydrated, loggedIn, wpUser?.email, grokUser?.primaryEmail, catalog.length, catalog[0]?.wpId]);
 
   useEffect(() => {
     if (!hydrated || !loggedIn || !catalog.length) return;
