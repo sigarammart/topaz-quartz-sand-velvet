@@ -36,6 +36,7 @@ export type WpTrip = {
   title: string;
   date: string;
   url: string;
+  data?: Omit<WpTripSaveInput, "email">;
 };
 
 type WpTerm = { id?: number; name: string; slug: string; parent?: number; taxonomy?: string; count?: number };
@@ -120,6 +121,7 @@ type WpUserTrip = {
   link?: string;
   date?: string;
   title?: { rendered?: string };
+  content?: { rendered?: string };
 };
 
 const FALLBACK_IMAGE: Record<Category, string> = {
@@ -1858,7 +1860,7 @@ async function wpTripSyncCredentials() {
   const appPassword = process.env.WP_TRIP_SYNC_APP_PASSWORD?.trim() ?? "";
   if (!username || !appPassword) return null;
   return {
-    Authorization: `Basic ${Buffer.from(`${username}:${appPassword.replace(/\\s+/g, " ")}`, "utf8").toString("base64")}`,
+    Authorization: `Basic ${Buffer.from(`${username}:${appPassword.replace(/\s+/g, " ")}`, "utf8").toString("base64")}`,
   };
 }
 
@@ -1866,7 +1868,7 @@ async function resolveWpUserByEmail(email: string, headers: HeadersInit) {
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
   const res = await wpGet<Array<{ id?: number; email?: string; name?: string }>>(
-    `/wp-json/wp/v2/users?search=${encodeURIComponent(normalized)}&per_page=100&_fields=id,email,name`,
+    `/wp-json/wp/v2/users?search=${encodeURIComponent(normalized)}&per_page=100&_fields=id,email,name&context=edit`,
     headers,
     12000,
   );
@@ -2004,7 +2006,7 @@ export const fetchWpUserTrips = createServerFn({ method: "GET" })
     if (!wpUser?.id) return { trips: [] as WpTrip[], configured: true as const };
 
     const res = await wpGet<WpUserTrip[]>(
-      `/wp-json/wp/v2/user_trip?author=${wpUser.id}&per_page=20&orderby=date&order=desc&_fields=id,slug,title,date,link`,
+      `/wp-json/wp/v2/user_trip?author=${wpUser.id}&per_page=20&orderby=date&order=desc&_fields=id,slug,title,date,link,content`,
       headers,
       15000,
     );
@@ -2012,15 +2014,27 @@ export const fetchWpUserTrips = createServerFn({ method: "GET" })
 
     return {
       configured: true as const,
-      trips: res.data.map((t) => ({
-        id: t.id,
-        slug: t.slug,
-        title: decodeHtml(t.title?.rendered ?? t.slug),
-        date: t.date
-          ? new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-          : "",
-        url: t.link ?? `${WP_ORIGIN}/user_trip/${t.slug}/`,
-      })),
+      trips: res.data.map((t) => {
+        const encoded = t.content?.rendered?.match(/<!-- xplore-pwa-trip-data:([A-Za-z0-9+/=]+) -->/)?.[1];
+        let savedData: Omit<WpTripSaveInput, "email"> | undefined;
+        if (encoded) {
+          try {
+            savedData = JSON.parse(Buffer.from(encoded, "base64").toString("utf8")) as Omit<WpTripSaveInput, "email">;
+          } catch {
+            savedData = undefined;
+          }
+        }
+        return {
+          id: t.id,
+          slug: t.slug,
+          title: decodeHtml(t.title?.rendered ?? t.slug),
+          date: t.date
+            ? new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+            : "",
+          url: t.link ?? `${WP_ORIGIN}/user_trip/${t.slug}/`,
+          data: savedData,
+        };
+      }),
     };
   });
 
