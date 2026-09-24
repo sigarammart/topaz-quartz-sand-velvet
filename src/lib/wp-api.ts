@@ -1836,6 +1836,7 @@ export const fetchWpListing = createServerFn({ method: "GET" })
 
 export type WpTripSaveInput = {
   email: string;
+  wpId?: number;
   title: string;
   code: string;
   fromPlace: string;
@@ -1905,6 +1906,7 @@ export const saveWpUserTrip = createServerFn({ method: "POST" })
   .validator(
     z.object({
       email: z.string().email(),
+      wpId: z.number().int().positive().optional(),
       title: z.string().min(1).max(200),
       code: z.string().min(1).max(100),
       fromPlace: z.string().max(300),
@@ -1956,8 +1958,11 @@ export const saveWpUserTrip = createServerFn({ method: "POST" })
       `<!-- xplore-pwa-trip-data:${Buffer.from(JSON.stringify({ ...data, wpUserId: wpUser.id }), "utf8").toString("base64")} -->`,
     ].filter(Boolean).join("\n");
 
-    const res = await fetch(`${WP_ORIGIN}/wp-json/wp/v2/user_trip`, {
-      method: "POST",
+    const endpoint = data.wpId
+      ? `${WP_ORIGIN}/wp-json/wp/v2/user_trip/${data.wpId}`
+      : `${WP_ORIGIN}/wp-json/wp/v2/user_trip`;
+    const res = await fetch(endpoint, {
+      method: data.wpId ? "PUT" : "POST",
       headers: {
         Accept: "application/json",
         "Content-Type": "application/json",
