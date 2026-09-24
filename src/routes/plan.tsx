@@ -5,5 +5,5 @@ export const Route = createFileRoute("/plan")({ component: PlanPage });
 
 function PlanPage() {
   const navigate = useNavigate();
-  return <TripFormWizard afterSave={() => void navigate({ to: "/trip" })} />;
+  return <TripFormWizard fresh afterSave={() => void navigate({ to: "/trip" })} />;
 }
