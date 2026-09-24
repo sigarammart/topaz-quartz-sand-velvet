@@ -2331,6 +2331,74 @@ export const fetchWpUserTrips = createServerFn({ method: "GET" })
   });
 
 
+export const fetchWpBookmarks = createServerFn({ method: "GET" })
+  .validator(z.object({ email: z.string().email() }))
+  .handler(async ({ data }) => {
+    const headers = await wpTripSyncCredentials();
+    if (!headers) return { ok: false as const, bookmarkIds: [] as number[], configured: false as const };
+
+    const res = await fetch(
+      `${WP_ORIGIN}/wp-json/xplore/v1/pwa/bookmarks/state?email=${encodeURIComponent(data.email.trim().toLowerCase())}`,
+      {
+        method: "GET",
+        headers: { Accept: "application/json", ...headers },
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    const body = (await res.json().catch(() => null)) as
+      | { ok?: boolean; bookmark_ids?: unknown; message?: string; code?: string }
+      | null;
+    if (!res.ok || body?.ok === false) {
+      return {
+        ok: false as const,
+        bookmarkIds: [] as number[],
+        configured: true as const,
+        error: body?.message || body?.code || `WordPress returned HTTP ${res.status}.`,
+      };
+    }
+    const bookmarkIds = Array.isArray(body?.bookmark_ids)
+      ? [...new Set(body.bookmark_ids.map(Number).filter((id) => Number.isFinite(id) && id > 0))]
+      : [];
+    return { ok: true as const, bookmarkIds, configured: true as const };
+  });
+
+export const syncWpBookmarks = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      email: z.string().email(),
+      bookmarkIds: z.array(z.number().int().positive()),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const headers = await wpTripSyncCredentials();
+    if (!headers) return { ok: false as const, error: "WordPress bookmark sync is not configured on the PWA server." };
+
+    const res = await fetch(`${WP_ORIGIN}/wp-json/xplore/v1/pwa/bookmarks/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", ...headers },
+      body: JSON.stringify({
+        email: data.email.trim().toLowerCase(),
+        bookmark_ids: [...new Set(data.bookmarkIds)],
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const body = (await res.json().catch(() => null)) as
+      | { ok?: boolean; bookmark_ids?: unknown; message?: string; code?: string }
+      | null;
+    if (!res.ok || body?.ok === false) {
+      return {
+        ok: false as const,
+        error: body?.message || body?.code || `WordPress returned HTTP ${res.status}.`,
+      };
+    }
+    return {
+      ok: true as const,
+      bookmarkIds: Array.isArray(body?.bookmark_ids)
+        ? [...new Set(body.bookmark_ids.map(Number).filter((id) => Number.isFinite(id) && id > 0))]
+        : data.bookmarkIds,
+    };
+  });
+
 export const fetchWpGuide = createServerFn({ method: "GET" })
   .validator(z.object({ slug: z.string().min(1), url: z.string().optional() }))
   .handler(async ({ data }) => {
