@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, LogOut, RefreshCw } from "lucide-react";
+import { ArrowRight, Bookmark, CalendarDays, Clock3, LogOut, MapPin, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { ListingCard } from "@/components/listing-card";
@@ -8,9 +8,10 @@ import { RedirectToSignIn } from "@/lib/auth/gates";
 import { signOut } from "@/lib/auth/client";
 import { hasGateSessionMarker } from "@/lib/auth/gate-session-marker";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { fetchWpAuthorContent, fetchWpUserTrips, type WpTrip } from "@/lib/wp-api";
+import { fetchWpAuthorContent, fetchWpBookmarks, fetchWpTripStore, fetchWpUserTrips, type WpTrip } from "@/lib/wp-api";
 import { useHydrated } from "@/lib/use-hydrated";
 import { useSession } from "@/store/session";
+import { resolveListing, useCatalog } from "@/store/catalog";
 import { useTrip } from "@/store/trip";
 
 export const Route = createFileRoute("/account")({ component: AccountPage });
@@ -64,6 +65,68 @@ function TripList({ trips, loading }: { trips: WpTrip[]; loading: boolean }) {
   );
 }
 
+const RECENTLY_VIEWED_KEY = "xplore-pondy-recently-viewed";
+const MAX_RECENTLY_VIEWED = 20;
+
+type AccountTab = "saved" | "bookmarks" | "trips" | "viewed";
+
+const ACCOUNT_TABS: { id: AccountTab; label: string; icon: typeof CalendarDays }[] = [
+  { id: "saved", label: "Saved", icon: CalendarDays },
+  { id: "bookmarks", label: "Bookmarks", icon: Bookmark },
+  { id: "trips", label: "Created Trips", icon: CalendarDays },
+  { id: "viewed", label: "Recently Viewed", icon: Clock3 },
+];
+
+function ActivityListingGrid({
+  title,
+  ids,
+  fallbackSlugs,
+  catalog,
+  wpIdsBySlug,
+  emptyText,
+  action,
+}: {
+  title: string;
+  ids: number[];
+  fallbackSlugs: string[];
+  catalog: ReturnType<typeof useCatalog.getState>["items"];
+  wpIdsBySlug: Record<string, number>;
+  emptyText: string;
+  action: React.ReactNode;
+}) {
+  const byId = new Map(catalog.map((listing) => [listing.wpId, listing]));
+  const remote = ids.map((id) => byId.get(id)).filter((l): l is NonNullable<typeof l> => !!l);
+  const local = fallbackSlugs
+    .map((slug) => {
+      const hit = resolveListing(slug, catalog);
+      if (hit) return hit;
+      const id = wpIdsBySlug[slug];
+      return typeof id === "number" ? byId.get(id) : undefined;
+    })
+    .filter((l): l is NonNullable<typeof l> => !!l);
+  const shown = [...remote, ...local.filter((l) => !remote.some((r) => r.slug === l.slug))];
+
+  return (
+    <div className="mt-5">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-display text-lg font-semibold">{title}</h3>
+        {shown.length > 0 && action}
+      </div>
+      {shown.length === 0 ? (
+        <div className="mt-4 rounded-xl bg-card p-8 text-center ring-1 ring-border/70">
+          <MapPin className="mx-auto size-7 text-primary" />
+          <p className="mt-3 text-sm text-muted-foreground">{emptyText}</p>
+          <div className="mt-4">{action}</div>
+        </div>
+      ) : (
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {shown.map((listing) => <ListingCard key={listing.slug} listing={listing} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AccountPage() {
   const hydrated = useHydrated();
   const navigate = useNavigate();
@@ -76,11 +139,55 @@ function AccountPage() {
   const clearSession = useSession((s) => s.clearSession);
   const tripTitle = useTrip((s) => s.title);
   const tripStarted = useTrip((s) => s.started);
+  const tempTrip = useTrip((s) => s.tempTrip);
+  const savedSlugs = useTrip((s) => s.saved);
+  const wpIdsBySlug = useTrip((s) => s.wpIdsBySlug);
+  const catalog = useCatalog((s) => s.items);
   const [refreshing, setRefreshing] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [recentTrips, setRecentTrips] = useState<WpTrip[]>([]);
   const [tripsLoading, setTripsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<AccountTab>("trips");
+  const [remoteSavedIds, setRemoteSavedIds] = useState<number[]>([]);
+  const [remoteBookmarkIds, setRemoteBookmarkIds] = useState<number[]>([]);
+  const [recentViewedSlugs, setRecentViewedSlugs] = useState<string[]>([]);
   const gateSession = typeof document !== "undefined" && hasGateSessionMarker();
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      const raw = localStorage.getItem(RECENTLY_VIEWED_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(parsed)) {
+        setRecentViewedSlugs(parsed.filter((slug): slug is string => typeof slug === "string").slice(0, MAX_RECENTLY_VIEWED));
+      }
+    } catch {
+      setRecentViewedSlugs([]);
+    }
+  }, [hydrated]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const email = googleUser?.primaryEmail ?? user?.email ?? "";
+    if (!email) return;
+    let cancelled = false;
+    void Promise.all([
+      fetchWpTripStore({ data: { email } }),
+      fetchWpBookmarks({ data: { email } }),
+    ]).then(([savedResult, bookmarkResult]) => {
+      if (cancelled) return;
+      setRemoteSavedIds(savedResult.ok ? savedResult.listingIds : []);
+      setRemoteBookmarkIds(bookmarkResult.ok ? bookmarkResult.bookmarkIds : []);
+    }).catch(() => {
+      if (!cancelled) {
+        setRemoteSavedIds([]);
+        setRemoteBookmarkIds([]);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, googleUser?.primaryEmail, user?.email]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -216,30 +323,84 @@ function AccountPage() {
 
       {user && (
         <section className="mt-10">
-          <h2 className="font-display text-2xl font-semibold">Your listings</h2>
-          {myListings.length === 0 ? (
-            <p className="mt-3 text-sm text-muted-foreground">
-              No listings are attached to this WordPress user. Published directory listings still
-              appear under Explore for everyone.
-            </p>
-          ) : (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {myListings.map((l) => (
-                <ListingCard key={l.slug} listing={l} />
-              ))}
-            </div>
-          )}
-        </section>
-      )}
+        <h2 className="font-display text-2xl font-semibold">Your activity</h2>
 
-      <section className="mt-10">
-        <h2 className="font-display text-2xl font-semibold">
-          {myTrips.length ? "Your trips" : "Recently created trips"}
-        </h2>
-        <TripList
-          trips={myTrips.length ? myTrips : recentTrips}
-          loading={tripsLoading && myTrips.length === 0 && recentTrips.length === 0}
-        />
+        <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-card p-2 ring-1 ring-border/70 sm:grid-cols-4">
+          {ACCOUNT_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Icon className="size-4" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {activeTab === "saved" && (
+          <ActivityListingGrid
+            title="Saved places"
+            ids={remoteSavedIds}
+            fallbackSlugs={tempTrip}
+            catalog={catalog}
+            wpIdsBySlug={wpIdsBySlug}
+            emptyText="No places saved to your trip yet."
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link to="/explore">Explore places</Link>
+              </Button>
+            }
+          />
+        )}
+
+        {activeTab === "bookmarks" && (
+          <ActivityListingGrid
+            title="Bookmarked places"
+            ids={remoteBookmarkIds}
+            fallbackSlugs={savedSlugs}
+            catalog={catalog}
+            wpIdsBySlug={wpIdsBySlug}
+            emptyText="No bookmarks yet."
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link to="/explore">Explore places</Link>
+              </Button>
+            }
+          />
+        )}
+
+        {activeTab === "trips" && (
+          <div className="mt-5">
+            <TripList
+              trips={myTrips.length ? myTrips : recentTrips}
+              loading={tripsLoading && myTrips.length === 0 && recentTrips.length === 0}
+            />
+          </div>
+        )}
+
+        {activeTab === "viewed" && (
+          <ActivityListingGrid
+            title="Recently viewed"
+            ids={[]}
+            fallbackSlugs={recentViewedSlugs}
+            catalog={catalog}
+            wpIdsBySlug={wpIdsBySlug}
+            emptyText="Places you view will appear here."
+            action={
+              <Button asChild variant="outline" size="sm">
+                <Link to="/explore">Explore places</Link>
+              </Button>
+            }
+          />
+        )}
       </section>
 
       <p className="mt-10 text-sm">
