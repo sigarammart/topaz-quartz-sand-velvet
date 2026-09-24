@@ -74,8 +74,6 @@ function TripPage() {
   const itineraryPolished = useTrip((s) => s.itineraryPolished);
   const setItinerary = useTrip((s) => s.setItinerary);
   const originGps = useGeo((s) => s.origin) ?? ANNA_SALAI;
-  const fromLat = useTrip((s) => s.fromLat);
-  const fromLng = useTrip((s) => s.fromLng);
   const origin =
     fromLat != null && fromLng != null ? { lat: fromLat, lng: fromLng } : originGps;
   const [busy, setBusy] = useState<"generate" | "ai" | null>(null);
