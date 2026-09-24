@@ -6,7 +6,6 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { useAppLoggedIn } from "@/lib/app-session";
 import { resolveListing, useCatalog } from "@/store/catalog";
 import { useAuthModal } from "@/store/auth-modal";
-import { useSession } from "@/store/session";
 import { useTrip } from "@/store/trip";
 
 export const Route = createFileRoute("/bookmarks")({ component: SavedPage });
@@ -16,7 +15,7 @@ function SavedPage() {
   const saved = useTrip((s) => s.saved);
   const wpIds = useTrip((s) => s.wpIdsBySlug);
   const items = useCatalog((s) => s.items);
-  const bookmarkIds = useSession((s) => s.bookmarkIds);
+  const bookmarkIds = useTrip((s) => s.saved.map((slug) => s.wpIdsBySlug?.[slug]).filter((id): id is number => typeof id === "number"));
   const showLogin = useAuthModal((s) => s.show);
   const { loggedIn, isPending } = useAppLoggedIn();
   const listings = hydrated
