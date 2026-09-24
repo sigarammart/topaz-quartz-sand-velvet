@@ -40,6 +40,8 @@ export const Route = createFileRoute("/place/$slug")({
 });
 
 const DETAIL_TTL = 30 * 60 * 1000;
+const RECENTLY_VIEWED_KEY = "xplore-pondy-recently-viewed";
+const MAX_RECENTLY_VIEWED = 20;
 const detailCache = new Map<string, { at: number; listing: Listing }>();
 
 function placeKey(slug: string) {
@@ -174,6 +176,21 @@ function PlacePage() {
     }
     throw notFound();
   }
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(RECENTLY_VIEWED_KEY);
+      const current = raw ? JSON.parse(raw) : [];
+      const slugs = Array.isArray(current)
+        ? current.filter((item): item is string => typeof item === "string")
+        : [];
+      const next = [slug, ...slugs.filter((item) => item !== slug)].slice(0, MAX_RECENTLY_VIEWED);
+      localStorage.setItem(RECENTLY_VIEWED_KEY, JSON.stringify(next));
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [slug]);
+
   const km = listingDistanceKm(origin, listing);
   const nearby = catalogNearby(listing.slug, items);
   const maps =
