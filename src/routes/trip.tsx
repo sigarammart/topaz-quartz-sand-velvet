@@ -276,7 +276,7 @@ function TripPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/40 to-transparent" />
         <div className="absolute right-3 top-3 z-10">
           <Button variant="outline" size="sm" asChild className="bg-card/95 shadow-soft">
-            <Link to="/plan">Edit trip details</Link>
+            <Link to="/plan" search={{ edit: true }}>Edit trip details</Link>
           </Button>
         </div>
         <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
