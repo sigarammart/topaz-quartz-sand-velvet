@@ -5,6 +5,8 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { useAppLoggedIn } from "@/lib/app-session";
 import { useAuthModal } from "@/store/auth-modal";
 import { useTrip } from "@/store/trip";
+import { resolveListing, useCatalog } from "@/store/catalog";
+import { syncWpBookmarks } from "@/lib/wp-api";
 
 export function SaveButton({
   slug,
@@ -20,7 +22,8 @@ export function SaveButton({
   const hydrated = useHydrated();
   const saved = useTrip((s) => s.saved.includes(slug));
   const toggle = useTrip((s) => s.toggleSaved);
-  const { loggedIn, isPending } = useAppLoggedIn();
+  const { loggedIn, isPending, wpUser, grokUser } = useAppLoggedIn();
+  const catalog = useCatalog((s) => s.items);
   const showLogin = useAuthModal((s) => s.show);
   const on = hydrated && saved;
 
@@ -38,7 +41,30 @@ export function SaveButton({
           return;
         }
         const added = toggle(slug, wpId);
-        toast.success(added ? `Bookmarked ${name}` : `Removed ${name} from bookmarks`);
+        const email = wpUser?.email || grokUser?.primaryEmail || "";
+        const savedSlugs = useTrip.getState().saved;
+        const bookmarkIds = savedSlugs
+          .map((savedSlug) => resolveListing(savedSlug, catalog)?.wpId)
+          .filter((id): id is number => typeof id === "number");
+
+        if (email) {
+          void syncWpBookmarks({
+            data: {
+              email,
+              bookmarkIds,
+            },
+          }).then((result) => {
+            if (!result.ok) {
+              toast.error(result.error || "Bookmark could not be synced with xplorepondy.com.");
+              return;
+            }
+            toast.success(added ? `Bookmarked ${name}` : `Removed ${name} from bookmarks`);
+          }).catch(() => {
+            toast.error("Bookmark could not be synced with xplorepondy.com.");
+          });
+        } else {
+          toast.success(added ? `Bookmarked ${name}` : `Removed ${name} from bookmarks`);
+        }
       }}
       className={cn(
         "flex size-11 items-center justify-center rounded-full bg-card/90 text-foreground shadow-soft ring-1 ring-border/70 backdrop-blur-sm transition-colors",
