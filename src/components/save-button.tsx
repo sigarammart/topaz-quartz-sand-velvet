@@ -37,7 +37,7 @@ export function SaveButton({
         e.stopPropagation();
         if (isPending) return;
         if (!loggedIn) {
-          showLogin({ reason: "bookmark", slug, name, wpId, next: "/saved" });
+          showLogin({ reason: "bookmark", slug, name, wpId, next: "/bookmarks" });
           return;
         }
         const added = toggle(slug, wpId);
