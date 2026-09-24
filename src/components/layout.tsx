@@ -147,16 +147,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (catalogStatus === "ready" || catalog.length > 8) {
       syncJetTemp(catalog);
-      syncBookmarks(catalog, bookmarkIds);
     }
-  }, [catalog, catalogStatus, syncJetTemp, syncBookmarks, bookmarkIds]);
+  }, [catalog, catalogStatus, syncJetTemp]);
 
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === JET_TEMP_STORAGE_KEY) useTrip.getState().syncJetTemp(useCatalog.getState().items);
-      if (e.key === JET_BOOKMARK_STORAGE_KEY) {
-        useTrip.getState().syncBookmarks(useCatalog.getState().items, useSession.getState().bookmarkIds);
-      }
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
