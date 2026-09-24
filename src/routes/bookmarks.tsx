@@ -67,7 +67,7 @@ function SavedPage() {
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Bookmark</p>
       <h1 className="mt-1 font-display text-3xl font-semibold">Your Pondy bookmarks</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Places you bookmark here are the same JetEngine save-bookmark list as xplorepondy.com.
+        Places you bookmark here are synced with your xplorepondy.com account.
       </p>
 
       {isPending ? (
