@@ -182,6 +182,7 @@ function TripPage() {
 
   useEffect(() => {
     if (!hydrated || !loggedIn || !accountEmail || !wpId || catalog.length === 0) return;
+    if (requestedWpId && wpId !== requestedWpId) return;
 
     const selected = [...new Set([...items.map((item) => item.slug), ...tempTrip])]
       .map((slug) => resolveListing(slug, catalog))
