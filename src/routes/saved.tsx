@@ -57,6 +57,7 @@ function SavedPage() {
           return id ? items.find((row) => row.wpId === id) : undefined;
         })
         .filter((l): l is NonNullable<typeof l> => l != null)
+      ]
     : [];
 
   const shownListings = [
