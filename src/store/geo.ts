@@ -37,32 +37,89 @@ export const useGeo = create<GeoState>((set, get) => ({
     );
   },
   hydrate: () => {
-    if (typeof navigator === "undefined") return;
+    if (typeof window === "undefined") return;
+
+    if (!navigator.geolocation) {
+      set({
+        status: "denied",
+        origin: ANNA_SALAI,
+        source: "landmark",
+        nearMe: false,
+      });
+      return;
+    }
+
+    const requestGps = () => {
+      set({ status: "asking" });
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          set({
+            origin: {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            },
+            source: "gps",
+            status: "ready",
+            nearMe: true,
+          });
+        },
+        () => {
+          set({
+            status: "denied",
+            origin: ANNA_SALAI,
+            source: "landmark",
+            nearMe: false,
+          });
+        },
+        {
+          enableHighAccuracy: false,
+          timeout: 12000,
+          maximumAge: 120000,
+        },
+      );
+    };
+
     const permissions = navigator.permissions;
-    if (!permissions?.query) return;
+
+    if (!permissions?.query) {
+      requestGps();
+      return;
+    }
+
     void permissions
       .query({ name: "geolocation" })
-      .then((status) => {
-        if (status.state === "granted" && get().source !== "gps") {
-          navigator.geolocation.getCurrentPosition(
-            (pos) =>
-              set({
-                origin: { lat: pos.coords.latitude, lng: pos.coords.longitude },
-                source: "gps",
-                status: "ready",
-              }),
-            () => undefined,
-            { enableHighAccuracy: false, timeout: 12000, maximumAge: 120000 },
-          );
+      .then((permission) => {
+        if (permission.state === "granted" || permission.state === "prompt") {
+          requestGps();
+          return;
         }
-        if (status.state === "denied") {
-          set({ status: "denied", origin: ANNA_SALAI, source: "landmark" });
+
+        if (permission.state === "denied") {
+          set({
+            status: "denied",
+            origin: ANNA_SALAI,
+            source: "landmark",
+            nearMe: false,
+          });
         }
-        status.onchange = () => {
-          if (status.state === "granted") get().locate();
-          if (status.state === "denied" || status.state === "prompt") get().clear();
+
+        permission.onchange = () => {
+          if (permission.state === "granted") {
+            requestGps();
+          } else if (permission.state === "denied") {
+            set({
+              status: "denied",
+              origin: ANNA_SALAI,
+              source: "landmark",
+              nearMe: false,
+            });
+          }
         };
       })
-      .catch(() => undefined);
+      .catch(() => {
+        requestGps();
+      });
+  }
   },
 }));
