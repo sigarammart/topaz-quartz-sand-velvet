@@ -159,7 +159,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Logo className="rounded-none bg-transparent p-0" />
           </Link>
           <nav className="ml-6 hidden items-center gap-1 md:flex">
-            {NAV.map((item) => {
+            {NAV.filter((item) => item.to !== "/saved").map((item) => {
               const active =
                 item.to === "/"
                   ? pathname === "/"
@@ -189,16 +189,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               Events
             </Link>
-            <Link
-              to="/bookmarks"
-              onClick={onBookmarkNav}
-              className={cn(
-                "rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground",
-                pathname.startsWith("/bookmarks") && "bg-muted text-foreground",
-              )}
-            >
-              Bookmark
-            </Link>
           </nav>
           <div className="ml-auto flex items-center gap-1.5">
             <Button variant="ghost" size="icon" asChild className="md:hidden">
@@ -207,30 +197,18 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" size="sm" asChild className="hidden md:inline-flex">
-              <Link to="/plan">Plan a trip</Link>
-            </Button>
             <InstallHeaderButton />
-            <HeaderAuth />
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="hidden md:inline-flex"
-            >
-              <Link to="/account">
-                <UserRound className="size-4" />
-                My Account
-              </Link>
-            </Button>
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="md:hidden" aria-label="Menu">
+                <Button variant="ghost" size="icon" aria-label="Menu">
                   <Menu />
                 </Button>
               </SheetTrigger>
               <SheetContent side="right" title="Menu">
                 <nav className="flex flex-col gap-1">
+                  <div className="mb-2 border-b border-border pb-3">
+                    <HeaderAuth />
+                  </div>
                   {[
                     ...NAV,
                     { to: "/events", label: "Events", icon: CalendarDays },
