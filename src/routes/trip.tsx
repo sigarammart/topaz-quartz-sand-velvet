@@ -55,6 +55,9 @@ function TripPage() {
   const wpId = useTrip((s) => s.wpId);
   const days = useTrip((s) => s.days);
   const locations = useTrip((s) => s.locations);
+  const fromPlace = useTrip((s) => s.fromPlace);
+  const fromLat = useTrip((s) => s.fromLat);
+  const fromLng = useTrip((s) => s.fromLng);
   const budget = useTrip((s) => s.budget);
   const tripType = useTrip((s) => s.tripType);
   const start = useTrip((s) => s.start);
@@ -165,6 +168,17 @@ function TripPage() {
     const signature = JSON.stringify({
       wpId,
       code,
+      locations,
+      fromPlace,
+      fromLat,
+      fromLng,
+      budget,
+      tripType,
+      datesKnown: useTrip.getState().datesKnown,
+      start,
+      end,
+      months: useTrip.getState().months,
+      days,
       interests,
       items: syncItems,
       itinerary,
@@ -178,6 +192,17 @@ function TripPage() {
           email: accountEmail,
           wpId,
           code,
+          locations,
+          fromPlace,
+          fromLat,
+          fromLng,
+          budget,
+          tripType,
+          datesKnown: useTrip.getState().datesKnown,
+          start,
+          end,
+          months: useTrip.getState().months,
+          days,
           interests,
           items: syncItems,
           itinerary: itinerary ?? [],
@@ -200,6 +225,15 @@ function TripPage() {
     accountEmail,
     wpId,
     code,
+    locations,
+    fromPlace,
+    fromLat,
+    fromLng,
+    budget,
+    tripType,
+    start,
+    end,
+    days,
     catalog,
     items,
     tempTrip,
