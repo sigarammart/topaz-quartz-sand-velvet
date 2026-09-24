@@ -2102,6 +2102,7 @@ export type WpTripSyncInput = {
   months: string[];
   days: number;
   interests: string[];
+  savedListingIds: number[];
   items: { listingId: number; day: number }[];
   itinerary: unknown[];
 };
@@ -2111,6 +2112,7 @@ export type WpTripRemoteState = {
   tripId: number;
   code: string;
   interests: string[];
+  savedListingIds: number[];
   items: { listingId: number; day: number }[];
   itinerary: unknown[];
   error?: string;
@@ -2134,6 +2136,7 @@ export const syncWpUserTrip = createServerFn({ method: "POST" })
       months: z.array(z.string()),
       days: z.number().int().min(1).max(7),
       interests: z.array(z.string()),
+      savedListingIds: z.array(z.number().int().positive()),
       items: z.array(
         z.object({
           listingId: z.number().int().positive(),
@@ -2178,6 +2181,7 @@ export const syncWpUserTrip = createServerFn({ method: "POST" })
           months: data.months,
           days: data.days,
           interests: data.interests,
+          savedListingIds: data.savedListingIds,
           items: data.items,
           itinerary: data.itinerary,
         }),
@@ -2238,6 +2242,7 @@ export const fetchWpUserTripState = createServerFn({ method: "GET" })
           trip_id?: number;
           trip_code?: string;
           interests?: unknown;
+          saved_listing_ids?: unknown;
           items?: unknown;
           itinerary?: unknown;
           message?: string;
@@ -2254,6 +2259,9 @@ export const fetchWpUserTripState = createServerFn({ method: "GET" })
 
     const interests = Array.isArray(body?.interests)
       ? body.interests.map(String).map((value) => value.trim()).filter(Boolean)
+      : [];
+    const savedListingIds = Array.isArray(body?.saved_listing_ids)
+      ? body.saved_listing_ids.map(Number).filter((id) => Number.isFinite(id) && id > 0)
       : [];
     const items = Array.isArray(body?.items)
       ? body.items
@@ -2274,6 +2282,7 @@ export const fetchWpUserTripState = createServerFn({ method: "GET" })
       tripId: Number(body?.trip_id ?? data.wpId),
       code: String(body?.trip_code ?? ""),
       interests,
+      savedListingIds: [...new Set(savedListingIds)],
       items,
       itinerary: Array.isArray(body?.itinerary) ? body.itinerary : [],
     };
