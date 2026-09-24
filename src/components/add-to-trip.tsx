@@ -8,6 +8,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { useAppLoggedIn } from "@/lib/app-session";
 import { useAuthModal } from "@/store/auth-modal";
 import { useCatalog } from "@/store/catalog";
+import { fetchWpTripStore, updateWpTripStore } from "@/lib/wp-api";
 import { useTrip } from "@/store/trip";
 
 export function AddToTrip({
@@ -32,10 +33,11 @@ export function AddToTrip({
   const active = hydrated && on;
   const wpUserCheck = useAppLoggedIn();
   const showLogin = useAuthModal((s) => s.show);
+  const accountEmail = wpUserCheck.wpUser?.email || wpUserCheck.grokUser?.primaryEmail || "";
   const loggedIn = wpUserCheck.loggedIn;
   const postId = wpId ?? catalogId ?? mappedId;
 
-  function onClick(e?: MouseEvent) {
+  async function onClick(e?: MouseEvent) {
     e?.preventDefault();
     e?.stopPropagation();
     if (wpUserCheck.isPending) return;
@@ -43,7 +45,28 @@ export function AddToTrip({
       showLogin({ reason: "add-trip", slug, name, wpId: postId, next: "/trip" });
       return;
     }
-    const added = toggle(slug, postId);
+    if (!accountEmail || !postId) {
+      toast.error("Your trip account could not be synchronized.");
+      return;
+    }
+
+    const wasAdded = on;
+    const operation = wasAdded ? "remove" : "add";
+    const result = await updateWpTripStore({
+      data: {
+        email: accountEmail,
+        operation,
+        listingId: postId,
+      },
+    });
+
+    if (!result.ok) {
+      toast.error(result.error || "Could not update your trip list.");
+      return;
+    }
+
+    const added = !wasAdded;
+    toggle(slug, postId);
     if (added) {
       toast.success(`Saved ${name} for your trip`, {
         description: "It’s in Trip. Tap Add there to put it on a day.",
@@ -65,7 +88,7 @@ export function AddToTrip({
         type="button"
         aria-pressed={active}
         aria-label={active ? `Remove ${name} from trip list` : `Add ${name} to trip`}
-        onClick={onClick}
+        onClick={() => void onClick()}
         className={cn(
           "flex size-11 items-center justify-center rounded-full bg-card/90 text-foreground shadow-soft ring-1 ring-border/70 backdrop-blur-sm transition-colors hover:bg-card",
           active && "bg-primary text-primary-foreground ring-primary",
@@ -78,7 +101,7 @@ export function AddToTrip({
   }
 
   return (
-    <Button className={cn("flex-1", className)} onClick={() => onClick()}>
+    <Button className={cn("flex-1", className)} onClick={() => void onClick()}>
       {active ? <CalendarCheck /> : <CalendarPlus />}
       {active ? "In trip list" : "Add to trip"}
     </Button>
