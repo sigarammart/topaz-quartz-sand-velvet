@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Bookmark, CalendarDays, Clock3, LogOut, MapPin, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ListingCard } from "@/components/listing-card";
 import { Button } from "@/components/ui/button";
@@ -92,7 +92,7 @@ function ActivityListingGrid({
   catalog: ReturnType<typeof useCatalog.getState>["items"];
   wpIdsBySlug: Record<string, number>;
   emptyText: string;
-  action: React.ReactNode;
+  action: ReactNode;
 }) {
   const byId = new Map(catalog.map((listing) => [listing.wpId, listing]));
   const remote = ids.map((id) => byId.get(id)).filter((l): l is NonNullable<typeof l> => !!l);
@@ -323,6 +323,20 @@ function AccountPage() {
 
       {user && (
         <section className="mt-10">
+          <h2 className="font-display text-2xl font-semibold">Your listings</h2>
+          {myListings.length === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              No listings are attached to this WordPress user. Published directory listings still appear under Explore for everyone.
+            </p>
+          ) : (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {myListings.map((l) => <ListingCard key={l.slug} listing={l} />)}
+            </div>
+          )}
+        </section>
+      )}
+
+      <section className="mt-10">
         <h2 className="font-display text-2xl font-semibold">Your activity</h2>
 
         <div className="mt-5 grid grid-cols-2 gap-2 rounded-xl bg-card p-2 ring-1 ring-border/70 sm:grid-cols-4">
