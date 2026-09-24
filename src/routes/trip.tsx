@@ -36,8 +36,9 @@ import { useTrip } from "@/store/trip";
 type TripTab = "interests" | "saved" | "all";
 
 export const Route = createFileRoute("/trip")({
-  validateSearch: (search: Record<string, unknown>): { tab?: TripTab } => ({
+  validateSearch: (search: Record<string, unknown>): { tab?: TripTab; wpId?: number } => ({
     tab: search.tab === "saved" || search.tab === "all" || search.tab === "interests" ? search.tab : undefined,
+    wpId: Number.isFinite(Number(search.wpId)) && Number(search.wpId) > 0 ? Number(search.wpId) : undefined,
   }),
   component: TripPage,
 });
@@ -47,7 +48,7 @@ function TripPage() {
   const { loggedIn, isPending, wpUser, grokUser } = useAppLoggedIn();
   const accountEmail = wpUser?.email || grokUser?.primaryEmail || "";
   const showLogin = useAuthModal((s) => s.show);
-  const { tab: tabParam } = Route.useSearch();
+  const { tab: tabParam, wpId: requestedWpId } = Route.useSearch();
   const catalog = useCatalog((s) => s.items);
   const started = useTrip((s) => s.started);
   const title = useTrip((s) => s.title);
@@ -94,13 +95,25 @@ function TripPage() {
   const tripRemoteHydrated = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!hydrated || !loggedIn || !accountEmail || !wpId || catalog.length === 0) return;
-    if (tripRemoteHydrated.current === wpId) return;
+    const activeWpId = requestedWpId ?? wpId;
+    if (!hydrated || !loggedIn || !accountEmail || !activeWpId || catalog.length === 0) return;
+    if (tripRemoteHydrated.current === activeWpId) return;
 
-    tripRemoteHydrated.current = wpId;
+    if (requestedWpId && wpId !== requestedWpId) {
+      useTrip.setState({
+        wpId: requestedWpId,
+        started: true,
+        items: [],
+        tempTrip: [],
+        itinerary: null,
+        itineraryPolished: false,
+      });
+    }
+
+    tripRemoteHydrated.current = activeWpId;
 
     void fetchWpUserTripState({
-      data: { email: accountEmail, wpId },
+      data: { email: accountEmail, wpId: activeWpId },
     }).then((result) => {
       if (!result.ok) {
         tripRemoteHydrated.current = null;
@@ -151,7 +164,7 @@ function TripPage() {
 
       tripSyncReady.current = true;
       tripSyncSignature.current = JSON.stringify({
-        wpId,
+        wpId: activeWpId,
         code: result.code || useTrip.getState().code,
         interests: result.interests.length ? result.interests : useTrip.getState().interests,
         items: remoteItems.map((item) => ({
@@ -165,7 +178,7 @@ function TripPage() {
     }).catch(() => {
       tripRemoteHydrated.current = null;
     });
-  }, [hydrated, loggedIn, accountEmail, wpId, catalog]);
+  }, [hydrated, loggedIn, accountEmail, wpId, requestedWpId, catalog]);
 
   useEffect(() => {
     if (!hydrated || !loggedIn || !accountEmail || !wpId || catalog.length === 0) return;
