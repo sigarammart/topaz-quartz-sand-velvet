@@ -132,32 +132,20 @@ function TripPage() {
         })
         .filter((item): item is { slug: string; day: number } => !!item);
 
-      const remoteSaved = Array.isArray(result.savedListingIds)
-        ? result.savedListingIds
-            .map((listingId) => byWpId.get(listingId))
-            .filter((listing): listing is Listing => !!listing)
-        : [];
-
+      // Saved is a user-level collection backed by the JetEngine
+      // trip-itinerary-temp store. Do not let an empty/older user_trip
+      // snapshot clear the user's current Saved collection while a trip
+      // is being opened or created.
+      //
+      // The trip's selected/day assignments remain authoritative here;
+      // Saved is hydrated separately by the global trip-store hydration.
       const remoteItinerary = Array.isArray(result.itinerary) ? result.itinerary : [];
-      const remoteWpIdsBySlug: Record<string, number> = {};
-      for (const listing of remoteSaved) {
-        if (typeof listing.wpId === "number") remoteWpIdsBySlug[listing.slug] = listing.wpId;
-      }
 
       useTrip.setState({
         started: true,
         code: result.code || useTrip.getState().code,
         interests: result.interests.length ? result.interests : useTrip.getState().interests,
         items: remoteItems,
-        ...(Array.isArray(result.savedListingIds)
-          ? {
-              tempTrip: remoteSaved.map((listing) => listing.slug),
-              wpIdsBySlug: {
-                ...(useTrip.getState().wpIdsBySlug ?? {}),
-                ...remoteWpIdsBySlug,
-              },
-            }
-          : {}),
         itinerary: remoteItinerary as typeof itinerary,
         itineraryPolished: remoteItinerary.length > 0,
       });
@@ -173,6 +161,10 @@ function TripPage() {
           )?.wpId,
           day: item.day,
         })),
+        savedListingIds: useTrip
+          .getState()
+          .tempTrip.map((slug) => resolveListing(slug, catalog)?.wpId)
+          .filter((id): id is number => typeof id === "number"),
         itinerary: remoteItinerary,
       });
     }).catch(() => {
