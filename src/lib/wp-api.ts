@@ -790,6 +790,13 @@ function mapListing(
       .flat()
       .filter((t) => (t as { taxonomy?: string }).taxonomy === "listing_category" || !("taxonomy" in t));
   }
+  if (!terms.length) {
+    const classSlugs = (raw.class_list ?? [])
+      .filter((value) => value.startsWith("listing_category-"))
+      .map((value) => value.slice("listing_category-".length))
+      .filter(Boolean);
+    terms = classSlugs.map((slug) => ({ slug, name: slug.replace(/-/g, " ") }));
+  }
   const { category, kind, tags } = categoryFromTerms(terms);
   let region = "Pondicherry";
   if (extras?.regionMap && raw.region?.[0]) {
@@ -823,6 +830,24 @@ function mapListing(
   const tripDaysRaw = decodeHtml(String(meta._trip_single_multi_days ?? "")).trim();
   const tripDays = itinerary.length || groupSize ? tripDaysRaw : "";
   const taxonomies = extractTaxonomies(raw, extras?.taxMaps);
+  const classCategorySlugs = (raw.class_list ?? [])
+    .filter((value) => value.startsWith("listing_category-"))
+    .map((value) => value.slice("listing_category-".length))
+    .filter(Boolean);
+  if (classCategorySlugs.length) {
+    const existing = taxonomies.find((group) => group.key === "listing_category");
+    const seen = new Set(existing?.terms.map((term) => term.slug) ?? []);
+    const classTerms = classCategorySlugs
+      .filter((slug) => !seen.has(slug))
+      .map((slug) => ({
+        name: slug.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+        slug,
+      }));
+    if (classTerms.length) {
+      if (existing) existing.terms.push(...classTerms);
+      else taxonomies.unshift({ key: "listing_category", label: TAX_LABELS.listing_category, terms: classTerms });
+    }
+  }
   const menuImages = extractMenuImages(meta.dining_menu_images);
   const listeo = contactFromListeoMeta(meta as Record<string, unknown>);
   return {
