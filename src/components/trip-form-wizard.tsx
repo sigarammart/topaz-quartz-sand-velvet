@@ -173,7 +173,8 @@ export function TripFormWizard({ afterSave, fresh = false }: { afterSave?: () =>
         title: trip.title,
         wpId: trip.id,
         wpUrl: trip.url,
-        code: trip.data.code || (trip.id ? String(trip.id) : undefined),
+        // Always use the WordPress post ID as the canonical trip code.
+        code: trip.id ? String(trip.id) : trip.data.code,
       });
     } else {
       const seed = seedFromWpTitle(trip.title);
