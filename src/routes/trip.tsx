@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, Clock, GripVertical, Sparkles, Wand2, X } from "lucide-react";
+import { Check, Clock, Download, GripVertical, Sparkles, Wand2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ListingMap } from "@/components/listing-map";
@@ -434,6 +434,51 @@ function TripPage() {
     }
   }
 
+  function downloadItineraryPdf() {
+    if (!itinerary || itinerary.length === 0) return;
+
+    const lines: string[] = [
+      "XPLORE PONDY",
+      title || "My Pondicherry Itinerary",
+      locationLabel ? `Location: ${locationLabel}` : "",
+      dateLabel ? `Dates: ${dateLabel}` : "",
+      `Days: ${days}`,
+      "",
+    ].filter(Boolean);
+
+    for (const block of itinerary) {
+      lines.push(`DAY ${block.day}: ${block.title}`);
+      if (block.intro) lines.push(block.intro);
+      lines.push("");
+
+      for (const stop of block.stops) {
+        const listing = resolveListing(stop.slug, catalog);
+        if (!listing) continue;
+
+        lines.push(`${stop.time}  ${listing.name}`);
+        if (stop.travel) {
+          lines.push(`Travel: ${stop.travel.minutes} min · ${travelLabel(stop.travel.km)}`);
+        }
+        if (stop.blurb) lines.push(stop.blurb);
+        lines.push("");
+      }
+    }
+
+    const blob = createItineraryPdfBlob(lines);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${(title || "xplore-pondy-itinerary")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase()}.pdf`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast.success("Itinerary PDF downloaded");
+  }
+
   if (!hydrated || isPending) return <p className="py-16 text-center text-sm text-muted-foreground">Loading trip…</p>;
 
   if (!loggedIn) {
@@ -729,7 +774,8 @@ function TripPage() {
             </p>
           )}
           {itinerary && itinerary.length > 0 && (
-            <div className="mt-5 rounded-xl bg-background p-3 ring-1 ring-border/70">
+            <>
+              <div className="mt-5 rounded-xl bg-background p-3 ring-1 ring-border/70">
               <h3 className="font-display text-base font-semibold">
                 Your itinerary{itineraryPolished ? " · AI" : ""}
               </h3>
@@ -763,7 +809,8 @@ function TripPage() {
                   </section>
                 ))}
               </div>
-            </div>
+              </div>
+            </>
           )}
           {wpUrl ? (
             <a href={wpUrl} className="mt-3 block text-xs text-primary hover:underline" target="_blank" rel="noreferrer">
@@ -790,6 +837,19 @@ function TripPage() {
           />
         </section>
       </div>
+
+      {itinerary && itinerary.length > 0 ? (
+        <Button
+          type="button"
+          size="sm"
+          onClick={downloadItineraryPdf}
+          className="fixed bottom-20 right-4 z-40 rounded-full px-4 shadow-lg lg:bottom-6 lg:right-6"
+          aria-label="Download itinerary as PDF"
+        >
+          <Download className="size-4" />
+          Download PDF
+        </Button>
+      ) : null}
 
       <TripPaneBar pane={pane} onChange={setPane} badge={items.length} />
       <SelectedListingsSheet
@@ -970,4 +1030,106 @@ function MetaChip({ label, value }: { label: string; value: string }) {
       <span className="font-medium">{value}</span>
     </span>
   );
+}
+
+
+function createItineraryPdfBlob(sourceLines: string[]): Blob {
+  const clean = (value: string) =>
+    value
+      .replace(/[•·]/g, "-")
+      .replace(/[–—]/g, "-")
+      .replace(/[“”]/g, '"')
+      .replace(/[‘’]/g, "'")
+      .replace(/…/g, "...")
+      .replace(/[^\\x09\\x0A\\x0D\\x20-\\x7E]/g, "");
+
+  const wrap = (value: string, max = 88) => {
+    const words = clean(value).trim().split(/\\s+/).filter(Boolean);
+    if (!words.length) return [""];
+    const result: string[] = [];
+    let line = "";
+    for (const word of words) {
+      if ((line ? line.length + 1 : 0) + word.length <= max) {
+        line = line ? `${line} ${word}` : word;
+      } else {
+        if (line) result.push(line);
+        line = word;
+      }
+    }
+    if (line) result.push(line);
+    return result;
+  };
+
+  const lines = sourceLines.flatMap((line) => (line ? wrap(line) : [""]));
+  const pageLines = 48;
+  const pages: string[][] = [];
+  for (let i = 0; i < lines.length; i += pageLines) {
+    pages.push(lines.slice(i, i + pageLines));
+  }
+  if (!pages.length) pages.push(["XPLORE PONDY"]);
+
+  const objects: string[] = [];
+  const addObject = (body: string) => {
+    objects.push(body);
+    return objects.length;
+  };
+
+  const catalogId = addObject("<< /Type /Catalog /Pages 2 0 R >>");
+  const pagesId = addObject("");
+  const fontId = addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  const pageIds: number[] = [];
+
+  for (const page of pages) {
+    const content: string[] = [
+      "BT",
+      "/F1 11 Tf",
+      "50 790 Td",
+      "14 TL",
+    ];
+
+    page.forEach((line, index) => {
+      if (index === 0) {
+        content.push(`/F1 16 Tf`);
+      } else if (line.startsWith("DAY ")) {
+        content.push("/F1 13 Tf");
+      } else {
+        content.push("/F1 11 Tf");
+      }
+
+      const escaped = clean(line).replace(/\\/g, "\\\\").replace(/\\(/g, "\\\(").replace(/\\)/g, "\\\)");
+      content.push(`(${escaped}) Tj`);
+      content.push("0 -14 Td");
+    });
+
+    content.push("ET");
+    const stream = content.join("\\n");
+    const contentId = addObject(
+      `<< /Length ${stream.length} >>\\nstream\\n${stream}\\nendstream`,
+    );
+    const pageId = addObject(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`,
+    );
+    pageIds.push(pageId);
+  }
+
+  objects[pagesId - 1] =
+    `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
+
+  const header = "%PDF-1.4\\n";
+  let pdf = header;
+  const offsets: number[] = [0];
+
+  objects.forEach((object, index) => {
+    offsets[index + 1] = pdf.length;
+    pdf += `${index + 1} 0 obj\\n${object}\\nendobj\\n`;
+  });
+
+  const xrefOffset = pdf.length;
+  pdf += `xref\\n0 ${objects.length + 1}\\n0000000000 65535 f \\n`;
+  for (let i = 1; i <= objects.length; i++) {
+    pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \\n`;
+  }
+  pdf += `trailer\\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\\nstartxref\\n${xrefOffset}\\n%%EOF`;
+
+  return new Blob([pdf], { type: "application/pdf" });
 }
