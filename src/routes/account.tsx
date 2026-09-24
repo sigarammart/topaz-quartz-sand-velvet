@@ -98,8 +98,13 @@ function AccountPage() {
             method: method ?? "application-password",
           });
         }
-        const recent = await fetchWpUserTrips();
-        if (!cancelled) setRecentTrips(recent.trips);
+        const tripEmail = googleUser?.primaryEmail ?? user?.email ?? "";
+        if (tripEmail) {
+          const recent = await fetchWpUserTrips({ data: { email: tripEmail } });
+          if (!cancelled) setRecentTrips(recent.trips);
+        } else if (!cancelled) {
+          setRecentTrips([]);
+        }
       } catch {
         /* keep whatever we already have */
       } finally {
@@ -109,7 +114,7 @@ function AccountPage() {
     return () => {
       cancelled = true;
     };
-  }, [hydrated, user?.id]);
+  }, [hydrated, user?.id, user?.email, googleUser?.primaryEmail]);
 
   if (isPending || !hydrated) {
     return <div className="py-16 text-center text-sm text-muted-foreground">Loading account…</div>;
