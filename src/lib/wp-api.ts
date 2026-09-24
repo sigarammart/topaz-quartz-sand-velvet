@@ -2086,6 +2086,77 @@ export const saveWpUserTrip = createServerFn({ method: "POST" })
     };
   });
 
+export type WpTripSyncInput = {
+  email: string;
+  wpId: number;
+  interests: string[];
+  items: { listingId: number; day: number }[];
+  itinerary: unknown[];
+};
+
+export const syncWpUserTrip = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      email: z.string().email(),
+      wpId: z.number().int().positive(),
+      interests: z.array(z.string()),
+      items: z.array(
+        z.object({
+          listingId: z.number().int().positive(),
+          day: z.number().int().min(1).max(7),
+        }),
+      ),
+      itinerary: z.array(z.unknown()),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const headers = await wpTripSyncCredentials();
+    if (!headers) {
+      return {
+        ok: false as const,
+        configured: false as const,
+        error: "WordPress trip sync is not configured on the PWA server.",
+      };
+    }
+
+    const normalizedEmail = data.email.trim().toLowerCase();
+    const res = await fetch(
+      `${WP_ORIGIN}/wp-json/xplore/v1/pwa/trip/${data.wpId}/sync`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          interests: data.interests,
+          items: data.items,
+          itinerary: data.itinerary,
+        }),
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+
+    const body = (await res.json().catch(() => null)) as
+      | { ok?: boolean; message?: string; code?: string }
+      | null;
+
+    if (!res.ok || body?.ok === false) {
+      return {
+        ok: false as const,
+        configured: true as const,
+        error: body?.message || body?.code || `WordPress returned HTTP ${res.status}.`,
+      };
+    }
+
+    return {
+      ok: true as const,
+      configured: true as const,
+    };
+  });
+
 export const fetchWpUserTrips = createServerFn({ method: "GET" })
   .validator(z.object({ email: z.string().email() }))
   .handler(async ({ data }) => {
