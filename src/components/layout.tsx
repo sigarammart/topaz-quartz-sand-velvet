@@ -63,6 +63,67 @@ export function AppShell({ children }: { children: ReactNode }) {
   const syncJetTemp = useTrip((s) => s.syncJetTemp);
   const wide = pathname === "/trip" || pathname.startsWith("/explore");
   const tripStoreHydrationKey = useRef("");
+  const pullStartY = useRef<number | null>(null);
+  const pullTriggered = useRef(false);
+  const [pullDistance, setPullDistance] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const onTouchStart = (event: TouchEvent) => {
+      if (window.scrollY <= 0 && event.touches.length === 1) {
+        pullStartY.current = event.touches[0].clientY;
+        pullTriggered.current = false;
+      } else {
+        pullStartY.current = null;
+      }
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      if (pullStartY.current === null || event.touches.length !== 1) return;
+
+      const distance = event.touches[0].clientY - pullStartY.current;
+      if (distance <= 0 || window.scrollY > 0) {
+        setPullDistance(0);
+        return;
+      }
+
+      setPullDistance(Math.min(distance * 0.45, 90));
+
+      if (distance >= 80) {
+        pullTriggered.current = true;
+      }
+
+      if (distance > 8) {
+        event.preventDefault();
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (pullStartY.current === null) return;
+
+      const shouldRefresh = pullTriggered.current;
+      pullStartY.current = null;
+      pullTriggered.current = false;
+      setPullDistance(0);
+
+      if (shouldRefresh) {
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, []);
 
   function onTripNav(e: MouseEvent) {
     if (loggedIn) return;
@@ -266,6 +327,21 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+
+      {pullDistance > 0 && (
+        <div
+          className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex justify-center"
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top) + 8px)",
+            transform: `translateY(${pullDistance}px)`,
+          }}
+          aria-hidden="true"
+        >
+          <div className="rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-sm">
+            {pullDistance >= 36 ? "Release to refresh" : "Pull to refresh"}
+          </div>
+        </div>
+      )}
 
       <main className={cn("mx-auto w-full flex-1 px-4 pb-24 pt-6 md:pb-12", wide ? "max-w-7xl" : "max-w-6xl")}>
         {children}
