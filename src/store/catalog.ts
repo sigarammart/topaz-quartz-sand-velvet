@@ -36,6 +36,7 @@ type CatalogState = {
 
 let loadStarted = 0;
 let hoursStarted = 0;
+let guidesStarted = 0;
 const hoursDone = new Set<string>();
 const hoursQueued = new Set<string>();
 const pendingSlugs = new Set<string>();
@@ -96,6 +97,17 @@ function withHours(item: Listing, hit: HoursPatch | Listing): Listing {
   };
 }
 
+async function hydrateGuides(apply: (guides: Guide[]) => void) {
+  if (Date.now() - guidesStarted < 15000) return;
+  guidesStarted = Date.now();
+  try {
+    const result = await fetchWpGuides();
+    if (result.guides.length) apply(result.guides);
+  } catch {
+    guidesStarted = 0;
+  }
+}
+
 async function hydrateHours(apply: (rows: HoursPatch[]) => void, _items: Listing[]) {
   const state = useCatalog.getState();
   if (state.openNowStatus === "ready" && state.openNowTotal > 0) return;
@@ -144,12 +156,14 @@ export const useCatalog = create<CatalogState>((set, get) => ({
           openNowStatus: (snap.openNowTotal ?? 0) > 0 ? "ready" : "idle",
         });
         if ((snap.openNowTotal ?? 0) === 0) void hydrateHours(get().applyHours, snap.listings);
+        void hydrateGuides((guides) => set({ guides }));
         return;
       }
     }
     if (current.status === "loading" && Date.now() - loadStarted < 25000) return;
     if (current.openNowStatus !== "ready") void hydrateHours(get().applyHours, current.items);
     if (current.source === "live" && current.items.length >= 350 && current.items.some((item) => item.wpId)) {
+      void hydrateGuides((guides) => set({ guides }));
       return;
     }
     loadStarted = Date.now();
@@ -182,11 +196,7 @@ export const useCatalog = create<CatalogState>((set, get) => ({
       });
       persistSession();
       void hydrateHours(get().applyHours, listings);
-      void fetchWpGuides()
-        .then((guideResult) => {
-          if (guideResult.guides.length) set({ guides: guideResult.guides });
-        })
-        .catch(() => undefined);
+      void hydrateGuides((guides) => set({ guides }));
     } catch {
       if (previous.length >= 80) {
         set({
