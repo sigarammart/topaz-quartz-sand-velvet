@@ -2044,25 +2044,6 @@ export const fetchWpUserTrips = createServerFn({ method: "GET" })
   });
 
 
-  const res = await wpGet<WpUserTrip[]>(
-    "/wp-json/wp/v2/user_trip?per_page=12&orderby=date&order=desc&_fields=id,slug,title,date,link",
-    {},
-    12000,
-  );
-  if (!res.ok || !Array.isArray(res.data)) return { trips: [] as WpTrip[] };
-  return {
-    trips: res.data.map((t) => ({
-      id: t.id,
-      slug: t.slug,
-      title: decodeHtml(t.title?.rendered ?? t.slug),
-      date: t.date
-        ? new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-        : "",
-      url: t.link ?? `${WP_ORIGIN}/user_trip/${t.slug}/`,
-    })),
-  };
-});
-
 export const fetchWpGuide = createServerFn({ method: "GET" })
   .validator(z.object({ slug: z.string().min(1), url: z.string().optional() }))
   .handler(async ({ data }) => {
