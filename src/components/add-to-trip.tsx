@@ -8,7 +8,7 @@ import { useHydrated } from "@/lib/use-hydrated";
 import { useAppLoggedIn } from "@/lib/app-session";
 import { useAuthModal } from "@/store/auth-modal";
 import { useCatalog } from "@/store/catalog";
-import { fetchWpTripStore, updateWpTripStore } from "@/lib/wp-api";
+import { updateWpTripStore } from "@/lib/wp-api";
 import { useTrip } from "@/store/trip";
 
 export function AddToTrip({
