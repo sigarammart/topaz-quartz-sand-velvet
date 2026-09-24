@@ -1041,10 +1041,10 @@ function createItineraryPdfBlob(sourceLines: string[]): Blob {
       .replace(/[“”]/g, '"')
       .replace(/[‘’]/g, "'")
       .replace(/…/g, "...")
-      .replace(/[^\\x09\\x0A\\x0D\\x20-\\x7E]/g, "");
+      .replace(/[^\x09\x0A\x0D\x20-\x7E]/g, "");
 
   const wrap = (value: string, max = 88) => {
-    const words = clean(value).trim().split(/\\s+/).filter(Boolean);
+    const words = clean(value).trim().split(/\s+/).filter(Boolean);
     if (!words.length) return [""];
     const result: string[] = [];
     let line = "";
@@ -1080,31 +1080,29 @@ function createItineraryPdfBlob(sourceLines: string[]): Blob {
   const pageIds: number[] = [];
 
   for (const page of pages) {
-    const content: string[] = [
-      "BT",
-      "/F1 11 Tf",
-      "50 790 Td",
-      "14 TL",
-    ];
+    const content: string[] = ["BT", "/F1 11 Tf", "50 790 Td", "14 TL"];
 
     page.forEach((line, index) => {
       if (index === 0) {
-        content.push(`/F1 16 Tf`);
+        content.push("/F1 16 Tf");
       } else if (line.startsWith("DAY ")) {
         content.push("/F1 13 Tf");
       } else {
         content.push("/F1 11 Tf");
       }
 
-      const escaped = clean(line).replace(/\\/g, "\\\\").replace(/\\(/g, "\\\(").replace(/\\)/g, "\\\)");
+      const escaped = clean(line)
+        .replace(/\\/g, "\\\\")
+        .replace(/\(/g, "\\(")
+        .replace(/\)/g, "\\)");
       content.push(`(${escaped}) Tj`);
       content.push("0 -14 Td");
     });
 
     content.push("ET");
-    const stream = content.join("\\n");
+    const stream = content.join("\n");
     const contentId = addObject(
-      `<< /Length ${stream.length} >>\\nstream\\n${stream}\\nendstream`,
+      `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
     );
     const pageId = addObject(
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 842] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`,
@@ -1115,21 +1113,21 @@ function createItineraryPdfBlob(sourceLines: string[]): Blob {
   objects[pagesId - 1] =
     `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
 
-  const header = "%PDF-1.4\\n";
+  const header = "%PDF-1.4\n";
   let pdf = header;
   const offsets: number[] = [0];
 
   objects.forEach((object, index) => {
     offsets[index + 1] = pdf.length;
-    pdf += `${index + 1} 0 obj\\n${object}\\nendobj\\n`;
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
   });
 
   const xrefOffset = pdf.length;
-  pdf += `xref\\n0 ${objects.length + 1}\\n0000000000 65535 f \\n`;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
   for (let i = 1; i <= objects.length; i++) {
-    pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \\n`;
+    pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
   }
-  pdf += `trailer\\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\\nstartxref\\n${xrefOffset}\\n%%EOF`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
 
   return new Blob([pdf], { type: "application/pdf" });
 }
