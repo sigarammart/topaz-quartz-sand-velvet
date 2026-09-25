@@ -20,11 +20,11 @@ function PlaceLine({ listing }: { listing: Listing }) {
   const origin = useGeo((s) => s.origin);
   const fromGps = useGeo((s) => s.source === "gps");
   const km = listingDistanceKm(origin, listing);
-  const place = listing.area || listing.location;
+  const place = listing.friendlyAddress || listing.area || listing.location;
   return (
-    <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
-      <MapPin className="size-3 shrink-0" />
-      <span className="block min-w-0 truncate">
+    <p className="flex min-w-0 items-start gap-1 text-xs leading-snug text-muted-foreground">
+      <MapPin className="mt-0.5 size-3 shrink-0" />
+      <span className="min-w-0 break-words line-clamp-2">
         {km != null ? formatDistance(km, fromGps) : place}
         {km != null && place ? ` · ${place}` : ""}
       </span>
@@ -107,15 +107,15 @@ export function ListingCard({
               {kindLabel(listing)}
             </p>
             <h3 className="truncate text-sm font-semibold leading-snug">{listing.name}</h3>
+            <PlaceLine listing={listing} />
             {listing.rating > 0 && (
               <div className="mt-0.5 flex items-center gap-1.5 text-muted-foreground">
                 <Stars value={listing.rating} />
                 <span className="text-[11px]">({listing.reviews.toLocaleString()})</span>
               </div>
             )}
-            <div className="mt-0.5 flex min-w-0 flex-col items-start gap-0.5">
+            <div className="mt-0.5">
               <OpenNowBadge listing={listing} />
-              <PlaceLine listing={listing} />
             </div>
           </div>
         </Link>
