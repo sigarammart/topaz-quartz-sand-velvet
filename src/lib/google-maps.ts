@@ -170,7 +170,40 @@ export const GOOGLE_MAP_LIGHT = [
   { featureType: "water", elementType: "geometry", stylers: [{ color: "#c5dce0" }] },
 ];
 
+type GooglePlaceReview = {
+  authorAttribution?: {
+    displayName?: string;
+    uri?: string;
+    photoURI?: string;
+  };
+  rating?: number;
+  relativePublishTimeDescription?: string;
+  text?: string | { text?: string };
+};
+
+type ModernGooglePlace = {
+  id?: string;
+  displayName?: string;
+  rating?: number;
+  userRatingCount?: number;
+  googleMapsURI?: string;
+  reviews?: GooglePlaceReview[];
+  fetchFields: (request: { fields: string[] }) => Promise<void>;
+};
+
+type ModernGooglePlaceClass = {
+  new (options: { id: string }): ModernGooglePlace;
+  searchByText: (request: {
+    textQuery: string;
+    fields: string[];
+    maxResultCount?: number;
+    language?: string;
+    region?: string;
+  }) => Promise<{ places: ModernGooglePlace[] }>;
+};
+
 export type GooglePlacesLib = {
+  Place?: ModernGooglePlaceClass;
   AutocompleteService?: new () => {
     getPlacePredictions: (
       req: Record<string, unknown>,
