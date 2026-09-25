@@ -1471,7 +1471,9 @@ async function loadListingPages() {
     12000,
   );
   if (!first.ok || !Array.isArray(first.data)) {
-    throw new Error(`WordPress listings failed (${first.status})`);
+    // The catalog can still be built from the Listeo geo feed when the
+    // WordPress REST listing endpoint is temporarily unavailable.
+    return { rows: [], total: 0 };
   }
   const total = Number(first.headers.get("X-WP-Total") ?? first.data.length);
   const pages = Math.min(Number(first.headers.get("X-WP-TotalPages") ?? "1"), 8);
