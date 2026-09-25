@@ -47,7 +47,7 @@ const MAX_RECENTLY_VIEWED = 20;
 const detailCache = new Map<string, { at: number; listing: Listing }>();
 
 function placeKey(slug: string) {
-  return `xp-place-v1:${slug}`;
+  return `xp-place-v2:${slug}`;
 }
 
 function cachedDetail(slug: string) {
