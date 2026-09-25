@@ -113,7 +113,7 @@ export function ListingCard({
                 <span className="text-[11px]">({listing.reviews.toLocaleString()})</span>
               </div>
             )}
-            <div className="mt-0.5 flex min-w-0 items-center gap-2">
+            <div className="mt-0.5 flex min-w-0 flex-col items-start gap-0.5">
               <OpenNowBadge listing={listing} />
               <PlaceLine listing={listing} />
             </div>
