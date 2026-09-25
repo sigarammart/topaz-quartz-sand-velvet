@@ -297,7 +297,7 @@ function Explore() {
         </>
       ) : (
         <>
-          <div className="mt-4 flex flex-col gap-2">
+          <div className="mt-4 flex flex-col gap-3">
             {shown.map((l) => (
               <ListingCard key={l.slug} listing={l} layout="row" pin={pinNumbers.get(l.slug)} />
             ))}
