@@ -25,18 +25,20 @@ function googleMapsPlaceUrl(placeId: string) {
   return `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${encodeURIComponent(placeId)}`;
 }
 
-export function GoogleReviews({ placeId }: { placeId?: string }) {
+export function GoogleReviews({
+  placeId,
+  name,
+  address,
+}: {
+  placeId?: string;
+  name: string;
+  address?: string;
+}) {
   const [place, setPlace] = useState<PlaceDetails | null>(null);
-  const [loading, setLoading] = useState(Boolean(placeId));
+  const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<PlacesStatus>();
 
   useEffect(() => {
-    if (!placeId) {
-      setLoading(false);
-      setStatus("MISSING_PLACE_ID");
-      return;
-    }
-
     let cancelled = false;
     setLoading(true);
     setStatus(undefined);
@@ -54,16 +56,47 @@ export function GoogleReviews({ placeId }: { placeId?: string }) {
       const host = document.createElement("div");
       const service = new places.PlacesService(host);
 
-      service.getDetails(
+      const getDetails = (resolvedPlaceId: string) => {
+        service.getDetails(
+          {
+            placeId: resolvedPlaceId,
+            fields: ["name", "rating", "user_ratings_total", "reviews", "url"],
+          },
+          (details, resultStatus) => {
+            if (cancelled) return;
+            setPlace((details as PlaceDetails | null) ?? null);
+            setStatus(resultStatus);
+            setLoading(false);
+          },
+        );
+      };
+
+      if (placeId) {
+        getDetails(placeId);
+        return;
+      }
+
+      if (typeof service.findPlaceFromQuery !== "function") {
+        setStatus("MISSING_PLACE_ID");
+        setLoading(false);
+        return;
+      }
+
+      const query = [name, address, "Puducherry"].filter(Boolean).join(", ");
+      service.findPlaceFromQuery(
         {
-          placeId,
-          fields: ["name", "rating", "user_ratings_total", "reviews", "url"],
+          query,
+          fields: ["place_id", "name", "rating", "user_ratings_total", "url"],
         },
-        (details, resultStatus) => {
+        (matches, resultStatus) => {
           if (cancelled) return;
-          setPlace((details as PlaceDetails | null) ?? null);
-          setStatus(resultStatus);
-          setLoading(false);
+          const resolvedPlaceId = matches?.[0]?.place_id;
+          if (!resolvedPlaceId) {
+            setStatus(resultStatus || "ZERO_RESULTS");
+            setLoading(false);
+            return;
+          }
+          getDetails(resolvedPlaceId);
         },
       );
     }).catch(() => {
@@ -75,10 +108,7 @@ export function GoogleReviews({ placeId }: { placeId?: string }) {
     return () => {
       cancelled = true;
     };
-  }, [placeId]);
-
-  if (!placeId) return null;
-
+  }, [placeId, name, address]);
   const reviews = (place?.reviews ?? []).slice(0, 3);
   const viewAllUrl = place?.url || googleMapsPlaceUrl(placeId);
   const failed = !loading && status && status !== "OK";
