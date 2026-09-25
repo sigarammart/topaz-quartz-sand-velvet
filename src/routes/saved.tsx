@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarCheck, CalendarPlus } from "lucide-react";
+import { CalendarCheck, CalendarPlus, Map as MapIcon, X } from "lucide-react";
 import { ListingCard } from "@/components/listing-card";
+import { ListingMap } from "@/components/listing-map";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { useHydrated } from "@/lib/use-hydrated";
