@@ -28,23 +28,30 @@ function pinIcon(g: NonNullable<ReturnType<typeof googleMapsApi>>, fill: string,
   };
 }
 
-function clusterIcon(count: number) {
+function clusterIcon(count: number, dark: boolean) {
   const label = `${count}+`;
+  // Warm amber keeps the counter readable against the dark basemap.
+  // Signal arcs are intentionally thinner and semi-transparent.
+  const core = dark ? "#F2A93B" : "#0B1213";
+  const text = dark ? "#0B1213" : "#FFFFFF";
+  const arc1 = dark ? "rgba(85,225,232,.50)" : "#55E1E8";
+  const arc2 = dark ? "rgba(34,198,213,.50)" : "#22C6D5";
+  const arc3 = dark ? "rgba(14,165,183,.50)" : "#0EA5B7";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 58 58">
     <defs>
       <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-        <feDropShadow dx="0" dy="1.5" stdDeviation="1.8" flood-color="#061014" flood-opacity=".34"/>
+        <feDropShadow dx="0" dy="1.5" stdDeviation="1.8" flood-color="#061014" flood-opacity=".28"/>
       </filter>
     </defs>
     <g filter="url(#shadow)">
-      <path d="M29 3 A26 26 0 0 1 52 16" fill="none" stroke="#55E1E8" stroke-width="5" stroke-linecap="round"/>
-      <path d="M29 11 A18 18 0 0 1 45 20" fill="none" stroke="#22C6D5" stroke-width="5" stroke-linecap="round"/>
-      <path d="M29 19 A10 10 0 0 1 38 24" fill="none" stroke="#0EA5B7" stroke-width="5" stroke-linecap="round"/>
-      <path d="M29 55 A26 26 0 0 1 6 42" fill="none" stroke="#55E1E8" stroke-width="5" stroke-linecap="round"/>
-      <path d="M29 47 A18 18 0 0 1 13 38" fill="none" stroke="#22C6D5" stroke-width="5" stroke-linecap="round"/>
-      <path d="M29 39 A10 10 0 0 1 20 34" fill="none" stroke="#0EA5B7" stroke-width="5" stroke-linecap="round"/>
-      <circle cx="29" cy="29" r="15" fill="#0B1213" stroke="#FFFFFF" stroke-width="2.5"/>
-      <text x="29" y="33" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" font-weight="800" fill="#FFFFFF">${label}</text>
+      <path d="M29 3 A26 26 0 0 1 52 16" fill="none" stroke="${arc1}" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M29 11 A18 18 0 0 1 45 20" fill="none" stroke="${arc2}" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M29 19 A10 10 0 0 1 38 24" fill="none" stroke="${arc3}" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M29 55 A26 26 0 0 1 6 42" fill="none" stroke="${arc1}" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M29 47 A18 18 0 0 1 13 38" fill="none" stroke="${arc2}" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M29 39 A10 10 0 0 1 20 34" fill="none" stroke="${arc3}" stroke-width="3.5" stroke-linecap="round"/>
+      <circle cx="29" cy="29" r="15" fill="${core}" stroke="#FFFFFF" stroke-width="2.5"/>
+      <text x="29" y="33" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" font-weight="800" fill="${text}">${label}</text>
     </g>
   </svg>`;
   return {
@@ -222,7 +229,7 @@ export function GoogleListingMap({
           marker.setPosition({ lat: group.lat, lng: group.lng });
           marker.setMap(map);
         }
-        marker.setIcon(clusterIcon(group.items.length));
+        marker.setIcon(clusterIcon(group.items.length, dark));
         marker.setZIndex(25);
       }
 
