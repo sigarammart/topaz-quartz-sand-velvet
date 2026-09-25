@@ -110,7 +110,13 @@ export function GoogleReviews({
     };
   }, [placeId, name, address]);
   const reviews = (place?.reviews ?? []).slice(0, 3);
-  const viewAllUrl = place?.url || googleMapsPlaceUrl(placeId);
+  const viewAllUrl =
+    place?.url ||
+    (placeId
+      ? googleMapsPlaceUrl(placeId)
+      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+          [name, address, "Puducherry"].filter(Boolean).join(", "),
+        )}`);
   const failed = !loading && status && status !== "OK";
 
   return (
