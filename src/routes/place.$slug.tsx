@@ -8,6 +8,8 @@ import {
   Loader2,
   MapPin,
   Navigation,
+  LocateFixed,
+  Package,
   Phone,
   Ticket,
   Timer,
@@ -139,6 +141,7 @@ function PlacePage() {
     listing: cachedDetail(slug),
   }));
   const [relatedShown, setRelatedShown] = useState(6);
+  const [relatedSort, setRelatedSort] = useState<"featured" | "package" | "near">("featured");
 
   useEffect(() => {
     let cancelled = false;
@@ -193,6 +196,27 @@ function PlacePage() {
 
   const km = listingDistanceKm(origin, listing);
   const nearby = catalogNearby(listing.slug, items);
+  const sortedNearby = [...nearby].sort((a, b) => {
+    if (relatedSort === "near") {
+      const da = listingDistanceKm(origin, a);
+      const db = listingDistanceKm(origin, b);
+      if (da != null && db != null && da !== db) return da - db;
+      if (da != null) return -1;
+      if (db != null) return 1;
+    } else if (relatedSort === "package") {
+      const pa = a.listingPackage ?? 0;
+      const pb = b.listingPackage ?? 0;
+      if (pb !== pa) return pb - pa;
+      if (Boolean(b.featured) !== Boolean(a.featured)) return Number(Boolean(b.featured)) - Number(Boolean(a.featured));
+    } else {
+      if (Boolean(b.featured) !== Boolean(a.featured)) return Number(Boolean(b.featured)) - Number(Boolean(a.featured));
+      const pa = a.listingPackage ?? 0;
+      const pb = b.listingPackage ?? 0;
+      if (pb !== pa) return pb - pa;
+    }
+    if (b.rating !== a.rating) return b.rating - a.rating;
+    return a.name.localeCompare(b.name);
+  });
   const maps =
     listing.lat && listing.lng
       ? `https://www.google.com/maps/dir/?api=1&destination=${listing.lat},${listing.lng}`
@@ -659,16 +683,53 @@ function PlacePage() {
 
       {nearby.length > 0 && (
         <section className="mt-8">
-          <h2 className="font-display text-lg font-semibold">Nearby & related</h2>
-          <div className="mt-3 flex flex-col gap-2">
-            {nearby.slice(0, relatedShown).map((l) => (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-display text-lg font-semibold">Nearby & related</h2>
+            <div className="flex items-center gap-1.5" role="group" aria-label="Sort nearby listings">
+              <Button
+                type="button"
+                variant={relatedSort === "featured" ? "default" : "outline"}
+                size="sm"
+                className="h-8 rounded-full px-3 text-xs"
+                onClick={() => setRelatedSort("featured")}
+              >
+                Featured
+              </Button>
+              <Button
+                type="button"
+                variant={relatedSort === "package" ? "default" : "outline"}
+                size="sm"
+                className="h-8 rounded-full px-3 text-xs"
+                onClick={() => setRelatedSort("package")}
+              >
+                Package
+              </Button>
+              <Button
+                type="button"
+                variant={relatedSort === "near" ? "default" : "outline"}
+                size="sm"
+                className="h-8 rounded-full px-3"
+                onClick={() => {
+                  setRelatedSort("near");
+                  if (useGeo.getState().source !== "gps") useGeo.getState().locate();
+                }}
+                title="Sort by distance from you"
+                aria-label="Sort by distance from you"
+              >
+                <LocateFixed className="size-3.5" />
+                <span className="hidden sm:inline">Near me</span>
+              </Button>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-col gap-3">
+            {sortedNearby.slice(0, relatedShown).map((l) => (
               <ListingCard key={l.slug} listing={l} layout="row" />
             ))}
           </div>
-          {relatedShown < nearby.length && (
+          {relatedShown < sortedNearby.length && (
             <div className="mt-4 flex justify-center">
               <Button variant="outline" onClick={() => setRelatedShown((count) => count + 6)}>
-                Load more · {nearby.length - relatedShown} left
+                Load more · {sortedNearby.length - relatedShown} left
               </Button>
             </div>
           )}
