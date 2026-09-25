@@ -8,7 +8,7 @@ import {
 import { applySmartFilters, type SmartFilters } from "@/lib/filters";
 import { listingDistanceKm, type LatLng } from "@/lib/geo";
 import { elasticSearch } from "@/lib/es-search";
-import { fetchWpCatalog, fetchWpGuides, fetchWpOpenNowForSlugs, fetchWpOpenNowSnapshot } from "@/lib/wp-api";
+import { fetchWpCatalog, fetchWpGuides, fetchWpListingHours, fetchWpOpenNowForSlugs, fetchWpOpenNowSnapshot } from "@/lib/wp-api";
 import type { Category, DayHours, Guide, Listing } from "@/lib/types";
 
 type HoursPatch = {
@@ -115,14 +115,35 @@ async function hydrateHours(apply: (rows: HoursPatch[]) => void, _items: Listing
   hoursStarted = Date.now();
   try {
     useCatalog.setState({ openNowStatus: "loading" });
-    const snapshot = await fetchWpOpenNowSnapshot();
+
+    // Load the complete archive hours dataset, not only the currently
+    // visible cards. This prevents Open/Closed badges from appearing
+    // only after a card is scrolled into view.
+    const [snapshotResult, hoursResult] = await Promise.allSettled([
+      fetchWpOpenNowSnapshot(),
+      fetchWpListingHours(),
+    ]);
+
+    if (snapshotResult.status === "fulfilled") {
+      const snapshot = snapshotResult.value;
+      useCatalog.setState({
+        openNowTotal: snapshot.total,
+        openNowByCategory: snapshot.byCategory,
+      });
+      if (snapshot.rows.length) apply(snapshot.rows);
+      for (const row of snapshot.rows) hoursDone.add(row.slug);
+    }
+
+    if (hoursResult.status === "fulfilled" && hoursResult.value.length) {
+      apply(hoursResult.value);
+      for (const row of hoursResult.value) hoursDone.add(row.slug);
+    }
+
+    const snapshotReady = snapshotResult.status === "fulfilled";
+    const hoursReady = hoursResult.status === "fulfilled";
     useCatalog.setState({
-      openNowTotal: snapshot.total,
-      openNowByCategory: snapshot.byCategory,
-      openNowStatus: snapshot.total > 0 ? "ready" : "idle",
+      openNowStatus: snapshotReady || hoursReady ? "ready" : "idle",
     });
-    if (snapshot.rows.length) apply(snapshot.rows);
-    for (const row of snapshot.rows) hoursDone.add(row.slug);
     persistSession();
   } catch {
     hoursStarted = 0;
