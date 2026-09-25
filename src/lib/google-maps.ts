@@ -216,7 +216,7 @@ let placesLib: GooglePlacesLib | null = null;
 
 export async function loadGooglePlaces(): Promise<GooglePlacesLib | null> {
   if (typeof window === "undefined" || authFailed) return null;
-  if (placesLib?.AutocompleteService || placesLib?.AutocompleteSuggestion) return placesLib;
+  if (placesLib?.PlacesService || placesLib?.AutocompleteService || placesLib?.AutocompleteSuggestion) return placesLib;
   await loadGoogleMaps();
   const bootstrap = window.google?.maps;
   if (!bootstrap) return null;
