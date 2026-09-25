@@ -89,11 +89,34 @@ export function ListingMap(props: ListingMapProps) {
   const [engine, setEngine] = useState<"pending" | "google" | "osm">("pending");
   useEffect(() => {
     let cancelled = false;
-    void loadGoogleMaps().then((ok) => {
-      if (!cancelled) setEngine(ok ? "google" : "osm");
-    });
+    let retryTimer: number | undefined;
+    let attempts = 0;
+
+    const resolveEngine = () => {
+      attempts += 1;
+      void loadGoogleMaps().then((ok) => {
+        if (cancelled) return;
+        if (ok) {
+          setEngine("google");
+          return;
+        }
+
+        // Google Maps can fail transiently while its script/auth state is
+        // still settling on the first SPA navigation. Retry before falling
+        // back to OSM so the first map open is not a different engine/theme.
+        if (attempts < 3) {
+          retryTimer = window.setTimeout(resolveEngine, 700);
+        } else {
+          setEngine("osm");
+        }
+      });
+    };
+
+    resolveEngine();
+
     return () => {
       cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
   }, []);
   if (engine === "google") return <GoogleListingMap {...props} />;
@@ -175,7 +198,7 @@ function OsmListingMap({ listings, selected, onSelect, className }: ListingMapPr
       const shifted = unproject(p.x, p.y + (sizeRef.current.h * 0.22) / TILE, v.zoom);
       return { lat: shifted.lat, lng: shifted.lng, zoom: v.zoom };
     });
-  }, [active?.slug]);
+  }, [active?.slug, you?.lat, you?.lng]);
 
   useEffect(() => {
     const el = root.current;
