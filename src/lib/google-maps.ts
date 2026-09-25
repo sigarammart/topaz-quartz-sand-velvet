@@ -202,6 +202,20 @@ export type GooglePlacesLib = {
         status?: string,
       ) => void,
     ) => void;
+    findPlaceFromQuery?: (
+      req: Record<string, unknown>,
+      cb: (
+        places: Array<{
+          place_id?: string;
+          name?: string;
+          formatted_address?: string;
+          rating?: number;
+          user_ratings_total?: number;
+          url?: string;
+        }> | null,
+        status?: string,
+      ) => void,
+    ) => void;
   };
   AutocompleteSuggestion?: {
     fetchAutocompleteSuggestions: (req: Record<string, unknown>) => Promise<{
