@@ -19,10 +19,43 @@ type PlaceDetails = {
   reviews?: Review[];
 };
 
-type PlacesStatus = string | undefined;
-
 function googleMapsPlaceUrl(placeId: string) {
   return `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${encodeURIComponent(placeId)}`;
+}
+
+function normalizeModernPlace(place: {
+  displayName?: string;
+  rating?: number;
+  userRatingCount?: number;
+  googleMapsURI?: string;
+  reviews?: Array<{
+    authorAttribution?: {
+      displayName?: string;
+      uri?: string;
+      photoURI?: string;
+    };
+    rating?: number;
+    relativePublishTimeDescription?: string;
+    text?: string | { text?: string };
+  }>;
+}): PlaceDetails {
+  return {
+    name: place.displayName,
+    rating: place.rating,
+    user_ratings_total: place.userRatingCount,
+    url: place.googleMapsURI,
+    reviews: (place.reviews ?? []).map((review) => ({
+      author_name: review.authorAttribution?.displayName,
+      author_url: review.authorAttribution?.uri,
+      profile_photo_url: review.authorAttribution?.photoURI,
+      rating: review.rating,
+      relative_time_description: review.relativePublishTimeDescription,
+      text:
+        typeof review.text === "string"
+          ? review.text
+          : review.text?.text,
+    })),
+  };
 }
 
 export function GoogleReviews({
@@ -36,79 +69,124 @@ export function GoogleReviews({
 }) {
   const [place, setPlace] = useState<PlaceDetails | null>(null);
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState<PlacesStatus>();
+  const [status, setStatus] = useState<string>();
 
   useEffect(() => {
     let cancelled = false;
+
     setLoading(true);
     setStatus(undefined);
     setPlace(null);
 
-    void loadGooglePlaces().then((places) => {
-      if (cancelled) return;
+    void loadGooglePlaces()
+      .then(async (places) => {
+        if (cancelled) return;
 
-      if (!places?.PlacesService) {
-        setStatus("PLACES_LIBRARY_UNAVAILABLE");
-        setLoading(false);
-        return;
-      }
+        // Prefer Google's current Places API. The legacy PlacesService can remain
+        // as a compatibility fallback for projects that still expose it.
+        if (places?.Place) {
+          try {
+            let modernPlace;
 
-      const host = document.createElement("div");
-      const service = new places.PlacesService(host);
+            if (placeId) {
+              modernPlace = new places.Place({ id: placeId });
+              await modernPlace.fetchFields({
+                fields: ["displayName", "rating", "userRatingCount", "reviews", "googleMapsURI"],
+              });
+            } else {
+              const query = [name, address, "Puducherry"].filter(Boolean).join(", ");
+              const result = await places.Place.searchByText({
+                textQuery: query,
+                fields: ["id", "displayName", "rating", "userRatingCount", "reviews", "googleMapsURI"],
+                maxResultCount: 1,
+                language: "en",
+                region: "IN",
+              });
+              modernPlace = result.places?.[0];
 
-      const getDetails = (resolvedPlaceId: string) => {
-        service.getDetails(
-          {
-            placeId: resolvedPlaceId,
-            fields: ["name", "rating", "user_ratings_total", "reviews", "url"],
-          },
-          (details, resultStatus) => {
+              if (!modernPlace) {
+                setStatus("ZERO_RESULTS");
+                setLoading(false);
+                return;
+              }
+            }
+
             if (cancelled) return;
-            setPlace((details as PlaceDetails | null) ?? null);
-            setStatus(resultStatus);
-            setLoading(false);
-          },
-        );
-      };
 
-      if (placeId) {
-        getDetails(placeId);
-        return;
-      }
-
-      if (typeof service.findPlaceFromQuery !== "function") {
-        setStatus("MISSING_PLACE_ID");
-        setLoading(false);
-        return;
-      }
-
-      const query = [name, address, "Puducherry"].filter(Boolean).join(", ");
-      service.findPlaceFromQuery(
-        {
-          query,
-          fields: ["place_id", "name", "rating", "user_ratings_total", "url"],
-        },
-        (matches, resultStatus) => {
-          if (cancelled) return;
-          const resolvedPlaceId = matches?.[0]?.place_id;
-          if (!resolvedPlaceId) {
-            setStatus(resultStatus || "ZERO_RESULTS");
+            setPlace(normalizeModernPlace(modernPlace));
+            setStatus("OK");
             setLoading(false);
             return;
+          } catch (error) {
+            console.warn("[GoogleReviews] Modern Places API failed; trying legacy PlacesService.", error);
           }
-          getDetails(resolvedPlaceId);
-        },
-      );
-    }).catch(() => {
-      if (cancelled) return;
-      setStatus("LOAD_ERROR");
-      setLoading(false);
-    });
+        }
+
+        if (!places?.PlacesService) {
+          setStatus("PLACES_LIBRARY_UNAVAILABLE");
+          setLoading(false);
+          return;
+        }
+
+        const host = document.createElement("div");
+        const service = new places.PlacesService(host);
+
+        const getDetails = (resolvedPlaceId: string) => {
+          service.getDetails(
+            {
+              placeId: resolvedPlaceId,
+              fields: ["name", "rating", "user_ratings_total", "reviews", "url"],
+            },
+            (details, resultStatus) => {
+              if (cancelled) return;
+              setPlace((details as PlaceDetails | null) ?? null);
+              setStatus(resultStatus);
+              setLoading(false);
+            },
+          );
+        };
+
+        if (placeId) {
+          getDetails(placeId);
+          return;
+        }
+
+        if (typeof service.findPlaceFromQuery !== "function") {
+          setStatus("MISSING_PLACE_ID");
+          setLoading(false);
+          return;
+        }
+
+        const query = [name, address, "Puducherry"].filter(Boolean).join(", ");
+        service.findPlaceFromQuery(
+          {
+            query,
+            fields: ["place_id", "name", "rating", "user_ratings_total", "url"],
+          },
+          (matches, resultStatus) => {
+            if (cancelled) return;
+            const resolvedPlaceId = matches?.[0]?.place_id;
+            if (!resolvedPlaceId) {
+              setStatus(resultStatus || "ZERO_RESULTS");
+              setLoading(false);
+              return;
+            }
+            getDetails(resolvedPlaceId);
+          },
+        );
+      })
+      .catch((error) => {
+        console.warn("[GoogleReviews] Places loading failed.", error);
+        if (cancelled) return;
+        setStatus("LOAD_ERROR");
+        setLoading(false);
+      });
 
     return () => {
       cancelled = true;
     };
   }, [placeId, name, address]);
+
   const reviews = (place?.reviews ?? []).slice(0, 3);
   const viewAllUrl =
     place?.url ||
