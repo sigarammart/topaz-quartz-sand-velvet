@@ -12,6 +12,7 @@ export type ListeoGeo = {
   rating?: number;
   reviews?: number;
   address?: string;
+  friendlyAddress?: string;
   image?: string;
   gallery?: string[];
   kind?: string;
@@ -58,9 +59,10 @@ export function parseListeoGeoHtml(html: string): ListeoGeo[] {
     const name = decode(window.match(/data-title="([^"]*)"/)?.[1] ?? "");
     const rating = Number(window.match(/data-rating="([\d.]+)"/)?.[1]);
     const reviews = Number(window.match(/data-reviews="(\d+)"/)?.[1]);
-    const address = decode(
-      window.match(/data-friendly-address="([^"]*)"/)?.[1] ?? window.match(/data-address="([^"]*)"/)?.[1] ?? "",
-    );
+    // Listeo exposes _friendly_address separately as data-friendly-address.
+    // Keep it distinct from the raw _address/data-address value.
+    const friendlyAddress = decode(window.match(/data-friendly-address="([^"]*)"/)?.[1] ?? "");
+    const address = decode(window.match(/data-address="([^"]*)"/)?.[1] ?? "");
     const poster = window.match(/data-image="([^"]+)"/)?.[1];
     const slides = [...window.matchAll(/src="(https:\/\/xplorepondy\.com\/wp-content\/uploads\/[^"]+)"/g)].map(
       (m) => m[1],
@@ -80,6 +82,7 @@ export function parseListeoGeoHtml(html: string): ListeoGeo[] {
       rating: Number.isFinite(rating) && rating > 0 ? rating : undefined,
       reviews: Number.isFinite(reviews) && reviews > 0 ? reviews : undefined,
       address: address || undefined,
+      friendlyAddress: friendlyAddress || undefined,
       image: image || undefined,
       gallery: gallery.length ? gallery : undefined,
       kind: kind || undefined,
