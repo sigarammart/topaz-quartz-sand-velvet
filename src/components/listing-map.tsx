@@ -332,9 +332,7 @@ function OsmListingMap({ listings, selected, onSelect, className }: ListingMapPr
             alt=""
             draggable={false}
             src={
-              dark
-                ? `https://basemaps.cartocdn.com/dark_all/${tileZoom}/${tile.x}/${tile.y}.png`
-                : `https://basemaps.cartocdn.com/rastertiles/voyager/${tileZoom}/${tile.x}/${tile.y}.png`
+              `https://tile.openstreetmap.org/${tileZoom}/${tile.x}/${tile.y}.png`
             }
             className="pointer-events-none absolute size-[256px] max-w-none select-none outline-none"
             style={{ left: tile.left, top: tile.top }}
@@ -431,7 +429,7 @@ function OsmListingMap({ listings, selected, onSelect, className }: ListingMapPr
         </button>
       </div>
       <p className="absolute bottom-2 left-3 z-20 rounded-md bg-card/90 px-2 py-0.5 text-[10px] text-muted-foreground">
-        © OpenStreetMap · CARTO
+        © OpenStreetMap contributors
       </p>
       {pins.length === 0 && (
         <p className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 text-sm text-muted-foreground">
