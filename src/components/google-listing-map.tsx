@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LocateFixed } from "lucide-react";
 import type { Listing } from "@/lib/types";
 import { listingPinNumbers } from "@/lib/pins";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,8 @@ export function GoogleListingMap({
   const [ready, setReady] = useState(false);
   const dark = useTheme((s) => s.mode) !== "light";
   const you = useGeo((s) => (s.source === "gps" ? s.origin : null));
+  const locate = useGeo((s) => s.locate);
+  const geoStatus = useGeo((s) => s.status);
   const pinNumbers = useMemo(() => listingPinNumbers(listings), [listings]);
   const pins = useMemo(
     () => listings.filter((l) => Number.isFinite(l.lat) && Number.isFinite(l.lng)) as Array<Listing & { lat: number; lng: number }>,
@@ -215,6 +218,16 @@ export function GoogleListingMap({
           <ListingCard listing={active} layout="row" active pin={pinNumbers.get(active.slug)} />
         </div>
       )}
+      <button
+        type="button"
+        onClick={locate}
+        disabled={geoStatus === "asking"}
+        className="absolute left-3 top-3 z-40 flex size-10 items-center justify-center rounded-xl bg-card/95 text-foreground shadow-soft ring-1 ring-border backdrop-blur-sm hover:bg-muted disabled:opacity-60"
+        aria-label="Find my location"
+        title="Find my location"
+      >
+        <LocateFixed className={cn("size-5", geoStatus === "asking" && "animate-pulse")} />
+      </button>
       <div className="absolute right-3 top-3 z-40 flex flex-col overflow-hidden rounded-xl bg-card/95 shadow-soft ring-1 ring-border">
         <button
           type="button"
