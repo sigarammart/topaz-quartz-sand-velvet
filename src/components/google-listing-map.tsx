@@ -28,6 +28,30 @@ function pinIcon(g: NonNullable<ReturnType<typeof googleMapsApi>>, fill: string,
   };
 }
 
+function clusterGroups(
+  pins: Array<{ slug: string; lat: number; lng: number }>,
+  zoom: number,
+  cellSize = 70,
+) {
+  const world = 256 * 2 ** zoom;
+  const groups = new Map<string, Array<(typeof pins)[number]>>();
+  for (const pin of pins) {
+    const x = ((pin.lng + 180) / 360) * world;
+    const sin = Math.sin((pin.lat * Math.PI) / 180);
+    const y = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * world;
+    const key = `${Math.floor(x / cellSize)}:${Math.floor(y / cellSize)}`;
+    const group = groups.get(key) ?? [];
+    group.push(pin);
+    groups.set(key, group);
+  }
+  return [...groups.values()].map((group) => ({
+    key: group.length === 1 ? group[0].slug : `cluster:${group.map((p) => p.slug).sort().join("|")}`,
+    items: group,
+    lat: group.reduce((sum, p) => sum + p.lat, 0) / group.length,
+    lng: group.reduce((sum, p) => sum + p.lng, 0) / group.length,
+  }));
+}
+
 export function GoogleListingMap({
   listings,
   selected,
@@ -42,7 +66,9 @@ export function GoogleListingMap({
   const host = useRef<HTMLDivElement>(null);
   const mapRef = useRef<GoogleMap | null>(null);
   const markers = useRef(new Map<string, GoogleMarker>());
+  const clusterMarkers = useRef(new Map<string, GoogleMarker>());
   const youMarker = useRef<GoogleMarker | null>(null);
+  const [mapZoom, setMapZoom] = useState(13);
   const [ready, setReady] = useState(false);
   const dark = useTheme((s) => s.mode) !== "light";
   const you = useGeo((s) => (s.source === "gps" ? s.origin : null));
@@ -88,6 +114,7 @@ export function GoogleListingMap({
       setReady(true);
       click = () => onSelectRef.current(undefined);
       map.addListener("click", click);
+      map.addListener("zoom_changed", () => setMapZoom(map?.getZoom() ?? 13));
     });
     return () => {
       cancelled = true;
@@ -95,6 +122,8 @@ export function GoogleListingMap({
       if (map && g?.event) g.event.clearInstanceListeners(map);
       markers.current.forEach((m) => m.setMap(null));
       markers.current.clear();
+      clusterMarkers.current.forEach((m) => m.setMap(null));
+      clusterMarkers.current.clear();
       youMarker.current?.setMap(null);
       youMarker.current = null;
       mapRef.current = null;
@@ -121,37 +150,65 @@ export function GoogleListingMap({
       const fillActive = "#f5c15d";
       const stroke = "#0b1213";
       const labelColor = "#0b1213";
+      const groups = clusterGroups(pins, mapZoom);
+      const clusteredSlugs = new Set(groups.filter((g) => g.items.length > 1).flatMap((g) => g.items.map((p) => p.slug)));
       const keep = new Set(pins.map((p) => p.slug));
+
       for (const [slug, marker] of markers.current) {
-        if (!keep.has(slug)) {
-          marker.setMap(null);
-          markers.current.delete(slug);
-        }
+        if (!keep.has(slug) || clusteredSlugs.has(slug)) marker.setMap(null);
       }
-      for (const listing of pins) {
+
+      for (const group of groups) {
+        if (group.items.length > 1) continue;
+        const listing = group.items[0];
         const n = String(pinNumbers.get(listing.slug) ?? "");
         const isActive = listing.slug === selected;
         let marker = markers.current.get(listing.slug);
         if (!marker) {
-          marker = new g.Marker({
-            position: { lat: listing.lat, lng: listing.lng },
-            map,
-            title: listing.name,
-          });
+          marker = new g.Marker({ position: { lat: listing.lat, lng: listing.lng }, map, title: listing.name });
           marker.addListener("click", () => onSelectRef.current(listing.slug));
           markers.current.set(listing.slug, marker);
         } else {
           marker.setPosition({ lat: listing.lat, lng: listing.lng });
+          marker.setMap(map);
         }
         marker.setIcon(pinIcon(g, isActive ? fillActive : fill, stroke, isActive ? 15 : 13));
-        marker.setLabel({
-          text: n,
-          color: labelColor,
-          fontSize: "11px",
-          fontWeight: "700",
-        });
+        marker.setLabel({ text: n, color: labelColor, fontSize: "11px", fontWeight: "700" });
         marker.setZIndex(isActive ? 20 : 10);
       }
+
+      const clusterKeys = new Set<string>();
+      for (const group of groups) {
+        if (group.items.length < 2) continue;
+        clusterKeys.add(group.key);
+        let marker = clusterMarkers.current.get(group.key);
+        if (!marker) {
+          marker = new g.Marker({
+            position: { lat: group.lat, lng: group.lng },
+            map,
+            title: `${group.items.length} listings`,
+          });
+          marker.addListener("click", () => {
+            map.panTo({ lat: group.lat, lng: group.lng });
+            map.setZoom(Math.min(18, (map.getZoom() ?? mapZoom) + 2));
+          });
+          clusterMarkers.current.set(group.key, marker);
+        } else {
+          marker.setPosition({ lat: group.lat, lng: group.lng });
+          marker.setMap(map);
+        }
+        marker.setIcon(pinIcon(g, "#18b8d1", "#ffffff", Math.min(24, 13 + Math.sqrt(group.items.length) * 2)));
+        marker.setLabel({ text: String(group.items.length), color: "#ffffff", fontSize: "12px", fontWeight: "800" });
+        marker.setZIndex(40);
+      }
+
+      for (const [key, marker] of clusterMarkers.current) {
+        if (!clusterKeys.has(key)) {
+          marker.setMap(null);
+          clusterMarkers.current.delete(key);
+        }
+      }
+
       if (you) {
         if (!youMarker.current) {
           youMarker.current = new g.Marker({
@@ -178,7 +235,7 @@ export function GoogleListingMap({
     } catch {
       /* Maps constructors unavailable — parent falls back. */
     }
-  }, [pins, pinNumbers, selected, dark, you?.lat, you?.lng, ready]);
+  }, [pins, pinNumbers, selected, dark, you?.lat, you?.lng, ready, mapZoom]);
 
   useEffect(() => {
     const g = googleMapsApi();
