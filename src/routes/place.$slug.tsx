@@ -32,7 +32,7 @@ import { exploreSearchForTerm } from "@/lib/filters";
 import { listingPhotos } from "@/lib/media";
 import { catalogListing, catalogNearby, useCatalog } from "@/store/catalog";
 import { useGeo } from "@/store/geo";
-import { formatDistance, listingDistanceKm } from "@/lib/geo";
+import { formatDistance, listingDistanceKm, haversineKm } from "@/lib/geo";
 import { decodeEntities } from "@/lib/utils";
 import { preferListeoAddress, websiteHref } from "@/lib/listeo";
 import { filterListingGroups, orderListingGroups, profileFromSlugs } from "@/lib/listing-layouts";
@@ -685,41 +685,103 @@ function PlacePage() {
         </aside>
       </div>
 
-      {nearby.length > 0 && (
-        <section className="mt-8">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="font-display text-lg font-semibold">Nearby & related</h2>
-            <Button
-              type="button"
-              variant={relatedSort === "near" ? "default" : "outline"}
-              size="sm"
-              className="h-8 shrink-0 rounded-full px-3"
-              onClick={() => {
-                setRelatedSort("near");
-                if (useGeo.getState().source !== "gps") useGeo.getState().locate();
-              }}
-              title="Sort by distance from you"
-              aria-label="Sort by distance from you"
-            >
-              <LocateFixed className="size-3.5" />
-              <span className="hidden sm:inline">Near me</span>
-            </Button>
-          </div>
-          <div className="mt-3 flex flex-col gap-3">
-            {sortedNearby.slice(0, relatedShown).map((l) => (
-              <ListingCard key={l.slug} listing={l} layout="row" />
-            ))}
-          </div>
-          {relatedShown < sortedNearby.length && (
-            <div className="mt-4 flex justify-center">
-              <Button variant="outline" onClick={() => setRelatedShown((count) => count + 6)}>
-                Load more · {sortedNearby.length - relatedShown} left
-              </Button>
-            </div>
-          )}
-        </section>
-      )}
+      <NearbyCategories current={listing} items={items} />
+
     </article>
+  );
+}
+
+function nearbyCategory(listing: Listing): "cafes" | "restaurants" | "attractions" | "activities" | "stays" | null {
+  const values = [
+    listing.kind,
+    listing.category,
+    ...(listing.categorySlugs ?? []),
+    ...(listing.taxonomies ?? []).flatMap((group) => [
+      group.key,
+      group.label,
+      ...group.terms.flatMap((term) => [term.slug, term.name]),
+    ]),
+  ]
+    .map((value) => decodeEntities(value).toLowerCase().replace(/[^a-z0-9]+/g, " "))
+    .join(" ");
+
+  if (listing.category === "stay" || /hotel|resort|guest house|guesthouse|hostel|homestay|cottage|camp site|campsite|bed breakfast|boutique hotel|farm stay|serviced apartment/.test(values)) {
+    return "stays";
+  }
+  if (/cafe|coffee shop|bakery|pizzeria|dessert|ice cream|food cart/.test(values)) return "cafes";
+  if (/restaurant|resto pub|resto bar|pub|lounge|mess|home food|cloud kitchen/.test(values)) return "restaurants";
+  if (listing.category === "activities") return "activities";
+  if (listing.category === "places") return "attractions";
+  return null;
+}
+
+function NearbyCategories({ current, items }: { current: Listing; items: Listing[] }) {
+  const [tab, setTab] = useState<"cafes" | "restaurants" | "attractions" | "activities" | "stays">("cafes");
+
+  const categories = [
+    { id: "cafes" as const, label: "Cafes" },
+    { id: "restaurants" as const, label: "Restaurants" },
+    { id: "attractions" as const, label: "Attractions" },
+    { id: "activities" as const, label: "Activities" },
+    { id: "stays" as const, label: "Stays" },
+  ];
+
+  const rows = items
+    .filter((item) => item.slug !== current.slug)
+    .map((item) => ({
+      item,
+      distance: current.lat != null && current.lng != null && item.lat != null && item.lng != null
+        ? haversineKm({ lat: current.lat, lng: current.lng }, { lat: item.lat, lng: item.lng })
+        : undefined,
+      category: nearbyCategory(item),
+    }))
+    .filter((row) => row.category === tab && row.distance != null && row.distance <= 15)
+    .sort((a, b) => (a.distance! - b.distance!) || (b.item.rating - a.item.rating))
+    .slice(0, 8);
+
+  if (current.lat == null || current.lng == null) return null;
+
+  return (
+    <section className="mt-8" aria-label="Nearby places">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h2 className="font-display text-lg font-semibold">Nearby places</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">Explore more around this listing</p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+        {categories.map((category) => (
+          <button
+            key={category.id}
+            type="button"
+            onClick={() => setTab(category.id)}
+            className={cn(
+              "shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors",
+              tab === category.id
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {category.label}
+          </button>
+        ))}
+      </div>
+
+      {rows.length > 0 ? (
+        <div className="mt-3 flex snap-x gap-3 overflow-x-auto pb-2 [scrollbar-width:none]">
+          {rows.map(({ item }) => (
+            <div key={item.slug} className="w-[15.5rem] shrink-0 snap-start">
+              <ListingCard listing={item} layout="compact" />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-xl bg-card p-4 text-xs text-muted-foreground ring-1 ring-border/70">
+          No {categories.find((category) => category.id === tab)?.label.toLowerCase()} found within 15 km.
+        </div>
+      )}
+    </section>
   );
 }
 
