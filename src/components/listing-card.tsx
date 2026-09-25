@@ -98,7 +98,7 @@ export function ListingCard({
           onPointerDown={() => prefetchListing(listing)}
         >
           <div className="relative min-h-[4.75rem] w-[6.25rem] shrink-0 self-stretch overflow-hidden rounded-lg sm:min-h-20 sm:w-28">
-            <Cover listing={listing} className="h-full w-auto max-w-full object-contain" />
+            <Cover listing={listing} className="absolute inset-0 size-full object-cover" />
             {pin != null && <PinMark n={pin} active={active} className="left-1 top-1" />}
           </div>
           <div className="min-w-0 flex-1 py-0.5 pr-12">
