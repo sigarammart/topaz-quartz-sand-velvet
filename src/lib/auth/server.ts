@@ -120,7 +120,7 @@ const baseURL = {
   // `auto` → trust both http:// and https:// expansions of allowedHosts
   // (preview is https; local dev is http).
   protocol: "auto" as const,
-  fallback: explicitBaseURL || "https://app.xplorepondy.com",
+  fallback: explicitBaseURL || "https://pwa.xplorepondy.com",
 };
 
 // Origins Better Auth accepts on credentialed POSTs (sign-up/sign-in, …).
@@ -245,6 +245,11 @@ export const auth = betterAuth({
   // Secure + the names ourselves. (Browsers allow Secure cookies on
   // `http://localhost`, so local dev still works.)
   advanced: {
+    ipAddress: {
+      // Hostinger CDN forwards the real visitor address in X-Real-IP.
+      // Better Auth uses this for per-IP rate limiting and session tracking.
+      ipAddressHeaders: ["x-real-ip"],
+    },
     useSecureCookies: false,
     defaultCookieAttributes: { secure: true, sameSite: "lax", path: "/" },
     cookies: {
