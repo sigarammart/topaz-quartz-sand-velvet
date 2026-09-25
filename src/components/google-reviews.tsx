@@ -97,18 +97,25 @@ export function GoogleReviews({
               const query = [name, address, "Puducherry"].filter(Boolean).join(", ");
               const result = await places.Place.searchByText({
                 textQuery: query,
-                fields: ["id", "displayName", "rating", "userRatingCount", "reviews", "googleMapsURI"],
+                // Resolve the place first. Review data is fetched with Place Details
+                // below so the same code path is used for both known and discovered IDs.
+                fields: ["id", "displayName"],
                 maxResultCount: 1,
                 language: "en",
                 region: "IN",
               });
-              modernPlace = result.places?.[0];
+              const resolvedPlaceId = result.places?.[0]?.id;
 
-              if (!modernPlace) {
+              if (!resolvedPlaceId) {
                 setStatus("ZERO_RESULTS");
                 setLoading(false);
                 return;
               }
+
+              modernPlace = new places.Place({ id: resolvedPlaceId });
+              await modernPlace.fetchFields({
+                fields: ["displayName", "rating", "userRatingCount", "reviews", "googleMapsURI"],
+              });
             }
 
             if (cancelled) return;
