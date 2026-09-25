@@ -684,41 +684,40 @@ function PlacePage() {
         <section className="mt-8">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-lg font-semibold">Nearby & related</h2>
-            <div className="flex items-center gap-1.5" role="group" aria-label="Sort nearby listings">
-              <Button
-                type="button"
-                variant={relatedSort === "featured" ? "default" : "outline"}
-                size="sm"
-                className="h-8 rounded-full px-3 text-xs"
-                onClick={() => setRelatedSort("featured")}
-              >
-                Featured
-              </Button>
-              <Button
-                type="button"
-                variant={relatedSort === "package" ? "default" : "outline"}
-                size="sm"
-                className="h-8 rounded-full px-3 text-xs"
-                onClick={() => setRelatedSort("package")}
-              >
-                Package
-              </Button>
-              <Button
-                type="button"
-                variant={relatedSort === "near" ? "default" : "outline"}
-                size="sm"
-                className="h-8 rounded-full px-3"
-                onClick={() => {
-                  setRelatedSort("near");
-                  if (useGeo.getState().source !== "gps") useGeo.getState().locate();
-                }}
-                title="Sort by distance from you"
-                aria-label="Sort by distance from you"
-              >
-                <LocateFixed className="size-3.5" />
-                <span className="hidden sm:inline">Near me</span>
-              </Button>
+            <div className="flex min-w-0 items-center gap-1.5">
+              {[
+                ...(listing.tags ?? []),
+                ...(listing.bestFor ?? []),
+                ...(listing.taxonomies ?? []).flatMap((group) => group.terms.map((term) => term.name)),
+              ]
+                .filter(Boolean)
+                .filter((tag, index, tags) => tags.findIndex((item) => item.toLowerCase() === tag.toLowerCase()) === index)
+                .slice(0, 3)
+                .map((tag) => (
+                  <span
+                    key={tag}
+                    className="max-w-28 truncate rounded-full bg-card px-2.5 py-1 text-[10px] font-medium text-muted-foreground ring-1 ring-border/70"
+                    title={tag}
+                  >
+                    {tag}
+                  </span>
+                ))}
             </div>
+            <Button
+              type="button"
+              variant={relatedSort === "near" ? "default" : "outline"}
+              size="sm"
+              className="h-8 shrink-0 rounded-full px-3"
+              onClick={() => {
+                setRelatedSort("near");
+                if (useGeo.getState().source !== "gps") useGeo.getState().locate();
+              }}
+              title="Sort by distance from you"
+              aria-label="Sort by distance from you"
+            >
+              <LocateFixed className="size-3.5" />
+              <span className="hidden sm:inline">Near me</span>
+            </Button>
           </div>
           <div className="mt-3 flex flex-col gap-3">
             {sortedNearby.slice(0, relatedShown).map((l) => (
