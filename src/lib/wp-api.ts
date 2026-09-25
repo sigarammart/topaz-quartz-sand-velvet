@@ -881,6 +881,7 @@ function mapListing(
     phone: listeo.phone,
     website: listeo.website,
     address: listeo.address,
+    friendlyAddress: decodeHtml(String(meta._friendly_address ?? "")).trim() || undefined,
     cafeTypes,
     accessibility,
     tripDays,
