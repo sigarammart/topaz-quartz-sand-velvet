@@ -1532,13 +1532,12 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
       location: item.location === "Pondicherry" && geo?.address ? geo.address : item.location,
       area: item.area === "Pondicherry" && geo?.address ? geo.address : item.area,
       featured:
+        isFeaturedMeta(wpBySlug.get(slug)?.meta?._featured) ??
         item.featured ??
         hit?.featured ??
-        geo?.featured ??
-        isFeaturedMeta(wpBySlug.get(slug)?.meta?._featured),
+        geo?.featured,
       listingPackage:
         toListingPackage(wpBySlug.get(slug)?.meta?.["listing-package"]) ??
-        hit?.listingPackage ??
         item.listingPackage,
       image: pickListingImage(geo?.image, item.image, local?.image) || item.image || FALLBACK_IMAGE[item.category],
       gallery: uniqueImages(geo?.gallery, item.gallery, local?.gallery),
