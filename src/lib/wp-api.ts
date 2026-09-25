@@ -1490,13 +1490,16 @@ const HTML_TTL = 30 * 60 * 1000;
 const CATALOG_VERSION = 27;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
-  const { map: listeoGeo, total: listeoTotal } = await loadListeoGeo();
+  const [listeoResult, wpCatalog] = await Promise.all([
+    loadListeoGeo(),
+    loadListingPages(),
+  ]);
+  const { map: listeoGeo, total: listeoTotal } = listeoResult;
   if (listeoGeo.size < 8) throw new Error("listeo-empty");
 
   // WordPress REST is the authoritative source for taxonomy membership.
   // Listeo geo data is still used below to enrich listings with coordinates,
   // ratings, images, hours, etc.
-  const wpCatalog = await loadListingPages();
   const wpBySlug = new Map<string, WpListing>();
   for (const row of wpCatalog.rows) {
     if (row.slug) wpBySlug.set(row.slug, row);
