@@ -16,6 +16,8 @@ export type JetArchiveHit = {
   openNow?: boolean;
   weeklyHours?: DayHours[];
   featured?: boolean;
+  rating?: number;
+  reviews?: number;
   listingPackage?: number;
   category?: Category;
   kind?: string;
@@ -199,6 +201,10 @@ export function parseArchiveHtml(html: string, archiveSlug?: string): JetArchive
       if (extra.hours || extra.weeklyHours.length || extra.openNow != null) hoursInfo = extra;
     }
     const geo = Number.isFinite(id) ? markers.get(id) : undefined;
+    const ratingMatch = window.match(/(?:data-rating|combined-rating|rating)[^0-9]{0,80}([0-5](?:\.\d+)?)/i);
+    const reviewMatch = window.match(/(?:reviews?|ratings?)[^0-9]{0,40}(\d[\d,]*)/i);
+    const rating = ratingMatch ? Number(ratingMatch[1]) : undefined;
+    const reviews = reviewMatch ? Number(reviewMatch[1].replace(/,/g, "")) : undefined;
     const featured = /<(?:div|span)[^>]*class="[^"]*\bfeatured-nl\b/.test(window) || /\bbadge-nl featured-nl\b/.test(window);
     const kind = decodeEntities(
       window.match(/listing-category-tag[^"]*"[^>]*>\s*([^<]+)/)?.[1] ??
@@ -259,6 +265,8 @@ export function parseArchiveHtml(html: string, archiveSlug?: string): JetArchive
       openNow: hoursInfo.openNow,
       weeklyHours: hoursInfo.weeklyHours.length ? hoursInfo.weeklyHours : undefined,
       featured: featured || undefined,
+      rating,
+      reviews,
       listingPackage: rank,
       category: archiveCat ?? (kind ? archiveCategory(facetSlug(kind)) : undefined),
       kind: kind || undefined,
@@ -291,6 +299,8 @@ function mergeHit(prev: JetArchiveHit, hit: JetArchiveHit): JetArchiveHit {
     openNow: prev.openNow ?? hit.openNow,
     weeklyHours: prev.weeklyHours?.length ? prev.weeklyHours : hit.weeklyHours,
     featured: prev.featured || hit.featured,
+    rating: prev.rating ?? hit.rating,
+    reviews: prev.reviews ?? hit.reviews,
     category: prev.category ?? hit.category,
     kind: prev.kind || hit.kind,
     listingPackage:
