@@ -41,7 +41,7 @@ const hoursDone = new Set<string>();
 const hoursQueued = new Set<string>();
 const pendingSlugs = new Set<string>();
 let slugTimer: ReturnType<typeof setTimeout> | undefined;
-const SESSION_KEY = "xp-catalog-v25";
+const SESSION_KEY = "xp-catalog-v26";
 const SESSION_TTL = 20 * 60 * 1000;
 
 type SessionSnap = {
