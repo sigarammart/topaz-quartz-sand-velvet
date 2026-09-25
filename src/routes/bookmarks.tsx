@@ -19,6 +19,8 @@ function SavedPage() {
   const wpIds = useTrip((s) => s.wpIdsBySlug);
   const items = useCatalog((s) => s.items);
   const [remoteBookmarkIds, setRemoteBookmarkIds] = useState<number[]>([]);
+  const [showMap, setShowMap] = useState(false);
+  const [selectedSlug, setSelectedSlug] = useState<string | undefined>();
   const { wpUser, grokUser } = useAppLoggedIn();
   const accountEmail = wpUser?.email || grokUser?.primaryEmail || "";
   const showLogin = useAuthModal((s) => s.show);
@@ -94,11 +96,38 @@ function SavedPage() {
           </Button>
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {shown.map((l) => (
-            <ListingCard key={l.slug} listing={l} />
-          ))}
-        </div>
+        <>
+          <div className="mt-6">
+            <Button
+              type="button"
+              variant={showMap ? "default" : "outline"}
+              onClick={() => {
+                setShowMap((open) => !open);
+                setSelectedSlug(undefined);
+              }}
+            >
+              {showMap ? <X /> : <MapIcon />}
+              {showMap ? "Hide map" : "View map"}
+            </Button>
+          </div>
+
+          {showMap && (
+            <div className="mt-4">
+              <ListingMap
+                listings={shown}
+                selected={selectedSlug}
+                onSelect={setSelectedSlug}
+                className="h-[28rem] sm:h-[34rem]"
+              />
+            </div>
+          )}
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {shown.map((l) => (
+              <ListingCard key={l.slug} listing={l} />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
