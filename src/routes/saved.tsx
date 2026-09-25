@@ -22,6 +22,8 @@ function SavedPage() {
   const { loggedIn, isPending } = useAppLoggedIn();
 
   const [remoteTempIds, setRemoteTempIds] = useState<number[]>([]);
+  const [showMap, setShowMap] = useState(false);
+  const [selectedSlug, setSelectedSlug] = useState<string | undefined>();
   const { wpUser, grokUser } = useAppLoggedIn();
   const accountEmail = wpUser?.email || grokUser?.primaryEmail || "";
 
@@ -98,17 +100,42 @@ function SavedPage() {
         </div>
       ) : (
         <>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={showMap ? "default" : "outline"}
+              onClick={() => {
+                setShowMap((open) => !open);
+                setSelectedSlug(undefined);
+              }}
+            >
+              {showMap ? <X /> : <MapIcon />}
+              {showMap ? "Hide map" : "View map"}
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/trip">
+                <CalendarCheck />
+                Open Trip
+              </Link>
+            </Button>
+          </div>
+
+          {showMap && (
+            <div className="mt-4">
+              <ListingMap
+                listings={shownListings}
+                selected={selectedSlug}
+                onSelect={setSelectedSlug}
+                className="h-[28rem] sm:h-[34rem]"
+              />
+            </div>
+          )}
+
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {shownListings.map((listing) => (
               <ListingCard key={listing.slug} listing={listing} />
             ))}
           </div>
-          <Button asChild className="mt-6" variant="outline">
-            <Link to="/trip">
-              <CalendarCheck />
-              Open Trip
-            </Link>
-          </Button>
         </>
       )}
     </div>
