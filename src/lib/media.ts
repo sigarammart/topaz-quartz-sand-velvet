@@ -59,6 +59,14 @@ const LOCAL_GALLERY: Record<string, string[]> = {
 };
 
 export function listingPhotos(listing: Listing): string[] {
+  // WordPress can return a generic/fallback featured image alongside the real
+  // single gallery image. For a listing with exactly one gallery image, use
+  // that image as the sole hero image instead of rendering the fallback as a
+  // second thumbnail.
+  if (listing.gallery?.length === 1) {
+    return uniqueImages(listing.gallery, listing.menuImages);
+  }
+
   return uniqueImages([listing.image], listing.gallery, listing.menuImages, LOCAL_GALLERY[listing.slug]);
 }
 
