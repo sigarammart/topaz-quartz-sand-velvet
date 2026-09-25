@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Accessibility,
   Check,
@@ -13,6 +13,8 @@ import {
   Ticket,
   Timer,
   Users,
+  ChevronLeft,
+  ChevronRight,
   X,
 } from "lucide-react";
 import { AddToTrip } from "@/components/add-to-trip";
@@ -695,6 +697,14 @@ function nearbyCategory(listing: Listing): "cafes" | "restaurants" | "attraction
 
 function NearbyCategories({ current, items }: { current: Listing; items: Listing[] }) {
   const [tab, setTab] = useState<"related" | "cafes" | "restaurants" | "attractions" | "activities" | "stays">("related");
+  const cardsRef = useRef<HTMLDivElement>(null);
+
+  function scrollCards(direction: -1 | 1) {
+    cardsRef.current?.scrollBy({
+      left: direction * Math.max(cardsRef.current.clientWidth * 0.82, 260),
+      behavior: "smooth",
+    });
+  }
 
   const categories = [
     { id: "related" as const, label: "Related" },
@@ -752,12 +762,42 @@ function NearbyCategories({ current, items }: { current: Listing; items: Listing
       </div>
 
       {rows.length > 0 ? (
-        <div className="mt-3 flex snap-x gap-3 overflow-x-auto pb-2 [scrollbar-width:none]">
-          {rows.map(({ item }) => (
-            <div key={item.slug} className="w-[15.5rem] shrink-0 snap-start">
-              <ListingCard listing={item} layout="compact" />
-            </div>
-          ))}
+        <div className="relative mt-3">
+          <div
+            ref={cardsRef}
+            className="flex snap-x gap-3 overflow-x-auto pb-2 pr-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label="Nearby listings"
+          >
+            {rows.map(({ item }) => (
+              <div
+                key={item.slug}
+                className="w-[calc((100vw-3.75rem)/2)] shrink-0 snap-start sm:w-[15.5rem]"
+              >
+                <ListingCard listing={item} layout="compact" />
+              </div>
+            ))}
+          </div>
+
+          {rows.length > 2 && (
+            <>
+              <button
+                type="button"
+                onClick={() => scrollCards(-1)}
+                className="absolute left-1 top-1/2 z-20 hidden size-9 -translate-y-1/2 items-center justify-center rounded-full bg-card/95 text-foreground shadow-lg ring-1 ring-border/80 sm:flex"
+                aria-label="Previous nearby listings"
+              >
+                <ChevronLeft className="size-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollCards(1)}
+                className="absolute right-1 top-1/2 z-20 flex size-9 -translate-y-1/2 items-center justify-center rounded-full bg-card/95 text-foreground shadow-lg ring-1 ring-border/80"
+                aria-label="Next nearby listings"
+              >
+                <ChevronRight className="size-5" />
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="mt-3 rounded-xl bg-card p-4 text-xs text-muted-foreground ring-1 ring-border/70">
