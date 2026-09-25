@@ -1523,7 +1523,7 @@ const CATALOG_TTL = 20 * 60 * 1000;
 const CATALOG_STALE = 2 * 60 * 60 * 1000;
 const LISTING_PAGE_TTL = 30 * 60 * 1000;
 const HTML_TTL = 30 * 60 * 1000;
-const CATALOG_VERSION = 33;
+const CATALOG_VERSION = 34;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   const [listeoResult, wpCatalog] = await Promise.all([
