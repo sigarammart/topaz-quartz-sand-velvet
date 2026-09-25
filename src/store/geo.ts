@@ -61,7 +61,7 @@ export const useGeo = create<GeoState>((set, get) => ({
             },
             source: "gps",
             status: "ready",
-            nearMe: true,
+            nearMe: false,
           });
         },
         () => {
