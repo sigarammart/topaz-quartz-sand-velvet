@@ -1518,7 +1518,7 @@ const CATALOG_TTL = 20 * 60 * 1000;
 const CATALOG_STALE = 2 * 60 * 60 * 1000;
 const LISTING_PAGE_TTL = 30 * 60 * 1000;
 const HTML_TTL = 30 * 60 * 1000;
-const CATALOG_VERSION = 28;
+const CATALOG_VERSION = 29;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   const [listeoResult, wpCatalog] = await Promise.all([
@@ -1589,8 +1589,8 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
       hours: hit?.hours || item.hours || local?.hours || "",
       openNow: hit?.openNow ?? item.openNow ?? local?.openNow,
       weeklyHours: hit?.weeklyHours?.length ? hit.weeklyHours : (item.weeklyHours ?? local?.weeklyHours),
-      rating: item.rating || geo?.rating || local?.rating || 0,
-      reviews: item.reviews || geo?.reviews || local?.reviews || 0,
+      rating: item.rating || hit?.rating || geo?.rating || local?.rating || 0,
+      reviews: item.reviews || hit?.reviews || geo?.reviews || local?.reviews || 0,
       address: item.address || geo?.address,
       friendlyAddress:
         item.friendlyAddress ||
