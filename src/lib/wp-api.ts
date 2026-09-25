@@ -777,6 +777,16 @@ function enrichListingFromHtml(listing: Listing, html: string): Listing {
   };
 }
 
+function extractGooglePlaceId(meta: Record<string, unknown>): string | undefined {
+  for (const [key, value] of Object.entries(meta)) {
+    const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (!normalized.includes("google") && !normalized.includes("placeid")) continue;
+    const candidate = String(value ?? "").trim();
+    if (/^ChIJ[A-Za-z0-9_-]+$/.test(candidate)) return candidate;
+  }
+  return undefined;
+}
+
 function mapListing(
   raw: WpListing,
   extras?: {
@@ -824,6 +834,7 @@ function mapListing(
   ).slice(0, 900);
   const local = findLocal(raw.slug, raw.link);
   const meta = raw.meta ?? {};
+  const googlePlaceId = extractGooglePlaceId(meta as Record<string, unknown>);
   const cafeTypes = (meta.cafe_type ?? []).map((t) => decodeHtml(t)).filter(Boolean);
   const accessibility = Object.entries(meta.accessibility ?? {})
     .filter(([, v]) => truthyMeta(v))
@@ -881,6 +892,7 @@ function mapListing(
     phone: listeo.phone,
     website: listeo.website,
     address: listeo.address,
+    googlePlaceId,
     friendlyAddress: decodeHtml(String(meta._friendly_address ?? "")).trim() || undefined,
     cafeTypes,
     accessibility,
