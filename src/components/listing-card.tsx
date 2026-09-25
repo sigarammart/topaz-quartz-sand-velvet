@@ -24,7 +24,7 @@ function PlaceLine({ listing }: { listing: Listing }) {
   return (
     <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
       <MapPin className="size-3 shrink-0" />
-      <span className="truncate">
+      <span className="block min-w-0 truncate">
         {km != null ? formatDistance(km, fromGps) : place}
         {km != null && place ? ` · ${place}` : ""}
       </span>
