@@ -795,9 +795,9 @@ function extractGooglePlaceId(meta: Record<string, unknown>): string | undefined
 
 function extractGooglePlaceIdFromHtml(html: string): string | undefined {
   const patterns = [
-    /(?:place[_-]?id|placeId|query[_-]?place[_-]?id)["'=:\\s]+["']?(ChIJ[A-Za-z0-9_-]{10,})/i,
-    /(?:google\\.com\\/maps[^"'\\s]*?(?:place_id|query_place_id)=)(ChIJ[A-Za-z0-9_-]{10,})/i,
-    /\\b(ChIJ[A-Za-z0-9_-]{10,})\\b/i,
+    /(?:place[_-]?id|placeId|query[_-]?place[_-]?id)["'=:\s]+["']?(ChIJ[A-Za-z0-9_-]{10,})/i,
+    /(?:google\\.com\/maps[^"'\s]*?(?:place_id|query_place_id)=)(ChIJ[A-Za-z0-9_-]{10,})/i,
+    /\b(ChIJ[A-Za-z0-9_-]{10,})\b/i,
   ];
   for (const pattern of patterns) {
     const match = html.match(pattern);
@@ -1286,7 +1286,7 @@ function escapeXml(value: string) {
 }
 
 function xmlMember(xml: string, name: string) {
-  const re = new RegExp(`<name>${name}</name>\\s*<value>(?:<(?:string|int|i4)>)?([^<]*)`, "i");
+  const re = new RegExp(`<name>${name}</name>\s*<value>(?:<(?:string|int|i4)>)?([^<]*)`, "i");
   return re.exec(xml)?.[1]?.trim() ?? "";
 }
 
