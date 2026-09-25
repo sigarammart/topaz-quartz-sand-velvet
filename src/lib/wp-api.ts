@@ -806,19 +806,6 @@ function extractGooglePlaceIdFromHtml(html: string): string | undefined {
   return undefined;
 }
 
-function extractGooglePlaceIdFromHtml(html: string): string | undefined {
-  const patterns = [
-    /(?:place[_-]?id|placeId|query[_-]?place[_-]?id)["'=:\s]+["']?(ChIJ[A-Za-z0-9_-]{10,})/i,
-    /(?:google\.com\/maps[^"'\s]*?(?:place_id|query_place_id)=)(ChIJ[A-Za-z0-9_-]{10,})/i,
-    /\b(ChIJ[A-Za-z0-9_-]{10,})\b/i,
-  ];
-  for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (match?.[1]) return match[1];
-  }
-  return undefined;
-}
-
 function mapListing(
   raw: WpListing,
   extras?: {
