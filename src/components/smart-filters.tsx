@@ -16,10 +16,8 @@ import {
   type FilterParam,
   type SmartFilters,
 } from "@/lib/filters";
-import { listingIsOpen } from "@/lib/hours";
 import type { Category, Listing } from "@/lib/types";
 import { cn, decodeEntities } from "@/lib/utils";
-import { useCatalog } from "@/store/catalog";
 
 type SearchPatch = { q?: string; cat?: string } & Partial<Record<FilterParam, string | undefined>>;
 
@@ -27,11 +25,13 @@ export function SmartFiltersBar({
   items,
   category,
   filters,
+  openNowCount,
   onChange,
 }: {
   items: Listing[];
   category: Category | "all";
   filters: SmartFilters;
+  openNowCount?: number;
   onChange: (next: SearchPatch) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -50,20 +50,12 @@ export function SmartFiltersBar({
       .filter((row) => row.options.length >= 2 || (row.options.length === 1 && row.options[0].count < items.length));
   }, [items, category, filters]);
   const selectedType = filters.type ?? [];
-  const openNowTotal = useCatalog((s) => s.openNowTotal);
-  const openNowByCategory = useCatalog((s) => s.openNowByCategory);
-  const openNowStatus = useCatalog((s) => s.openNowStatus);
   const extraCount = activeFilterCount({ ...filters, type: undefined, open: undefined });
   const totalCount = activeFilterCount(filters);
-  const openCount = useMemo(() => {
+  const openCount = openNowCount ?? useMemo(() => {
     const without = applySmartFilters(items, { ...filters, open: undefined });
-    const live = without.filter((row) => listingIsOpen(row) === true).length;
-    const typed = (filters.type ?? []).length > 0 || extraCount > 0;
-    if (typed) return live;
-    const indexed = category === "all" ? openNowTotal : openNowByCategory[category];
-    if (indexed > 0) return indexed;
-    return live;
-  }, [items, filters, extraCount, category, openNowTotal, openNowByCategory]);
+    return without.filter((row) => listingIsOpen(row) === true).length;
+  }, [items, filters]);
   const openActive = (filters.open ?? []).includes("1");
 
   function setGroup(param: FilterParam, values: string[]) {
@@ -116,7 +108,7 @@ export function SmartFiltersBar({
         >
           Open Now 🟢
           <span className={cn("ml-1 tabular-nums", openActive ? "text-primary-foreground/80" : "text-muted-foreground")}>
-            {openNowStatus === "loading" && openCount === 0 ? "…" : openCount}
+            {openCount}
           </span>
         </button>
         <Sheet open={open} onOpenChange={setOpen}>
