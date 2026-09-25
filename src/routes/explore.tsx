@@ -263,7 +263,7 @@ function Explore() {
             listings={results}
             selected={selected}
             onSelect={setSelected}
-            className="h-full rounded-none ring-0"
+            className="!h-full rounded-none ring-0"
           />
           <div className="absolute left-1/2 top-4 z-[100] flex -translate-x-1/2 items-center gap-2">
             <button
