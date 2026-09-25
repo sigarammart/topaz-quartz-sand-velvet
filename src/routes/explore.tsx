@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { LayoutGrid, LayoutList, LocateFixed, Map as MapIcon, Search } from "lucide-react";
+import { LayoutGrid, LayoutList, LocateFixed, Map as MapIcon, Search, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ListingCard } from "@/components/listing-card";
 import { ListingMap } from "@/components/listing-map";
@@ -258,26 +258,23 @@ function Explore() {
             : "Nothing matches. Clear a filter or try a broader word."}
         </p>
       ) : view === "map" ? (
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-          <ListingMap listings={results} selected={selected} onSelect={setSelected} />
-          <div className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto pr-1">
-            {mapList.map((l) => (
-              <div
-                key={l.slug}
-                onMouseEnter={() => {
-                  if (Date.now() - hoverLock.current < 600) return;
-                  setSelected(l.slug);
-                }}
-              >
-                <ListingCard
-                  listing={l}
-                  layout="row"
-                  active={selected === l.slug}
-                  pin={pinNumbers.get(l.slug)}
-                  cardId={`listing-card-${l.slug}`}
-                />
-              </div>
-            ))}
+        <div className="fixed inset-0 z-[80] bg-background">
+          <ListingMap
+            listings={results}
+            selected={selected}
+            onSelect={setSelected}
+            className="h-full rounded-none ring-0"
+          />
+          <div className="absolute left-1/2 top-4 z-[100] flex -translate-x-1/2 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setView("list")}
+              className="flex h-10 items-center gap-2 rounded-full bg-card/95 px-4 text-xs font-semibold text-foreground shadow-soft ring-1 ring-border backdrop-blur-sm"
+              aria-label="Close map"
+            >
+              <X className="size-4" />
+              <span>Close map</span>
+            </button>
           </div>
         </div>
       ) : view === "grid" ? (
@@ -311,6 +308,16 @@ function Explore() {
           )}
         </>
       )}
+
+      <button
+        type="button"
+        onClick={() => setView("map")}
+        className="fixed bottom-20 left-1/2 z-[70] flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg ring-1 ring-primary/40 sm:bottom-6"
+        aria-label="Open map"
+      >
+        <MapIcon className="size-4" />
+        <span>View map</span>
+      </button>
     </div>
   );
 }
