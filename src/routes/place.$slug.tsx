@@ -33,7 +33,7 @@ import { listingPhotos } from "@/lib/media";
 import { catalogListing, catalogNearby, useCatalog } from "@/store/catalog";
 import { useGeo } from "@/store/geo";
 import { formatDistance, listingDistanceKm, haversineKm } from "@/lib/geo";
-import { decodeEntities } from "@/lib/utils";
+import { decodeEntities, cn } from "@/lib/utils";
 import { preferListeoAddress, websiteHref } from "@/lib/listeo";
 import { filterListingGroups, orderListingGroups, profileFromSlugs } from "@/lib/listing-layouts";
 
@@ -197,28 +197,6 @@ function PlacePage() {
   }
 
   const km = listingDistanceKm(origin, listing);
-  const nearby = catalogNearby(listing.slug, items);
-  const sortedNearby = [...nearby].sort((a, b) => {
-    if (relatedSort === "near") {
-      const da = listingDistanceKm(origin, a);
-      const db = listingDistanceKm(origin, b);
-      if (da != null && db != null && da !== db) return da - db;
-      if (da != null) return -1;
-      if (db != null) return 1;
-    } else if (relatedSort === "package") {
-      const pa = a.listingPackage ?? 0;
-      const pb = b.listingPackage ?? 0;
-      if (pb !== pa) return pb - pa;
-      if (Boolean(b.featured) !== Boolean(a.featured)) return Number(Boolean(b.featured)) - Number(Boolean(a.featured));
-    } else {
-      if (Boolean(b.featured) !== Boolean(a.featured)) return Number(Boolean(b.featured)) - Number(Boolean(a.featured));
-      const pa = a.listingPackage ?? 0;
-      const pb = b.listingPackage ?? 0;
-      if (pb !== pa) return pb - pa;
-    }
-    if (b.rating !== a.rating) return b.rating - a.rating;
-    return a.name.localeCompare(b.name);
-  });
   const maps =
     listing.lat && listing.lng
       ? `https://www.google.com/maps/dir/?api=1&destination=${listing.lat},${listing.lng}`
