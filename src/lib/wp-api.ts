@@ -766,6 +766,10 @@ function enrichListingFromHtml(listing: Listing, html: string): Listing {
     googlePlaceId: listing.googlePlaceId || htmlGooglePlaceId,
     rating: extra.rating || listing.rating || 0,
     reviews: extra.reviews || listing.reviews || 0,
+    friendlyAddress:
+      listing.friendlyAddress ||
+      preferListeoAddress(contact.address, extra.address) ||
+      undefined,
     price,
     hours: hoursInfo.hours || listing.hours,
     openNow: hoursInfo.openNow ?? listing.openNow,
@@ -1518,7 +1522,7 @@ const CATALOG_TTL = 20 * 60 * 1000;
 const CATALOG_STALE = 2 * 60 * 60 * 1000;
 const LISTING_PAGE_TTL = 30 * 60 * 1000;
 const HTML_TTL = 30 * 60 * 1000;
-const CATALOG_VERSION = 29;
+const CATALOG_VERSION = 30;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   const [listeoResult, wpCatalog] = await Promise.all([
@@ -1568,6 +1572,41 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
 
   const seen = new Set<string>();
   const listings: Listing[] = [];
+
+  // New WordPress listings can be missing from the Listeo geo feed and may
+  // also have _friendly_address / rating fields that are not exposed by REST.
+  // Enrich only those listings from their own listing page so address and
+  // rating are listing-specific rather than inferred from an archive card.
+  const htmlEnriched = new Map<string, Listing>();
+  const missingHtmlRows = wpCatalog.rows.filter(
+    (row) =>
+      row.slug &&
+      !listeoGeo.has(row.slug) &&
+      (!row.meta?._friendly_address || !row.meta?.google_place_id),
+  );
+  await Promise.all(
+    Array.from({ length: Math.min(4, missingHtmlRows.length) }, async (_, workerIndex) => {
+      for (let i = workerIndex; i < missingHtmlRows.length; i += 4) {
+        const row = missingHtmlRows[i];
+        if (!row?.slug) continue;
+        const urls = [
+          row.link,
+          WP_ORIGIN + "/listing/service/" + row.slug + "/",
+          WP_ORIGIN + "/listing/" + row.slug + "/",
+        ].filter((url): url is string => Boolean(url));
+        const page = await loadListingPageHtml(urls, 9000);
+        if (!page) continue;
+        try {
+          htmlEnriched.set(
+            row.slug,
+            enrichListingFromHtml(mapListing(row, { mediaMap }), page.html),
+          );
+        } catch {
+          /* keep the REST/Jet archive data */
+        }
+      }
+    }),
+  );
 
   function applyLive(item: Listing, slug: string): Listing {
     const hit = jetMeta.get(slug) ?? jetMeta.get(urlTail(item.siteUrl));
@@ -1664,7 +1703,12 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
   for (const raw of wpCatalog.rows) {
     if (seen.has(raw.slug)) continue;
     seen.add(raw.slug);
-    listings.push(applyLive(mapListing(raw, { mediaMap }), raw.slug));
+    listings.push(
+      applyLive(
+        htmlEnriched.get(raw.slug) ?? mapListing(raw, { mediaMap }),
+        raw.slug,
+      ),
+    );
   }
 
   for (const [slug, hit] of jetMeta) {
