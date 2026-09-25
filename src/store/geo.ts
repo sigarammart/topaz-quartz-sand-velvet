@@ -6,7 +6,7 @@ type GeoState = {
   source: "landmark" | "gps";
   status: "idle" | "asking" | "ready" | "denied";
   nearMe: boolean;
-  locate: () => void;
+  locate: (activateNearMe?: boolean) => void;
   clear: () => void;
   hydrate: () => void;
 };
@@ -17,10 +17,10 @@ export const useGeo = create<GeoState>((set, get) => ({
   status: "idle",
   nearMe: false,
   clear: () => set({ nearMe: false }),
-  locate: () => {
-    set({ nearMe: true, status: "asking" });
+  locate: (activateNearMe = false) => {
+    set({ nearMe: activateNearMe, status: "asking" });
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      set({ status: "denied", origin: ANNA_SALAI, source: "landmark", nearMe: true });
+      set({ status: "denied", origin: ANNA_SALAI, source: "landmark", nearMe: activateNearMe });
       return;
     }
     navigator.geolocation.getCurrentPosition(
@@ -29,10 +29,10 @@ export const useGeo = create<GeoState>((set, get) => ({
           origin: { lat: pos.coords.latitude, lng: pos.coords.longitude },
           source: "gps",
           status: "ready",
-          nearMe: true,
+          nearMe: activateNearMe,
         });
       },
-      () => set({ status: "denied", origin: ANNA_SALAI, source: "landmark", nearMe: true }),
+      () => set({ status: "denied", origin: ANNA_SALAI, source: "landmark", nearMe: activateNearMe }),
       { enableHighAccuracy: false, timeout: 12000, maximumAge: 120000 },
     );
   },
