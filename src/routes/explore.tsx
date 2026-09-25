@@ -211,7 +211,7 @@ function Explore() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => (nearMe ? clearGeo() : locate())}
+            onClick={() => (nearMe ? clearGeo() : locate(true))}
             className={cn(
               "flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs ring-1 transition-colors",
               nearMe
