@@ -1497,6 +1497,15 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
   const { map: listeoGeo, total: listeoTotal } = listeoResult;
   if (listeoGeo.size < 8) throw new Error("listeo-empty");
 
+  // Resolve WordPress featured-media IDs once so each listing can use its
+  // actual featured image instead of falling back to a shared/local image.
+  const featuredMediaIds = [...new Set(
+    wpCatalog.rows
+      .map((row) => Number(row.featured_media ?? 0))
+      .filter((id) => Number.isFinite(id) && id > 0),
+  )];
+  const mediaMap = await loadMedia(featuredMediaIds);
+
   // WordPress REST is the authoritative source for taxonomy membership.
   // Listeo geo data is still used below to enrich listings with coordinates,
   // ratings, images, hours, etc.
@@ -1543,7 +1552,9 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
       listingPackage:
         toListingPackage(wpBySlug.get(slug)?.meta?.["listing-package"]) ??
         item.listingPackage,
-      image: pickListingImage(geo?.image, item.image, local?.image) || item.image || FALLBACK_IMAGE[item.category],
+      // Prefer the WordPress featured image for the card cover. Listeo's
+      // geo image is only a fallback when WordPress has no featured image.
+      image: pickListingImage(item.image, geo?.image, local?.image) || item.image || FALLBACK_IMAGE[item.category],
       gallery: uniqueImages(geo?.gallery, item.gallery, local?.gallery),
     };
   }
@@ -1553,7 +1564,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
     seen.add(geo.slug);
 
     const wpRaw = wpBySlug.get(geo.slug);
-    const wpListing = wpRaw ? mapListing(wpRaw) : null;
+    const wpListing = wpRaw ? mapListing(wpRaw, { mediaMap }) : null;
     const category = wpListing?.category ?? geo.category ?? "places";
     const local = findLocal(geo.slug);
 
@@ -1598,7 +1609,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
   for (const raw of wpCatalog.rows) {
     if (seen.has(raw.slug)) continue;
     seen.add(raw.slug);
-    listings.push(applyLive(mapListing(raw), raw.slug));
+    listings.push(applyLive(mapListing(raw, { mediaMap }), raw.slug));
   }
 
   for (const [slug, hit] of jetMeta) {
