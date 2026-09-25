@@ -6,7 +6,7 @@ import { AppShell } from "@/components/layout";
 import { NotFound } from "@/components/not-found";
 import { Toaster } from "sonner";
 import { useTheme } from "@/store/theme";
-import appCss from "../styles.css?url";
+import "../styles.css";
 
 const APP_NAME = "Xplore Pondy";
 const PWA_NAME = "XP App";
@@ -42,7 +42,6 @@ export const Route = createRootRoute({
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&display=swap",
       },
-      { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
     ],
