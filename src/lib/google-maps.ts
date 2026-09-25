@@ -180,7 +180,27 @@ export type GooglePlacesLib = {
   PlacesService?: new (el: HTMLElement) => {
     getDetails: (
       req: Record<string, unknown>,
-      cb: (place: { formatted_address?: string; name?: string; geometry?: { location?: { lat: () => number; lng: () => number } } } | null) => void,
+      cb: (
+        place:
+          | {
+              formatted_address?: string;
+              name?: string;
+              geometry?: { location?: { lat: () => number; lng: () => number } };
+              rating?: number;
+              user_ratings_total?: number;
+              url?: string;
+              reviews?: Array<{
+                author_name?: string;
+                author_url?: string;
+                profile_photo_url?: string;
+                rating?: number;
+                relative_time_description?: string;
+                text?: string;
+              }>;
+            }
+          | null,
+        status?: string,
+      ) => void,
     ) => void;
   };
   AutocompleteSuggestion?: {
