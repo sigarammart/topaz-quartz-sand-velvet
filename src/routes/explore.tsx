@@ -229,7 +229,6 @@ function Explore() {
               [
                 ["list", LayoutList, "List"],
                 ["grid", LayoutGrid, "Grid"],
-                ["map", MapIcon, "Map"],
               ] as const
             ).map(([key, Icon, label]) => (
               <button
