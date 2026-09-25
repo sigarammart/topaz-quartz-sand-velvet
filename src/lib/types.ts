@@ -70,6 +70,7 @@ export type Listing = {
   phone?: string;
   website?: string;
   address?: string;
+  googlePlaceId?: string;
   friendlyAddress?: string;
   cafeTypes?: string[];
   accessibility?: string[];
