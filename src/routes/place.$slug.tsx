@@ -172,12 +172,6 @@ function PlacePage() {
   const origin = useGeo((s) => s.origin);
   const fromGps = useGeo((s) => s.source === "gps");
   const detailsLoading = extra === undefined;
-  if (!listing) {
-    if (extra === undefined || status === "loading" || status === "idle") {
-      return <PlaceLoading />;
-    }
-    throw notFound();
-  }
 
   useEffect(() => {
     try {
@@ -192,6 +186,13 @@ function PlacePage() {
       /* ignore storage errors */
     }
   }, [slug]);
+
+  if (!listing) {
+    if (extra === undefined || status === "loading" || status === "idle") {
+      return <PlaceLoading />;
+    }
+    throw notFound();
+  }
 
   const km = listingDistanceKm(origin, listing);
   const nearby = catalogNearby(listing.slug, items);
@@ -684,25 +685,6 @@ function PlacePage() {
         <section className="mt-8">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-display text-lg font-semibold">Nearby & related</h2>
-            <div className="flex min-w-0 items-center gap-1.5">
-              {[
-                ...(listing.tags ?? []),
-                ...(listing.bestFor ?? []),
-                ...(listing.taxonomies ?? []).flatMap((group) => group.terms.map((term) => term.name)),
-              ]
-                .filter(Boolean)
-                .filter((tag, index, tags) => tags.findIndex((item) => item.toLowerCase() === tag.toLowerCase()) === index)
-                .slice(0, 3)
-                .map((tag) => (
-                  <span
-                    key={tag}
-                    className="max-w-28 truncate rounded-full bg-card px-2.5 py-1 text-[10px] font-medium text-muted-foreground ring-1 ring-border/70"
-                    title={tag}
-                  >
-                    {tag}
-                  </span>
-                ))}
-            </div>
             <Button
               type="button"
               variant={relatedSort === "near" ? "default" : "outline"}
