@@ -9,7 +9,6 @@ import {
   MapPin,
   Navigation,
   LocateFixed,
-  Package,
   Phone,
   Ticket,
   Timer,
