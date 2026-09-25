@@ -59,6 +59,8 @@ type WpListingMeta = {
   _website?: string;
   _address?: string;
   _friendly_address?: string;
+  _featured?: string | number | boolean;
+  "listing-package"?: string | number;
   _geolocation_lat?: string;
   _geolocation_long?: string;
 };
@@ -1428,7 +1430,7 @@ async function loadListingPages() {
     "activity-type,property-type,property-category,by-theme,explore-type",
   ].join(",");
   const first = await wpGet<WpListing[]>(
-    `/wp-json/wp/v2/listing?per_page=100&page=1&_embed=1&_fields=${fields},_embedded`,
+    `/wp-json/wp/v2/listing?per_page=100&page=1&_embed=1&_fields=${fields},meta,_embedded`,
     {},
     12000,
   );
@@ -1442,7 +1444,7 @@ async function loadListingPages() {
       ? await Promise.all(
           Array.from({ length: pages - 1 }, (_, i) =>
             wpGet<WpListing[]>(
-              `/wp-json/wp/v2/listing?per_page=100&page=${i + 2}&_embed=1&_fields=${fields},_embedded`,
+              `/wp-json/wp/v2/listing?per_page=100&page=${i + 2}&_embed=1&_fields=${fields},meta,_embedded`,
               {},
               12000,
             ).then((r) => (r.ok && Array.isArray(r.data) ? r.data : [])),
@@ -1450,6 +1452,19 @@ async function loadListingPages() {
         )
       : [];
   return { rows: [first.data, ...rest].flat(), total };
+}
+
+function isFeaturedMeta(value: unknown): boolean | undefined {
+  if (value == null || value === "") return undefined;
+  if (value === true || value === 1 || value === "1" || value === "true" || value === "yes") return true;
+  if (value === false || value === 0 || value === "0" || value === "false" || value === "no") return false;
+  return undefined;
+}
+
+function toListingPackage(value: unknown): number | undefined {
+  if (value == null || value === "") return undefined;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 function mergeLocal(listings: Listing[]) {
@@ -1471,7 +1486,7 @@ const CATALOG_TTL = 20 * 60 * 1000;
 const CATALOG_STALE = 2 * 60 * 60 * 1000;
 const LISTING_PAGE_TTL = 30 * 60 * 1000;
 const HTML_TTL = 30 * 60 * 1000;
-const CATALOG_VERSION = 26;
+const CATALOG_VERSION = 27;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   const { map: listeoGeo, total: listeoTotal } = await loadListeoGeo();
@@ -1516,8 +1531,15 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
       address: item.address || geo?.address,
       location: item.location === "Pondicherry" && geo?.address ? geo.address : item.location,
       area: item.area === "Pondicherry" && geo?.address ? geo.address : item.area,
-      featured: geo?.featured || hit?.featured || item.featured,
-      listingPackage: hit?.listingPackage ?? item.listingPackage,
+      featured:
+        item.featured ??
+        hit?.featured ??
+        geo?.featured ??
+        isFeaturedMeta(wpBySlug.get(slug)?.meta?._featured),
+      listingPackage:
+        toListingPackage(wpBySlug.get(slug)?.meta?.["listing-package"]) ??
+        hit?.listingPackage ??
+        item.listingPackage,
       image: pickListingImage(geo?.image, item.image, local?.image) || item.image || FALLBACK_IMAGE[item.category],
       gallery: uniqueImages(geo?.gallery, item.gallery, local?.gallery),
     };
