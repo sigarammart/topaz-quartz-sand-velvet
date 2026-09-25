@@ -331,11 +331,6 @@ function OsmListingMap({ listings, selected, onSelect, className }: ListingMapPr
       >
         <LocateFixed className={cn("size-5", geoStatus === "asking" && "animate-pulse")} />
       </button>
-      {you && (
-        <div className="absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-full bg-card/95 px-3 py-1.5 text-xs font-semibold text-foreground shadow-soft ring-1 ring-border backdrop-blur-sm">
-          You are here
-        </div>
-      )}
 
       <div
         className="absolute inset-0 origin-center"
