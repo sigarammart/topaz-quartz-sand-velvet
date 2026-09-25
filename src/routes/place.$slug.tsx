@@ -460,7 +460,7 @@ function PlacePage() {
             </section>
           )}
 
-          <GoogleReviews placeId={listing.googlePlaceId} />
+          <GoogleReviews placeId={listing.googlePlaceId} name={listing.name} address={listing.address || listing.location} />
 
           {listing.bestFor.length > 0 && (
             <section className="mt-5">
