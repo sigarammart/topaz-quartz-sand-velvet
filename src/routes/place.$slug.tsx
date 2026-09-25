@@ -694,9 +694,10 @@ function nearbyCategory(listing: Listing): "cafes" | "restaurants" | "attraction
 }
 
 function NearbyCategories({ current, items }: { current: Listing; items: Listing[] }) {
-  const [tab, setTab] = useState<"cafes" | "restaurants" | "attractions" | "activities" | "stays">("cafes");
+  const [tab, setTab] = useState<"related" | "cafes" | "restaurants" | "attractions" | "activities" | "stays">("related");
 
   const categories = [
+    { id: "related" as const, label: "Related" },
     { id: "cafes" as const, label: "Cafes" },
     { id: "restaurants" as const, label: "Restaurants" },
     { id: "attractions" as const, label: "Attractions" },
@@ -713,7 +714,11 @@ function NearbyCategories({ current, items }: { current: Listing; items: Listing
         : undefined,
       category: nearbyCategory(item),
     }))
-    .filter((row) => row.category === tab && row.distance != null && row.distance <= 15)
+    .filter((row) => {
+      if (row.distance == null || row.distance > 15) return false;
+      if (tab === "related") return row.item.category === current.category;
+      return row.category === tab;
+    })
     .sort((a, b) => (a.distance! - b.distance!) || (b.item.rating - a.item.rating))
     .slice(0, 8);
 
@@ -756,7 +761,7 @@ function NearbyCategories({ current, items }: { current: Listing; items: Listing
         </div>
       ) : (
         <div className="mt-3 rounded-xl bg-card p-4 text-xs text-muted-foreground ring-1 ring-border/70">
-          No {categories.find((category) => category.id === tab)?.label.toLowerCase()} found within 15 km.
+          No {tab === "related" ? "related listings" : categories.find((category) => category.id === tab)?.label.toLowerCase()} found within 15 km.
         </div>
       )}
     </section>
