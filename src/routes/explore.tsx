@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { emptyFilterSearch, filtersFromSearch, type FilterParam } from "@/lib/filters";
 import type { LatLng } from "@/lib/geo";
 import { listingPinNumbers } from "@/lib/pins";
+import { listingIsOpen } from "@/lib/hours";
 import { CATEGORIES, CATEGORY_META, type Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { catalogSearch, sortListings, useCatalog } from "@/store/catalog";
@@ -88,6 +89,14 @@ function Explore() {
     if (q.trim()) return rows;
     return sortListings(rows, { origin, nearMe });
   }, [items, q, category, filters, origin, nearMe]);
+
+  // Use the same live hours logic as the Open Now filter and listing badges.
+  const openNowCount = useMemo(() => {
+    const countFilters = { ...filters };
+    delete countFilters.open;
+    const candidates = catalogSearch(items, q, category, countFilters);
+    return candidates.filter((listing) => listingIsOpen(listing) === true).length;
+  }, [items, q, category, filters]);
   const meta = isCategory(category) ? CATEGORY_META[category] : null;
   const [visible, setVisible] = useState(PAGE_SIZE);
   const [selected, setSelected] = useState<string | undefined>();
@@ -195,6 +204,7 @@ function Explore() {
         items={scoped}
         category={category}
         filters={filters}
+        openNowCount={openNowCount}
         onChange={(patch) =>
           void navigate({
             search: (prev) => ({ ...prev, ...patch }),
