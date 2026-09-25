@@ -1,5 +1,5 @@
 /* Xplore Pondy — browser cache. Network stays the source of truth; this only skips repeat downloads. */
-const SHELL = "xp-shell-v1";
+const SHELL = "xp-shell-v2";
 const DATA = "xp-data-v1";
 const IMAGES = "xp-images-v1";
 const DATA_LIMIT = 40;
