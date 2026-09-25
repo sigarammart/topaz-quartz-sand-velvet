@@ -70,6 +70,7 @@ export type Listing = {
   phone?: string;
   website?: string;
   address?: string;
+  friendlyAddress?: string;
   cafeTypes?: string[];
   accessibility?: string[];
   tripDays?: string;
