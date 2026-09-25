@@ -1634,7 +1634,9 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
       address: item.address || geo?.address,
       // _friendly_address is the only address value exposed to listing cards.
       // Never fall back to the raw _address/Listeo geo address.
-      friendlyAddress: item.friendlyAddress || undefined,
+      // When WP REST is unavailable, preserve the same _friendly_address
+      // value exposed by Listeo's data-friendly-address field.
+      friendlyAddress: item.friendlyAddress || geo?.friendlyAddress || undefined,
       location: item.location === "Pondicherry" && geo?.address ? geo.address : item.location,
       area: item.area === "Pondicherry" && geo?.address ? geo.address : item.area,
       featured:
