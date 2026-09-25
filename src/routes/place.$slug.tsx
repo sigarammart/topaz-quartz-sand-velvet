@@ -706,6 +706,12 @@ function NearbyCategories({ current, items }: { current: Listing; items: Listing
     });
   }
 
+  useEffect(() => {
+    // Each category has its own starting position. Switching tabs always
+    // returns the new category carousel to its first listing.
+    cardsRef.current?.scrollTo({ left: 0, behavior: "auto" });
+  }, [tab]);
+
   const categories = [
     { id: "related" as const, label: "Related" },
     { id: "cafes" as const, label: "Cafes" },
