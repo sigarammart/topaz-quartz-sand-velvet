@@ -52,10 +52,7 @@ export function SmartFiltersBar({
   const selectedType = filters.type ?? [];
   const extraCount = activeFilterCount({ ...filters, type: undefined, open: undefined });
   const totalCount = activeFilterCount(filters);
-  const openCount = openNowCount ?? useMemo(() => {
-    const without = applySmartFilters(items, { ...filters, open: undefined });
-    return without.filter((row) => listingIsOpen(row) === true).length;
-  }, [items, filters]);
+  const openCount = openNowCount ?? 0;
   const openActive = (filters.open ?? []).includes("1");
 
   function setGroup(param: FilterParam, values: string[]) {
