@@ -30,33 +30,33 @@ function pinIcon(g: NonNullable<ReturnType<typeof googleMapsApi>>, fill: string,
 
 function clusterIcon(count: number) {
   const label = `${count}+`;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="82" height="82" viewBox="0 0 82 82">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="58" height="58" viewBox="0 0 58 58">
     <defs>
       <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-        <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#061014" flood-opacity=".38"/>
+        <feDropShadow dx="0" dy="1.5" stdDeviation="1.8" flood-color="#061014" flood-opacity=".34"/>
       </filter>
     </defs>
     <g filter="url(#shadow)">
-      <path d="M41 3 A38 38 0 0 1 75 25" fill="none" stroke="#55E1E8" stroke-width="7" stroke-linecap="round"/>
-      <path d="M41 14 A27 27 0 0 1 65 30" fill="none" stroke="#22C6D5" stroke-width="7" stroke-linecap="round"/>
-      <path d="M41 25 A16 16 0 0 1 55 35" fill="none" stroke="#0EA5B7" stroke-width="7" stroke-linecap="round"/>
-      <path d="M41 79 A38 38 0 0 1 7 57" fill="none" stroke="#55E1E8" stroke-width="7" stroke-linecap="round"/>
-      <path d="M41 68 A27 27 0 0 1 17 52" fill="none" stroke="#22C6D5" stroke-width="7" stroke-linecap="round"/>
-      <path d="M41 57 A16 16 0 0 1 27 47" fill="none" stroke="#0EA5B7" stroke-width="7" stroke-linecap="round"/>
-      <circle cx="41" cy="41" r="20" fill="#0B1213" stroke="#FFFFFF" stroke-width="3"/>
-      <text x="41" y="45.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="800" fill="#FFFFFF">${label}</text>
+      <path d="M29 3 A26 26 0 0 1 52 16" fill="none" stroke="#55E1E8" stroke-width="5" stroke-linecap="round"/>
+      <path d="M29 11 A18 18 0 0 1 45 20" fill="none" stroke="#22C6D5" stroke-width="5" stroke-linecap="round"/>
+      <path d="M29 19 A10 10 0 0 1 38 24" fill="none" stroke="#0EA5B7" stroke-width="5" stroke-linecap="round"/>
+      <path d="M29 55 A26 26 0 0 1 6 42" fill="none" stroke="#55E1E8" stroke-width="5" stroke-linecap="round"/>
+      <path d="M29 47 A18 18 0 0 1 13 38" fill="none" stroke="#22C6D5" stroke-width="5" stroke-linecap="round"/>
+      <path d="M29 39 A10 10 0 0 1 20 34" fill="none" stroke="#0EA5B7" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="29" cy="29" r="15" fill="#0B1213" stroke="#FFFFFF" stroke-width="2.5"/>
+      <text x="29" y="33" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" font-weight="800" fill="#FFFFFF">${label}</text>
     </g>
   </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
-    anchor: { x: 41, y: 41 },
+    anchor: { x: 29, y: 29 },
   };
 }
 
 function clusterGroups(
   pins: Array<{ slug: string; lat: number; lng: number }>,
   zoom: number,
-  cellSize = 70,
+  cellSize = zoom <= 11 ? 120 : zoom <= 13 ? 100 : 82,
 ) {
   const world = 256 * 2 ** zoom;
   const groups = new Map<string, Array<(typeof pins)[number]>>();
@@ -223,7 +223,7 @@ export function GoogleListingMap({
           marker.setMap(map);
         }
         marker.setIcon(clusterIcon(group.items.length));
-        marker.setZIndex(40);
+        marker.setZIndex(25);
       }
 
       for (const [key, marker] of clusterMarkers.current) {
