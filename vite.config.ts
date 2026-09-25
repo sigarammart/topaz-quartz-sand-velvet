@@ -166,7 +166,15 @@ export default defineConfig(({ command, isPreview }) => ({
     // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
     grokPwaPlugin(),
     tailwindcss(),
-    tanstackStart(),
+    tanstackStart({
+      server: {
+        build: {
+          // Inline the initial route CSS into SSR HTML so a cold PWA load
+          // can paint with the app styles before the CSS asset request completes.
+          inlineCss: true,
+        },
+      },
+    }),
     ...(command === "build" || isPreview
       ? [
           nitro({
