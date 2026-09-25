@@ -28,6 +28,31 @@ function pinIcon(g: NonNullable<ReturnType<typeof googleMapsApi>>, fill: string,
   };
 }
 
+function clusterIcon(count: number) {
+  const label = `${count}+`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="82" height="82" viewBox="0 0 82 82">
+    <defs>
+      <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+        <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#061014" flood-opacity=".38"/>
+      </filter>
+    </defs>
+    <g filter="url(#shadow)">
+      <path d="M41 3 A38 38 0 0 1 75 25" fill="none" stroke="#55E1E8" stroke-width="7" stroke-linecap="round"/>
+      <path d="M41 14 A27 27 0 0 1 65 30" fill="none" stroke="#22C6D5" stroke-width="7" stroke-linecap="round"/>
+      <path d="M41 25 A16 16 0 0 1 55 35" fill="none" stroke="#0EA5B7" stroke-width="7" stroke-linecap="round"/>
+      <path d="M41 79 A38 38 0 0 1 7 57" fill="none" stroke="#55E1E8" stroke-width="7" stroke-linecap="round"/>
+      <path d="M41 68 A27 27 0 0 1 17 52" fill="none" stroke="#22C6D5" stroke-width="7" stroke-linecap="round"/>
+      <path d="M41 57 A16 16 0 0 1 27 47" fill="none" stroke="#0EA5B7" stroke-width="7" stroke-linecap="round"/>
+      <circle cx="41" cy="41" r="20" fill="#0B1213" stroke="#FFFFFF" stroke-width="3"/>
+      <text x="41" y="45.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="13" font-weight="800" fill="#FFFFFF">${label}</text>
+    </g>
+  </svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    anchor: { x: 41, y: 41 },
+  };
+}
+
 function clusterGroups(
   pins: Array<{ slug: string; lat: number; lng: number }>,
   zoom: number,
@@ -197,8 +222,7 @@ export function GoogleListingMap({
           marker.setPosition({ lat: group.lat, lng: group.lng });
           marker.setMap(map);
         }
-        marker.setIcon(pinIcon(g, "#18b8d1", "#ffffff", Math.min(24, 13 + Math.sqrt(group.items.length) * 2)));
-        marker.setLabel({ text: String(group.items.length), color: "#ffffff", fontSize: "12px", fontWeight: "800" });
+        marker.setIcon(clusterIcon(group.items.length));
         marker.setZIndex(40);
       }
 
