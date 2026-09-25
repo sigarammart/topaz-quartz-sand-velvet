@@ -194,7 +194,12 @@ export function GoogleReviews({
     };
   }, [placeId, name, address]);
 
-  const reviews = (place?.reviews ?? []).slice(0, 3);
+  // Show only useful/high-rated reviews: exclude anything below 3 stars,
+  // then put the highest-rated reviews first and show up to three.
+  const reviews = (place?.reviews ?? [])
+    .filter((review) => (review.rating ?? 0) >= 3)
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, 3);
   const viewAllUrl =
     place?.url ||
     (placeId
