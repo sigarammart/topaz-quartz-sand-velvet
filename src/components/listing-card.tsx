@@ -20,7 +20,9 @@ function PlaceLine({ listing }: { listing: Listing }) {
   const origin = useGeo((s) => s.origin);
   const fromGps = useGeo((s) => s.source === "gps");
   const km = listingDistanceKm(origin, listing);
-  const place = listing.friendlyAddress || listing.area || listing.location;
+  // Listing cards should show Listeo's explicit _friendly_address only.
+  // Do not fall back to _address/area/location.
+  const place = listing.friendlyAddress;
   return (
     <p className="flex min-w-0 items-start gap-1 text-xs leading-snug text-muted-foreground">
       <MapPin className="mt-0.5 size-3 shrink-0" />
