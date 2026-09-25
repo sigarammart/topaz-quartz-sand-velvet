@@ -19,6 +19,7 @@ import { AddToTrip } from "@/components/add-to-trip";
 import { ListingCard } from "@/components/listing-card";
 import { PhotoGallery } from "@/components/photo-gallery";
 import { OpenNowBadge } from "@/components/open-now-badge";
+import { GoogleReviews } from "@/components/google-reviews";
 import { SaveButton } from "@/components/save-button";
 import { Stars } from "@/components/stars";
 import { Badge } from "@/components/ui/badge";
@@ -97,6 +98,7 @@ function mergeListing(base?: Listing | null, extra?: Listing | null): Listing | 
     price: extra.price || base.price,
     phone: extra.phone || base.phone,
     website: extra.website || base.website,
+    googlePlaceId: extra.googlePlaceId || base.googlePlaceId,
     address: preferListeoAddress(extra.address, base.address),
     lat: extra.lat ?? base.lat,
     lng: extra.lng ?? base.lng,
@@ -457,6 +459,8 @@ function PlacePage() {
               </div>
             </section>
           )}
+
+          <GoogleReviews placeId={listing.googlePlaceId} />
 
           {listing.bestFor.length > 0 && (
             <section className="mt-5">
