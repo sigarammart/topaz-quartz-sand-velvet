@@ -1547,6 +1547,25 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
 
   const jetMeta = new Map<string, JetArchiveHit>();
 
+  // Some newly published WordPress listings are present in REST but have not
+  // appeared in the Listeo geo feed yet. Pull their archive marker data so
+  // cards still receive coordinates (and therefore distance-from-user).
+  const archiveSlugsForMissingGeo = [
+    ...new Set(
+      wpCatalog.rows
+        .filter((row) => row.slug && !listeoGeo.has(row.slug))
+        .flatMap((row) =>
+          (row.class_list ?? [])
+            .filter((value) => value.startsWith("listing_category-"))
+            .map((value) => value.slice("listing_category-".length)),
+        )
+        .filter(Boolean),
+    ),
+  ];
+  if (archiveSlugsForMissingGeo.length) {
+    await loadJetArchiveMeta(archiveSlugsForMissingGeo, jetMeta);
+  }
+
   const seen = new Set<string>();
   const listings: Listing[] = [];
 
@@ -1573,6 +1592,11 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
       rating: item.rating || geo?.rating || local?.rating || 0,
       reviews: item.reviews || geo?.reviews || local?.reviews || 0,
       address: item.address || geo?.address,
+      friendlyAddress:
+        item.friendlyAddress ||
+        item.address ||
+        geo?.address ||
+        undefined,
       location: item.location === "Pondicherry" && geo?.address ? geo.address : item.location,
       area: item.area === "Pondicherry" && geo?.address ? geo.address : item.area,
       featured:
