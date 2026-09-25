@@ -19,21 +19,35 @@ type PlaceDetails = {
   reviews?: Review[];
 };
 
+type PlacesStatus = string | undefined;
+
+function googleMapsPlaceUrl(placeId: string) {
+  return `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${encodeURIComponent(placeId)}`;
+}
+
 export function GoogleReviews({ placeId }: { placeId?: string }) {
   const [place, setPlace] = useState<PlaceDetails | null>(null);
   const [loading, setLoading] = useState(Boolean(placeId));
+  const [status, setStatus] = useState<PlacesStatus>();
 
   useEffect(() => {
     if (!placeId) {
       setLoading(false);
+      setStatus("MISSING_PLACE_ID");
       return;
     }
 
     let cancelled = false;
+    setLoading(true);
+    setStatus(undefined);
+    setPlace(null);
 
     void loadGooglePlaces().then((places) => {
-      if (cancelled || !places?.PlacesService) {
-        if (!cancelled) setLoading(false);
+      if (cancelled) return;
+
+      if (!places?.PlacesService) {
+        setStatus("PLACES_LIBRARY_UNAVAILABLE");
+        setLoading(false);
         return;
       }
 
@@ -45,12 +59,17 @@ export function GoogleReviews({ placeId }: { placeId?: string }) {
           placeId,
           fields: ["name", "rating", "user_ratings_total", "reviews", "url"],
         },
-        (details) => {
+        (details, resultStatus) => {
           if (cancelled) return;
           setPlace((details as PlaceDetails | null) ?? null);
+          setStatus(resultStatus);
           setLoading(false);
         },
       );
+    }).catch(() => {
+      if (cancelled) return;
+      setStatus("LOAD_ERROR");
+      setLoading(false);
     });
 
     return () => {
@@ -58,7 +77,11 @@ export function GoogleReviews({ placeId }: { placeId?: string }) {
     };
   }, [placeId]);
 
-  if (!placeId || (!loading && !place?.reviews?.length)) return null;
+  if (!placeId) return null;
+
+  const reviews = (place?.reviews ?? []).slice(0, 3);
+  const viewAllUrl = place?.url || googleMapsPlaceUrl(placeId);
+  const failed = !loading && status && status !== "OK";
 
   return (
     <section className="mt-6 rounded-2xl bg-card p-4 shadow-soft ring-1 ring-border/70" aria-label="Google reviews">
@@ -66,7 +89,7 @@ export function GoogleReviews({ placeId }: { placeId?: string }) {
         <div>
           <h2 className="text-base font-semibold">Google reviews</h2>
           {place?.rating ? (
-            <div className="mt-1 flex items-center gap-1.5 text-sm">
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm">
               <Star className="size-4 fill-yellow-400 text-yellow-400" />
               <span className="font-semibold tabular-nums">{place.rating.toFixed(1)}</span>
               {place.user_ratings_total ? (
@@ -76,19 +99,20 @@ export function GoogleReviews({ placeId }: { placeId?: string }) {
               ) : null}
               <span className="font-medium text-muted-foreground">· Google</span>
             </div>
-          ) : null}
+          ) : (
+            <div className="mt-1 text-xs text-muted-foreground">Ratings and reviews from Google</div>
+          )}
         </div>
-        {place?.url ? (
-          <a
-            href={place.url}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
-          >
-            View all
-            <ExternalLink className="size-3.5" />
-          </a>
-        ) : null}
+
+        <a
+          href={viewAllUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary hover:underline"
+        >
+          View all
+          <ExternalLink className="size-3.5" />
+        </a>
       </div>
 
       {loading ? (
@@ -96,10 +120,13 @@ export function GoogleReviews({ placeId }: { placeId?: string }) {
           <Loader2 className="size-4 animate-spin" />
           Loading Google reviews…
         </div>
-      ) : (
+      ) : reviews.length ? (
         <div className="mt-4 space-y-3">
-          {(place?.reviews ?? []).slice(0, 3).map((review, index) => (
-            <article key={`${review.author_url ?? review.author_name ?? "review"}-${index}`} className="rounded-xl bg-background/60 p-3 ring-1 ring-border/70">
+          {reviews.map((review, index) => (
+            <article
+              key={`${review.author_url ?? review.author_name ?? "review"}-${index}`}
+              className="rounded-xl bg-background/60 p-3 ring-1 ring-border/70"
+            >
               <div className="flex items-center gap-2">
                 {review.profile_photo_url ? (
                   <img
@@ -115,7 +142,12 @@ export function GoogleReviews({ placeId }: { placeId?: string }) {
                 )}
                 <div className="min-w-0">
                   {review.author_url ? (
-                    <a href={review.author_url} target="_blank" rel="noreferrer" className="truncate text-sm font-semibold hover:underline">
+                    <a
+                      href={review.author_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="truncate text-sm font-semibold hover:underline"
+                    >
                       {review.author_name ?? "Google reviewer"}
                     </a>
                   ) : (
@@ -142,6 +174,10 @@ export function GoogleReviews({ placeId }: { placeId?: string }) {
           <p className="pt-1 text-[11px] text-muted-foreground">
             Reviews and ratings are provided by Google. Individual reviews are shown with their Google author attribution.
           </p>
+        </div>
+      ) : (
+        <div className="mt-4 rounded-xl bg-background/60 p-3 text-xs text-muted-foreground ring-1 ring-border/70">
+          {failed ? "Google did not return reviews for this place." : "No Google reviews were returned."}
         </div>
       )}
     </section>
