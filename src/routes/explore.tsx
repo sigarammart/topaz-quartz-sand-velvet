@@ -309,15 +309,17 @@ function Explore() {
         </>
       )}
 
-      <button
-        type="button"
-        onClick={() => setView("map")}
-        className="fixed bottom-20 left-1/2 z-[70] flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg ring-1 ring-primary/40 sm:bottom-6"
-        aria-label="Open map"
-      >
-        <MapIcon className="size-4" />
-        <span>View map</span>
-      </button>
+      {view !== "map" && (
+        <button
+          type="button"
+          onClick={() => setView("map")}
+          className="fixed bottom-20 left-1/2 z-[70] flex h-11 -translate-x-1/2 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-lg ring-1 ring-primary/40 sm:bottom-6"
+          aria-label="Open map"
+        >
+          <MapIcon className="size-4" />
+          <span>View map</span>
+        </button>
+      )}
     </div>
   );
 }
