@@ -795,9 +795,9 @@ function extractGooglePlaceId(meta: Record<string, unknown>): string | undefined
 
 function extractGooglePlaceIdFromHtml(html: string): string | undefined {
   const patterns = [
-    /(?:place[_-]?id|placeId|query[_-]?place[_-]?id)["'=:\s]+["']?(ChIJ[A-Za-z0-9_-]{10,})/i,
-    /(?:google\.com\/maps[^"'\s]*?(?:place_id|query_place_id)=)(ChIJ[A-Za-z0-9_-]{10,})/i,
-    /\b(ChIJ[A-Za-z0-9_-]{10,})\b/i,
+    /(?:place[_-]?id|placeId|query[_-]?place[_-]?id)["'=:\\s]+["']?(ChIJ[A-Za-z0-9_-]{10,})/i,
+    /(?:google\\.com\\/maps[^"'\\s]*?(?:place_id|query_place_id)=)(ChIJ[A-Za-z0-9_-]{10,})/i,
+    /\\b(ChIJ[A-Za-z0-9_-]{10,})\\b/i,
   ];
   for (const pattern of patterns) {
     const match = html.match(pattern);
@@ -2417,3 +2417,173 @@ export const fetchWpBookmarks = createServerFn({ method: "GET" })
       | null;
     if (!res.ok || body?.ok === false) {
       return {
+        ok: false as const,
+        bookmarkIds: [] as number[],
+        configured: true as const,
+        error: body?.message || body?.code || `WordPress returned HTTP ${res.status}.`,
+      };
+    }
+    const bookmarkIds = Array.isArray(body?.bookmark_ids)
+      ? [...new Set(body.bookmark_ids.map(Number).filter((id) => Number.isFinite(id) && id > 0))]
+      : [];
+    return { ok: true as const, bookmarkIds, configured: true as const };
+  });
+
+export const syncWpBookmarks = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      email: z.string().email(),
+      bookmarkIds: z.array(z.number().int().positive()),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const headers = await wpTripSyncCredentials();
+    if (!headers) return { ok: false as const, error: "WordPress bookmark sync is not configured on the PWA server." };
+
+    const res = await fetch(`${WP_ORIGIN}/wp-json/xplore/v1/pwa/bookmarks/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", ...headers },
+      body: JSON.stringify({
+        email: data.email.trim().toLowerCase(),
+        bookmark_ids: [...new Set(data.bookmarkIds)],
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const body = (await res.json().catch(() => null)) as
+      | { ok?: boolean; bookmark_ids?: unknown; message?: string; code?: string }
+      | null;
+    if (!res.ok || body?.ok === false) {
+      return {
+        ok: false as const,
+        error: body?.message || body?.code || `WordPress returned HTTP ${res.status}.`,
+      };
+    }
+    return {
+      ok: true as const,
+      bookmarkIds: Array.isArray(body?.bookmark_ids)
+        ? [...new Set(body.bookmark_ids.map(Number).filter((id) => Number.isFinite(id) && id > 0))]
+        : data.bookmarkIds,
+    };
+  });
+
+export const fetchWpGuide = createServerFn({ method: "GET" })
+  .validator(z.object({ slug: z.string().min(1), url: z.string().optional() }))
+  .handler(async ({ data }) => {
+    const slugs = guideSlugCandidates(data.slug, data.url);
+    const urls = [
+      data.url,
+      ...slugs.map((s) => `${WP_ORIGIN}/guide/${s}/`),
+    ].filter((url, i, all): url is string => !!url && all.indexOf(url) === i);
+
+    const [restHits, page] = await Promise.all([
+      Promise.all(
+        slugs.map((s) =>
+          wpGet<WpGuide[]>(
+            `/wp-json/wp/v2/travel_guide?slug=${encodeURIComponent(s)}&_embed=1`,
+            {},
+            15000,
+          ).catch(() => null),
+        ),
+      ),
+      loadListingPageHtml(urls, 20000),
+    ]);
+
+    const restRow = restHits
+      .map((res) => (res?.ok && Array.isArray(res.data) ? res.data[0] : undefined))
+      .find(Boolean);
+
+    let mapped: Guide | null = restRow ? mapGuide(restRow) : null;
+    const local =
+      localGuides.find((g) => slugs.includes(g.slug) || (g.siteUrl && slugs.some((s) => g.siteUrl?.includes(s)))) ??
+      mapped ??
+      null;
+    if (page) {
+      const fromHtml = guideFromHtml(mapped?.slug || data.slug, page.url, page.html, mapped ?? local);
+      const htmlRich = fromHtml.sections.some((s) => (s.blocks?.length ?? 0) > 1);
+      if (htmlRich && fromHtml.sections.length >= (mapped?.sections.length ?? 0)) {
+        return {
+          ...fromHtml,
+          slug: mapped?.slug || fromHtml.slug,
+          title: mapped?.title || fromHtml.title,
+          date: mapped?.date || fromHtml.date,
+          topic: mapped?.topic || fromHtml.topic,
+          categories: mapped?.categories,
+          tags: mapped?.tags,
+          image: pickListingImage(mapped?.image, fromHtml.image, local?.image),
+        };
+      }
+    }
+    return mapped ?? local ?? null;
+  });
+
+async function loadAuthorContent(authorId: number, headers: HeadersInit) {
+  const [mine, trips] = await Promise.all([
+    wpGet<WpListing[]>(
+      `/wp-json/wp/v2/listing?author=${authorId}&per_page=30&_embed=1`,
+      headers,
+      15000,
+    ),
+    wpGet<WpUserTrip[]>(
+      `/wp-json/wp/v2/user_trip?author=${authorId}&per_page=20&orderby=date&order=desc`,
+      headers,
+      15000,
+    ),
+  ]);
+  const myListings = mine.ok && Array.isArray(mine.data) ? mine.data.map((row) => mapListing(row)) : [];
+  const myTrips: WpTrip[] =
+    trips.ok && Array.isArray(trips.data)
+      ? trips.data.map((t) => ({
+          id: t.id,
+          slug: t.slug,
+          title: decodeHtml(t.title?.rendered ?? t.slug),
+          date: t.date
+            ? new Date(t.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+            : "",
+          url: t.link ?? `${WP_ORIGIN}/user_trip/${t.slug}/`,
+        }))
+      : [];
+  return { myListings, myTrips };
+}
+
+export const fetchWpAuthorContent = createServerFn({ method: "GET" })
+  .validator(z.object({ authorId: z.number().int().positive() }))
+  .handler(async ({ data }) => loadAuthorContent(data.authorId, {}));
+
+export const wpLogin = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      username: z.string().min(1),
+      password: z.string().min(1),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const username = data.username.trim();
+    const password = data.password.trim();
+    const basic = `Basic ${Buffer.from(`${username}:${password}`, "utf8").toString("base64")}`;
+
+    let me = await fetchMe({ Authorization: basic });
+    let method: "application-password" | "wordpress" = "application-password";
+    let authHeaders: HeadersInit = { Authorization: basic };
+
+    if (!me) {
+      const xmlMe = await fetchMeXmlRpc(username, password);
+      const cookie = await wpCookieLogin(username, password);
+      const cookieMe = cookie ? await fetchMeWithCookie(cookie) : null;
+      me = cookieMe ?? xmlMe;
+      if (!me) {
+        return {
+          ok: false as const,
+          error: "That username or password was not accepted. Use the same login as xplorepondy.com.",
+        };
+      }
+      method = "wordpress";
+      authHeaders = cookie
+        ? { Cookie: cookie }
+        : { Authorization: basic };
+    }
+
+    const user = mapUser(me);
+    const { myListings, myTrips } = await loadAuthorContent(user.id, authHeaders);
+    const bookmarkIds = bookmarkIdsFromUserMeta(me.meta);
+    return { ok: true as const, user, myListings, myTrips, bookmarkIds, method };
+  });
