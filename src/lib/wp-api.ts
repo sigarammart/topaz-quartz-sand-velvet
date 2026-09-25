@@ -766,10 +766,9 @@ function enrichListingFromHtml(listing: Listing, html: string): Listing {
     googlePlaceId: listing.googlePlaceId || htmlGooglePlaceId,
     rating: extra.rating || listing.rating || 0,
     reviews: extra.reviews || listing.reviews || 0,
-    friendlyAddress:
-      listing.friendlyAddress ||
-      preferListeoAddress(contact.address, extra.address) ||
-      undefined,
+    // Keep the card address tied to Listeo's explicit _friendly_address field.
+    // Do not substitute the raw _address/contact address here.
+    friendlyAddress: listing.friendlyAddress || undefined,
     price,
     hours: hoursInfo.hours || listing.hours,
     openNow: hoursInfo.openNow ?? listing.openNow,
@@ -1633,11 +1632,9 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
       rating: item.rating || hit?.rating || geo?.rating || local?.rating || 0,
       reviews: item.reviews || hit?.reviews || geo?.reviews || local?.reviews || 0,
       address: item.address || geo?.address,
-      friendlyAddress:
-        item.friendlyAddress ||
-        item.address ||
-        geo?.address ||
-        undefined,
+      // _friendly_address is the only address value exposed to listing cards.
+      // Never fall back to the raw _address/Listeo geo address.
+      friendlyAddress: item.friendlyAddress || undefined,
       location: item.location === "Pondicherry" && geo?.address ? geo.address : item.location,
       area: item.area === "Pondicherry" && geo?.address ? geo.address : item.area,
       featured:
