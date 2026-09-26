@@ -5,7 +5,7 @@ import { listings as localListings } from "@/data/listings";
 import type { Category, Guide, GuideBlock, GuideSection, Listing, ListingFaq, ListingMetaGroup, ListingMetaItem, ListingStop, ListingTaxGroup, ListingTaxTerm } from "@/lib/types";
 import { parseOpenHoursHtml } from "@/lib/hours";
 import { bookmarkIdsFromUserMeta } from "@/lib/jet-store";
-import { ARCHIVE_SLUGS, categoryFromKindName } from "@/lib/listing-categories";
+import { ARCHIVE_SLUGS, archiveCategory, categoryFromKindName } from "@/lib/listing-categories";
 import { loadJetArchiveMeta, loadOpenNowSnapshot, type JetArchiveHit } from "@/lib/jet-archive";
 import { contactFromListeoMeta, preferListeoAddress } from "@/lib/listeo";
 import { cachedOriginText } from "@/lib/origin-cache";
@@ -396,15 +396,22 @@ function mediaUrl(media?: WpMedia) {
 function categoryFromTerms(
   terms: { slug?: string; name?: string; parent?: number }[],
 ): { category: Category; kind: string; tags: string[] } {
-  const slugs = terms.map((t) => t.slug ?? "");
+  const slugs = terms.map((t) => t.slug ?? "").filter(Boolean);
+
+  // Listeo often exposes only the child listing_category term on REST
+  // responses (for example "clinics" or "travel-agencies"), not the
+  // "services" parent. Resolve every term through the same archive mapping
+  // used by the Explore routes so child categories cannot fall back to
+  // "places".
   let category: Category = "places";
   const rank: Category[] = ["stay", "services", "food", "activities", "places"];
-  for (const c of rank) {
-    if (slugs.some((s) => PARENT_TO_CATEGORY[s] === c)) {
-      category = c;
+  for (const candidate of rank) {
+    if (slugs.some((slug) => archiveCategory(slug) === candidate || PARENT_TO_CATEGORY[slug] === candidate)) {
+      category = candidate;
       break;
     }
   }
+
   const kindTerm =
     terms.find((t) => t.slug && !SKIP_KIND.has(t.slug)) ?? terms[0];
   return {
