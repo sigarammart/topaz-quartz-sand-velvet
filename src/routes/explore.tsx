@@ -25,8 +25,6 @@ type ExploreSearch = {
 } & Partial<Record<FilterParam, string>>;
 
 const PAGE_SIZE = 24;
-const SERVICES_CATEGORY_URL = "https://xplorepondy.com/listing-category/services/";
-
 function parseView(value: unknown): ArchiveView | undefined {
   if (value === "list" || value === "grid" || value === "map") return value;
   return undefined;
@@ -199,12 +197,6 @@ function Explore() {
             </button>
           );
         })}
-        <a
-          href={SERVICES_CATEGORY_URL}
-          className="h-8 shrink-0 rounded-full bg-card px-3 text-xs font-medium text-foreground ring-1 ring-border transition-colors hover:bg-muted"
-        >
-          Services
-        </a>
       </div>
 
       <SmartFiltersBar
