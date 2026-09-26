@@ -43,7 +43,7 @@ const hoursDone = new Set<string>();
 const hoursQueued = new Set<string>();
 const pendingSlugs = new Set<string>();
 let slugTimer: ReturnType<typeof setTimeout> | undefined;
-const SESSION_KEY = "xp-catalog-v40";
+const SESSION_KEY = "xp-catalog-v41";
 // Keep the last known live catalog through transient server/WordPress outages.
 // A successful live refresh replaces it automatically.
 const SESSION_TTL = 24 * 60 * 60 * 1000;
@@ -163,7 +163,7 @@ export const useCatalog = create<CatalogState>((set, get) => ({
   total: localListings.length,
   error: null,
   openNowTotal: 0,
-  openNowByCategory: { places: 0, activities: 0, food: 0, stay: 0 },
+  openNowByCategory: { places: 0, activities: 0, food: 0, stay: 0, services: 0 },
   openNowStatus: "idle",
   ensure: async () => {
     const current = get();
