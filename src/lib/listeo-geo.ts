@@ -165,7 +165,9 @@ function ingest(html: string, map: Map<string, ListeoGeo>) {
 
 export async function loadListeoGeo(): Promise<{ map: Map<string, ListeoGeo>; total: number }> {
   const map = new Map<string, ListeoGeo>();
-  // Keep the cold-start live fetch bounded. WordPress REST remains the\n  // authoritative source for the full catalog; Listeo geo is enrichment.\n  const pageNos = [1, 2];
+  // Keep the cold-start live fetch bounded. WordPress REST remains the
+  // authoritative source for the full catalog; Listeo geo is enrichment.
+  const pageNos = [1, 2];
   const results = await Promise.all(pageNos.map(async (page) => ({ page, ...(await fetchListeoPage(page, 100)) })));
   let total = 0;
   for (const row of results) {
