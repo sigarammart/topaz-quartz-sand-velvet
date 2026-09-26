@@ -232,7 +232,19 @@ function listingTermsForGroup(listing: Listing, group: FilterGroup): ListingTaxT
   if (group.metaKeys?.length) add(metaTerms(listing, group.metaKeys));
   if (group.hints?.length) add(hintedMetaGroups(listing, group.hints));
 
-  if (group.param === "type") add([asTerm(listing.kind)].filter((t): t is ListingTaxTerm => !!t));
+  if (group.param === "type") {
+    // Live Listeo records can carry complete child-category slugs in
+    // categorySlugs even when the REST/geo taxonomy terms expose only the
+    // parent category. Include those slugs so facet counts reflect all
+    // memberships (e.g. all pizzerias, not only the one whose visible term
+    // happens to be "Pizzeria").
+    add(
+      (listing.categorySlugs ?? []).map((slug) =>
+        asTerm(slug.replace(/-/g, " ")),
+      ).filter((t): t is ListingTaxTerm => !!t),
+    );
+    add([asTerm(listing.kind)].filter((t): t is ListingTaxTerm => !!t));
+  }
   if (group.param === "area") {
     const name = listing.area && listing.area !== "Pondicherry" ? listing.area : listing.location;
     if (name && name !== "Pondicherry" && !/,/.test(name) && name.split(" ").length <= 4) {
