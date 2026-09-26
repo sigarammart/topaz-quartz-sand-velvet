@@ -117,6 +117,32 @@ export const fetchListeoBookingAvailability = createServerFn({ method: "POST" })
     );
     return { ok: true as const, dates };
   });
+
+export const fetchListeoBookingConfirmationUrl = createServerFn({ method: "POST" })
+  .validator(z.object({ listingUrl: z.string().url() }))
+  .handler(async ({ data }) => {
+    const listingUrl = new URL(data.listingUrl, WP_ORIGIN);
+    if (listingUrl.origin !== new URL(WP_ORIGIN).origin) {
+      throw new Error("Invalid Listeo listing origin");
+    }
+
+    const response = await fetch(listingUrl.toString(), {
+      headers: WP_HTML_HEADERS,
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!response.ok) throw new Error("Listeo listing could not be loaded");
+
+    const html = await response.text();
+    const formTag = html.match(/<form\b[^>]*\bid=["']form-booking["'][^>]*>/i)?.[0] ?? "";
+    const actionMatch = formTag.match(/\baction=["']([^"']+)["']/i);
+    if (!actionMatch?.[1]) throw new Error("Listeo booking confirmation URL was not found");
+
+    const actionUrl = new URL(decodeHtml(actionMatch[1]), listingUrl);
+    if (actionUrl.origin !== new URL(WP_ORIGIN).origin) {
+      throw new Error("Invalid Listeo booking confirmation origin");
+    }
+    return actionUrl.toString();
+  });
 const WP_HTML_HEADERS = {
   Accept: "text/html",
   "User-Agent":
