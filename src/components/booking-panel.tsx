@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import {
   ChevronDown,
   ChevronLeft,
@@ -597,7 +598,7 @@ function Field({
   className,
 }: {
   label: string;
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (
