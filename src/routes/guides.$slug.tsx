@@ -141,6 +141,16 @@ function GuidePage() {
   const guide = mergeGuide(catalogHit, extra ?? null);
   const detailsLoading = extra === undefined;
 
+  // Keep every Hook in the same order on every render. The guide can be
+  // temporarily unavailable while the catalog/detail request resolves.
+  const toc = useMemo(
+    () =>
+      guide?.sections
+        .map((s, i) => ({ heading: s.heading, id: s.heading ? headingId(s.heading, i) : "" }))
+        .filter((s): s is { heading: string; id: string } => Boolean(s.heading && s.id)) ?? [],
+    [guide],
+  );
+
   if (!guide) {
     if (extra === undefined || status === "loading" || status === "idle") {
       return (
@@ -153,13 +163,6 @@ function GuidePage() {
     throw notFound();
   }
 
-  const toc = useMemo(
-    () =>
-      guide.sections
-        .map((s, i) => ({ heading: s.heading, id: s.heading ? headingId(s.heading, i) : "" }))
-        .filter((s): s is { heading: string; id: string } => Boolean(s.heading && s.id)),
-    [guide.sections],
-  );
   const related = relatedGuides(guide, guides);
 
   return (
