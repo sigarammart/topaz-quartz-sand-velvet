@@ -151,11 +151,15 @@ function Explore() {
       <p className="mt-2 text-xs text-muted-foreground">
         {source === "live" && items.length > 80
           ? `Live from xplorepondy.com · ${Math.max(total, items.length).toLocaleString()} listings`
-          : status === "loading"
-            ? "Refreshing from xplorepondy.com…"
-            : status === "offline"
-              ? "WordPress unreachable · showing the curated set"
-              : "Loading the directory…"}
+          : items.length > 0
+            ? status === "offline"
+              ? `${items.length} places available · showing the curated set`
+              : status === "loading"
+                ? `${items.length} places available · updating in the background…`
+                : `${items.length} places available`
+            : status === "loading"
+              ? "Loading the directory…"
+              : "No listings loaded yet."}
       </p>
 
       <div className="relative mt-4">
