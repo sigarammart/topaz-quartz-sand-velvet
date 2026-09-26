@@ -46,7 +46,7 @@ let slugTimer: ReturnType<typeof setTimeout> | undefined;
 const SESSION_KEY = "xp-catalog-v41";
 // Keep the last known live catalog through transient server/WordPress outages.
 // A successful live refresh replaces it automatically.
-const SESSION_TTL = 0;
+const SESSION_TTL = 5 * 60 * 1000;
 
 type SessionSnap = {
   at: number;
@@ -196,7 +196,10 @@ export const useCatalog = create<CatalogState>((set, get) => ({
     loadStarted = Date.now();
     const previous = current.items;
     const previousSource = current.source;
-    const keepUi = previous.length > 80 && previousSource === "live";
+    const keepUi = previous.length > 8;
+    // Never blank or put the initial directory behind a long WordPress refresh.
+    // The curated/live set already in memory remains usable while the live
+    // catalog is fetched in the background.
     if (!keepUi) set({ status: "loading" });
     try {
       const result = await Promise.race([
