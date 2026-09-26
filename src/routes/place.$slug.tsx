@@ -697,6 +697,20 @@ function PlacePage() {
 
       <NearbyCategories current={listing} items={items} />
 
+      {bookingEnabled && (
+        <BookingPanel
+          open={bookingOpen}
+          onClose={() => setBookingOpen(false)}
+          listingName={listing.name}
+          dates={bookingDates}
+          slots={[]}
+          selectedDate={bookingDates[0]?.value}
+          reservationFee={50}
+          currency="INR"
+          externalBookingUrl={listing.siteUrl}
+        />
+      )}
+
     </article>
   );
 }
