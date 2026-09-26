@@ -1561,8 +1561,9 @@ async function loadListingPages() {
     "id,slug,title,link,featured_media,listing_category,region,listing_feature,class_list",
     "meta._friendly_address,meta.google_place_id,meta._google_place_id,meta.googlePlaceId,meta._geolocation_lat,meta._geolocation_long,meta._featured,meta.listing-package",
   ].join(",");
+  const perPage = 100;
   const first = await wpGet<WpListing[]>(
-    `/wp-json/wp/v2/listing?per_page=50&page=1&_fields=${fields}`,
+    `/wp-json/wp/v2/listing?per_page=${perPage}&page=1&_fields=${fields}`,
     {},
     8000,
   );
@@ -1572,15 +1573,15 @@ async function loadListingPages() {
     return { rows: [], total: 0 };
   }
   const total = Number(first.headers.get("X-WP-Total") ?? first.data.length);
-  const pages = 1;
+  const pages = Number(first.headers.get("X-WP-TotalPages") ?? Math.ceil(total / perPage));
   const rest =
     pages > 1
       ? await Promise.all(
           Array.from({ length: pages - 1 }, (_, i) =>
             wpGet<WpListing[]>(
-              `/wp-json/wp/v2/listing?per_page=100&page=${i + 2}&_embed=1&_fields=${fields},meta,_embedded`,
+              `/wp-json/wp/v2/listing?per_page=${perPage}&page=${i + 2}&_fields=${fields}`,
               {},
-              12000,
+              10000,
             ).then((r) => (r.ok && Array.isArray(r.data) ? r.data : [])),
           ),
         )
@@ -1627,7 +1628,7 @@ const CATALOG_TTL = 0;
 const CATALOG_STALE = 0;
 const LISTING_PAGE_TTL = 0;
 const HTML_TTL = 0;
-const CATALOG_VERSION = 41;
+const CATALOG_VERSION = 42;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   // Keep the initial catalog request deliberately lightweight. The PWA must
@@ -1637,12 +1638,13 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
   const wpCatalog = await loadListingPages();
 
   if (wpCatalog.rows.length >= 30) {
-    const listings = mergeLocal(
-      wpCatalog.rows
-        .filter((row) => Boolean(row?.slug))
-        .map((row) => mapListing(row))
-        .filter((row): row is Listing => Boolean(row)),
-    );
+    // REST is the authoritative catalog source. Do not append the curated
+    // local set here: doing so made the UI report the WordPress total (e.g.
+    // 567) while actually rendering only the first REST page plus local extras.
+    const listings = wpCatalog.rows
+      .filter((row) => Boolean(row?.slug))
+      .map((row) => mapListing(row))
+      .filter((row): row is Listing => Boolean(row));
     return {
       listings,
       total: Math.max(wpCatalog.total, listings.length),
