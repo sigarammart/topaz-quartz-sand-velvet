@@ -141,7 +141,7 @@ export function BookingPanel({
   const totalGuests = activeGuests.adults + activeGuests.children + activeGuests.infants;
 
   const selection = useMemo<BookingSelection | null>(() => {
-    if (!selectedDate || !selected) return null;
+    if (!activeDate || !selected) return null;
     return {
       date: activeDate,
       slot: selected,
@@ -153,6 +153,9 @@ export function BookingPanel({
     if (!open) {
       setStep("datetime");
       setGuestOpen(false);
+      setInternalDate(selectedDate ?? dates[0]?.value);
+      setInternalSlot(selectedSlot);
+      setInternalGuests(guests);
       setDetails({ firstName: "", lastName: "", email: "", phone: "", message: "" });
     }
   }, [open]);
@@ -199,6 +202,13 @@ export function BookingPanel({
     if (!selection) return;
     onContinue?.(selection);
     setStep("confirm");
+  }
+
+  function moveDate(direction: -1 | 1) {
+    if (!activeDate) return;
+    const index = dates.findIndex((date) => date.value === activeDate);
+    const next = dates[index + direction];
+    if (next && next.available !== false) changeDate(next.value);
   }
 
   function confirm() {
@@ -264,20 +274,22 @@ export function BookingPanel({
             <DateTimeStep
               dates={dates}
               slots={slots}
-              selectedDate={selectedDate}
-              selectedSlot={selectedSlot}
-              guests={guests}
+              selectedDate={activeDate}
+              selectedSlot={activeSlotId}
+              guests={activeGuests}
               guestOpen={guestOpen}
               totalGuests={totalGuests}
               reservationFee={reservationFee}
               currency={currency}
               loading={loading}
               error={error}
-              onDateChange={onDateChange}
-              onSlotChange={onSlotChange}
+              onDateChange={changeDate}
+              onSlotChange={changeSlot}
               onGuestsToggle={() => setGuestOpen((value) => !value)}
               onGuestsChange={updateGuests}
               onNext={nextStep}
+              onPreviousDate={() => moveDate(-1)}
+              onNextDate={() => moveDate(1)}
             />
           )}
 
@@ -329,6 +341,8 @@ function DateTimeStep({
   onGuestsToggle,
   onGuestsChange,
   onNext,
+  onPreviousDate,
+  onNextDate,
   externalBookingUrl,
 }: {
   dates: BookingDateOption[];
@@ -347,6 +361,8 @@ function DateTimeStep({
   onGuestsToggle: () => void;
   onGuestsChange: (next: Partial<BookingGuestCounts>) => void;
   onNext: () => void;
+  onPreviousDate?: () => void;
+  onNextDate?: () => void;
   externalBookingUrl?: string;
 }) {
   return (
@@ -361,10 +377,10 @@ function DateTimeStep({
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-semibold">Date</h4>
           <div className="hidden items-center gap-1 sm:flex">
-            <button type="button" className="grid size-8 place-items-center rounded-full border border-border" aria-label="Previous dates">
+            <button type="button" onClick={onPreviousDate} disabled={!onPreviousDate} className="grid size-8 place-items-center rounded-full border border-border disabled:opacity-40" aria-label="Previous dates">
               <ChevronLeft className="size-4" />
             </button>
-            <button type="button" className="grid size-8 place-items-center rounded-full border border-border" aria-label="Next dates">
+            <button type="button" onClick={onNextDate} disabled={!onNextDate} className="grid size-8 place-items-center rounded-full border border-border disabled:opacity-40" aria-label="Next dates">
               <ChevronRight className="size-4" />
             </button>
           </div>
