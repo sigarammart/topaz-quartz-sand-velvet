@@ -1,4 +1,4 @@
-import type { Category } from "@/lib/types";
+import type { Category, ListingTaxTerm } from "@/lib/types";
 import { categoryFromKindName } from "@/lib/listing-categories";
 import { pickListingImage, uniqueImages } from "@/lib/media";
 import { cachedOriginText } from "@/lib/origin-cache";
@@ -17,6 +17,7 @@ export type ListeoGeo = {
   gallery?: string[];
   kind?: string;
   category?: Category;
+  categoryTerms?: ListingTaxTerm[];
   id?: number;
   featured?: boolean;
 };
@@ -70,7 +71,25 @@ export function parseListeoGeoHtml(html: string): ListeoGeo[] {
     const gallery = uniqueImages(slides);
     const image = pickListingImage(poster, gallery[0]);
     const listingType = window.match(/data-listing-type="([^"]+)"/)?.[1] ?? "";
-    const kind = decode(window.match(/listing-category-tag-nl">([^<]+)/)?.[1] ?? "").split(",")[0]?.trim() ?? "";
+    const categoryNames = [
+      ...window.matchAll(/listing-category-tag-nl[^>]*>([^<]+)/gi),
+    ]
+      .flatMap((match) => decode(match[1] ?? "").split(","))
+      .map((name) => name.trim())
+      .filter(Boolean);
+    const categoryTerms: ListingTaxTerm[] = [];
+    const categorySeen = new Set<string>();
+    for (const name of categoryNames) {
+      const slug = name
+        .toLowerCase()
+        .replace(/&/g, " ")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      if (!slug || categorySeen.has(slug)) continue;
+      categorySeen.add(slug);
+      categoryTerms.push({ name, slug });
+    }
+    const kind = categoryNames[0] ?? "";
     const id = Number(window.match(/data-post-id="(\d+)"/)?.[1] || window.match(/data-id="(\d+)"/)?.[1]);
     const featured =
       /<(?:div|span)[^>]*class="[^"]*\bfeatured-nl\b/.test(window) || /\bbadge-nl featured-nl\b/.test(window);
@@ -87,6 +106,7 @@ export function parseListeoGeoHtml(html: string): ListeoGeo[] {
       gallery: gallery.length ? gallery : undefined,
       kind: kind || undefined,
       category: categoryFromCard(kind, listingType),
+      categoryTerms: categoryTerms.length ? categoryTerms : undefined,
       id: Number.isFinite(id) && id > 0 ? id : undefined,
       featured: featured || undefined,
     });
