@@ -734,7 +734,19 @@ function enrichListingFromHtml(listing: Listing, html: string): Listing {
   ];
   const profile = profileFromSlugs(categorySlugs);
   const jet = extractJetMetaGroups(html, profile);
-  const groups = [...(jet.groups.length ? jet.groups : listing.metaGroups ?? [])];
+  const groups = [...(listing.metaGroups ?? [])];
+  for (const group of jet.groups) {
+    const existing = groups.find((item) => item.title.toLowerCase() === group.title.toLowerCase());
+    if (!existing) {
+      groups.push(group);
+      continue;
+    }
+    const seen = new Set(existing.items.map((item) => item.label.toLowerCase()));
+    for (const item of group.items) {
+      if (!seen.has(item.label.toLowerCase())) existing.items.push(item);
+    }
+    if (!existing.text && group.text) existing.text = group.text;
+  }
   if (!profile && facts.fields.length && !groups.some((g) => /^features$/i.test(g.title))) {
     groups.unshift({
       title: "Features",
@@ -807,6 +819,75 @@ function extractGooglePlaceIdFromHtml(html: string): string | undefined {
     if (match?.[1]) return match[1];
   }
   return undefined;
+}
+
+function metaValueItems(value: unknown): ListingMetaItem[] {
+  const items: ListingMetaItem[] = [];
+  const add = (value: unknown, included = true) => {
+    if (value == null || value === false || value === "") return;
+    const label = decodeHtml(String(value)).replace(/[_-]+/g, " ").replace(/\\s+/g, " ").trim();
+    if (!label || items.some((item) => item.label.toLowerCase() === label.toLowerCase())) return;
+    items.push({ label, included });
+  };
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (typeof entry === "object" && entry !== null) {
+        for (const [key, entryValue] of Object.entries(entry as Record<string, unknown>)) {
+          if (entryValue === true || entryValue === 1 || entryValue === "1" || entryValue === "yes" || entryValue === "true") {
+            add(keyLabelFromMeta(key));
+          } else if (typeof entryValue === "string" && entryValue.trim()) {
+            add(entryValue);
+          }
+        }
+      } else {
+        add(entry);
+      }
+    }
+    return items;
+  }
+
+  if (typeof value === "object") {
+    for (const [key, entryValue] of Object.entries(value as Record<string, unknown>)) {
+      if (entryValue === true || entryValue === 1 || entryValue === "1" || entryValue === "yes" || entryValue === "true") {
+        add(keyLabelFromMeta(key));
+      } else if (typeof entryValue === "string" && entryValue.trim()) {
+        add(entryValue);
+      }
+    }
+    return items;
+  }
+
+  if (typeof value === "string") {
+    for (const entry of value.split(/[,|\\n]+/)) add(entry);
+  } else {
+    add(value);
+  }
+  return items;
+}
+
+function keyLabelFromMeta(key: string) {
+  return key
+    .replace(/^_/, "")
+    .replace(/_amp_/g, " & ")
+    .replace(/_/g, " ")
+    .replace(/\\b\\w/g, (char) => char.toUpperCase());
+}
+
+function extractProfileMetaGroups(
+  meta: WpListingMeta,
+  profile: ListingFieldProfile | null,
+): ListingMetaGroup[] {
+  if (!profile) return [];
+  const groups: ListingMetaGroup[] = [];
+  for (const key of profileKeys(profile)) {
+    if (key === "_editor_note") continue;
+    const value = (meta as Record<string, unknown>)[key];
+    const items = metaValueItems(value);
+    if (!items.length) continue;
+    groups.push({ title: keyLabelFromMeta(key), items });
+  }
+  return groups;
 }
 
 function mapListing(
@@ -885,6 +966,13 @@ function mapListing(
       else taxonomies.unshift({ key: "listing_category", label: TAX_LABELS.listing_category, terms: classTerms });
     }
   }
+  const profile = profileFromSlugs([
+    ...classCategorySlugs,
+    ...taxonomies.flatMap((group) => group.terms.map((term) => term.slug)),
+    kind,
+  ]);
+  const rawMetaGroups = extractProfileMetaGroups(meta, profile);
+
   const menuImages = extractMenuImages(meta.dining_menu_images);
   const listeo = contactFromListeoMeta(meta as Record<string, unknown>);
   return {
@@ -921,6 +1009,7 @@ function mapListing(
     tripDays,
     groupSize,
     taxonomies,
+    metaGroups: rawMetaGroups.length ? rawMetaGroups : undefined,
     categorySlugs: (raw.class_list ?? [])
       .filter((c) => c.startsWith("listing_category-"))
       .map((c) => c.slice("listing_category-".length)),
