@@ -178,7 +178,7 @@ function PlacePage() {
   const origin = useGeo((s) => s.origin);
   const fromGps = useGeo((s) => s.source === "gps");
   const detailsLoading = extra === undefined;
-  const bookingEnabled = /hook[\s-]*lounge/i.test(String(listing.slug) + " " + String(listing.name) + " " + String(listing.siteUrl ?? ""));
+  const bookingEnabled = /hook[\s-]*lounge/i.test(\n    String(listing?.slug ?? "") + " " + String(listing?.name ?? "") + " " + String(listing?.siteUrl ?? ""),\n  );
 
   useEffect(() => {
     try {
