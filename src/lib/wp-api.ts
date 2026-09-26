@@ -434,26 +434,25 @@ function positiveInteger(value: unknown): number | undefined {
 function parseListeoGuestLimits(html: string): { min?: number; max?: number } {
   const findAttr = (tag: string, names: string[]) => {
     for (const name of names) {
-      const match = tag.match(new RegExp('\\\\b' + name + '\\s*=\\s*["\\\\\\'](\\\\d+)["\\\\\\']', 'i'));
-      if (match?.[1]) return Number(match[1]);
-      const unquoted = tag.match(new RegExp('\\\\b' + name + '\\s*=\\s*(\\\\d+)', 'i'));
+      const quoted = tag.match(new RegExp("\\b" + name + "\\s*=\\s*[\"'](\\d+)[\"']", "i"));
+      if (quoted?.[1]) return Number(quoted[1]);
+      const unquoted = tag.match(new RegExp("\\b" + name + "\\s*=\\s*(\\d+)", "i"));
       if (unquoted?.[1]) return Number(unquoted[1]);
     }
     return undefined;
   };
 
-  const adultInput = html.match(/<input\\b[^>]*(?:name|id)=["']adults["'][^>]*>/i)?.[0] ?? '';
-  const maxFromMeta = html.match(/(?:_max_guests|max_guests|maximum[_-]?guests)["'\\s:=]+(?:["']?)(\\d+)/i)?.[1];
-  const minFromMeta = html.match(/(?:_min_guests|min_guests|minimum[_-]?guests)["'\\s:=]+(?:["']?)(\\d+)/i)?.[1];
+  const adultInput = html.match(/<input\b[^>]*(?:name|id)=["']adults["'][^>]*>/i)?.[0] ?? "";
+  const maxFromMeta = html.match(/(?:_max_guests|max_guests|maximum[_-]?guests)["'\s:=]+["']?(\d+)/i)?.[1];
+  const minFromMeta = html.match(/(?:_min_guests|min_guests|minimum[_-]?guests)["'\s:=]+["']?(\d+)/i)?.[1];
 
-  const max = findAttr(adultInput, ['max', 'data-max', 'data-maximum']) ?? positiveInteger(maxFromMeta);
-  const min = findAttr(adultInput, ['min', 'data-min', 'data-minimum']) ?? positiveInteger(minFromMeta);
+  const max = findAttr(adultInput, ["max", "data-max", "data-maximum"]) ?? positiveInteger(maxFromMeta);
+  const min = findAttr(adultInput, ["min", "data-min", "data-minimum"]) ?? positiveInteger(minFromMeta);
   return {
     min: min && min >= 1 ? min : undefined,
     max: max && max >= 1 ? max : undefined,
   };
 }
-
 function truthyMeta(value: unknown) {
   if (value === true || value === 1) return true;
   if (typeof value === "string") return value.toLowerCase() === "true" || value === "1" || value.toLowerCase() === "yes";
