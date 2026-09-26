@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { AddToTrip } from "@/components/add-to-trip";
+import { BookingPanel } from "@/components/booking-panel";
 import { ListingCard } from "@/components/listing-card";
 import { PhotoGallery } from "@/components/photo-gallery";
 import { OpenNowBadge } from "@/components/open-now-badge";
@@ -144,6 +145,7 @@ function PlacePage() {
     listing: cachedDetail(slug),
   }));
   const [relatedShown, setRelatedShown] = useState(6);
+  const [bookingOpen, setBookingOpen] = useState(false);
   const [relatedSort, setRelatedSort] = useState<"featured" | "package" | "near">("featured");
 
   useEffect(() => {
@@ -236,6 +238,21 @@ function PlacePage() {
     .filter((group) => group.terms.length);
   const where = listing.address || listing.location;
   const showDetailsSkeleton = detailsLoading && !listingHasDetails(listing);
+  const bookingDates = useMemo(() => {
+    const now = new Date();
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(now);
+      date.setDate(now.getDate() + index);
+      return {
+        value: date.toISOString().slice(0, 10),
+        weekday: new Intl.DateTimeFormat("en-IN", { weekday: "short" }).format(date),
+        day: new Intl.DateTimeFormat("en-IN", { day: "2-digit" }).format(date),
+        month: new Intl.DateTimeFormat("en-IN", { month: "short" }).format(date),
+        available: true,
+      };
+    });
+  }, []);
+
 
   return (
     <article aria-busy={detailsLoading}>
