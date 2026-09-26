@@ -188,6 +188,8 @@ type WpListingMeta = {
   _address?: string;
   _friendly_address?: string;
   _featured?: string | number | boolean;
+  _max_guests?: string | number;
+  _min_guests?: string | number;
   "listing-package"?: string | number;
   _geolocation_lat?: string;
   _geolocation_long?: string;
@@ -422,6 +424,34 @@ function findLocal(slug: string, link?: string): Listing | undefined {
     localListings.find((l) => urlTail(l.siteUrl) === slug) ||
     (linkTail ? localListings.find((l) => l.slug === linkTail || urlTail(l.siteUrl) === linkTail) : undefined)
   );
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : undefined;
+}
+
+function parseListeoGuestLimits(html: string): { min?: number; max?: number } {
+  const findAttr = (tag: string, names: string[]) => {
+    for (const name of names) {
+      const match = tag.match(new RegExp('\\\\b' + name + '\\s*=\\s*["\\\\\\'](\\\\d+)["\\\\\\']', 'i'));
+      if (match?.[1]) return Number(match[1]);
+      const unquoted = tag.match(new RegExp('\\\\b' + name + '\\s*=\\s*(\\\\d+)', 'i'));
+      if (unquoted?.[1]) return Number(unquoted[1]);
+    }
+    return undefined;
+  };
+
+  const adultInput = html.match(/<input\\b[^>]*(?:name|id)=["']adults["'][^>]*>/i)?.[0] ?? '';
+  const maxFromMeta = html.match(/(?:_max_guests|max_guests|maximum[_-]?guests)["'\\s:=]+(?:["']?)(\\d+)/i)?.[1];
+  const minFromMeta = html.match(/(?:_min_guests|min_guests|minimum[_-]?guests)["'\\s:=]+(?:["']?)(\\d+)/i)?.[1];
+
+  const max = findAttr(adultInput, ['max', 'data-max', 'data-maximum']) ?? positiveInteger(maxFromMeta);
+  const min = findAttr(adultInput, ['min', 'data-min', 'data-minimum']) ?? positiveInteger(minFromMeta);
+  return {
+    min: min && min >= 1 ? min : undefined,
+    max: max && max >= 1 ? max : undefined,
+  };
 }
 
 function truthyMeta(value: unknown) {
@@ -854,6 +884,7 @@ function enrichListingFromHtml(listing: Listing, html: string): Listing {
   const og = extractOgImage(html);
   const gallery = uniqueImages(extractGallery(html, og || listing.image), listing.gallery);
   const hoursInfo = parseOpenHoursHtml(html);
+  const guestLimits = parseListeoGuestLimits(html);
   const overview = extractListingOverview(html, listing.name);
   const categorySlugs = [
     ...new Set([
@@ -921,6 +952,8 @@ function enrichListingFromHtml(listing: Listing, html: string): Listing {
     location: listing.location === "Pondicherry" && extra.address ? extra.address : listing.location,
     lat: listing.lat ?? contact.lat ?? geo.lat,
     lng: listing.lng ?? contact.lng ?? geo.lng,
+    bookingMinGuests: guestLimits.min ?? listing.bookingMinGuests,
+    bookingMaxGuests: guestLimits.max ?? listing.bookingMaxGuests,
     duration: facts.duration || listing.duration,
     description: liveDesc.length > (listing.description?.length ?? 0) ? liveDesc : liveDesc || listing.description,
     cafeTypes: listing.cafeTypes?.length ? listing.cafeTypes : cafeFromGroups?.items.map((i) => i.label),
@@ -1161,6 +1194,8 @@ function mapListing(
     accessibility,
     tripDays,
     groupSize,
+    bookingMinGuests: positiveInteger(meta._min_guests) ?? listing.bookingMinGuests,
+    bookingMaxGuests: positiveInteger(meta._max_guests) ?? listing.bookingMaxGuests,
     taxonomies,
     metaGroups: rawMetaGroups.length ? rawMetaGroups : undefined,
     categorySlugs: (raw.class_list ?? [])
