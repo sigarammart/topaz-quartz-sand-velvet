@@ -218,6 +218,8 @@ function PlacePage() {
     });
   }, []);
 
+  const firstBookableDate = bookingDates.find((date) => (date.slots?.length ?? 0) > 0)?.value ?? bookingDates[0]?.value;
+
   if (!listing) {
     if (extra === undefined || status === "loading" || status === "idle") {
       return <PlaceLoading />;
@@ -712,10 +714,22 @@ function PlacePage() {
           listingName={listing.name}
           dates={bookingDates}
           slots={[]}
-          selectedDate={bookingDates[0]?.value}
+          selectedDate={firstBookableDate}
           reservationFee={50}
           currency="INR"
           externalBookingUrl={listing.siteUrl}
+          onConfirm={(details, selection) => {
+            const target = new URL(listing.siteUrl);
+            target.searchParams.set("booking_date", selection.date);
+            target.searchParams.set("booking_time", selection.slot.start);
+            target.searchParams.set("booking_adults", String(selection.guests.adults));
+            target.searchParams.set("booking_children", String(selection.guests.children));
+            target.searchParams.set("booking_infants", String(selection.guests.infants));
+            if (details.email) target.searchParams.set("booking_email", details.email);
+            if (details.phone) target.searchParams.set("booking_phone", details.phone);
+            window.open(target.toString(), "_blank", "noopener,noreferrer");
+            setBookingOpen(false);
+          }}
         />
       )}
 
