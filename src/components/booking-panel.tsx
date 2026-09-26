@@ -69,6 +69,8 @@ type BookingPanelProps = {
 };
 
 export type BookingDetails = {
+  username: string;
+  password: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -130,6 +132,8 @@ export function BookingPanel({
   const [internalSlot, setInternalSlot] = useState(selectedSlot);
   const [internalGuests, setInternalGuests] = useState<BookingGuestCounts>(guests);
   const [details, setDetails] = useState<BookingDetails>({
+    username: "",
+    password: "",
     firstName: "",
     lastName: "",
     email: "",
@@ -160,7 +164,7 @@ export function BookingPanel({
       setInternalDate(selectedDate ?? dates[0]?.value);
       setInternalSlot(selectedSlot);
       setInternalGuests(guests);
-      setDetails({ firstName: "", lastName: "", email: "", phone: "", message: "" });
+      setDetails({ username: "", password: "", firstName: "", lastName: "", email: "", phone: "", message: "" });
     }
   }, [open]);
 
@@ -626,6 +630,12 @@ function ConfirmStep({
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <Field label="Username *">
+          <Input value={details.username} onChange={(event) => onChange({ ...details, username: event.target.value })} autoComplete="username" />
+        </Field>
+        <Field label="Password *">
+          <Input type="password" value={details.password} onChange={(event) => onChange({ ...details, password: event.target.value })} autoComplete="new-password" />
+        </Field>
         <Field label="First name *">
           <Input value={details.firstName} onChange={(event) => onChange({ ...details, firstName: event.target.value })} autoComplete="given-name" />
         </Field>
