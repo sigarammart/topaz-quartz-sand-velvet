@@ -1825,31 +1825,20 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
     // Resolve featured_media IDs in one batched REST pass. The lightweight
     // listing query only returns the media ID; without this map every live
     // listing fell back to the same generic category image.
-    const [mediaMap, listeoGeo] = await Promise.all([
-      loadMedia(
-        wpCatalog.rows
-          .map((row) => Number(row?.featured_media ?? 0))
-          .filter((id) => Number.isFinite(id) && id > 0),
-      ),
-      loadListeoGeo(),
-    ]);
+    // Do not put the Listeo geo/AJAX feed on the critical path. It can
+    // take longer than the PWA request budget when WordPress/LiteSpeed is
+    // busy, leaving the client stuck on "Refreshing from xplorepondy.com…".
+    // The REST catalog already contains the authoritative listing data,
+    // including Listeo meta such as coordinates, rating, address and guests.
+    // Geo remains the recovery source when REST itself is unavailable.
+    const mediaMap = await loadMedia(
+      wpCatalog.rows
+        .map((row) => Number(row?.featured_media ?? 0))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    );
     const listings = wpCatalog.rows
       .filter((row) => Boolean(row?.slug))
-      .map((row) => {
-        const listing = mapListing(row, { mediaMap });
-        const geo = listeoGeo.map.get(row.slug);
-        if (!geo) return listing;
-        return {
-          ...listing,
-          rating: geo.rating ?? listing.rating,
-          reviews: geo.reviews ?? listing.reviews,
-          lat: listing.lat ?? geo.lat,
-          lng: listing.lng ?? geo.lng,
-          address: listing.address ?? geo.address,
-          friendlyAddress: listing.friendlyAddress ?? geo.friendlyAddress,
-          featured: listing.featured ?? geo.featured,
-        };
-      })
+      .map((row) => mapListing(row, { mediaMap }))
       .filter((row): row is Listing => Boolean(row));
     return {
       listings,
