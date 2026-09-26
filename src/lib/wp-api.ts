@@ -1645,12 +1645,9 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
 
   // Resolve WordPress featured-media IDs once so each listing can use its
   // actual featured image instead of falling back to a shared/local image.
-  const featuredMediaIds = [...new Set(
-    wpCatalog.rows
-      .map((row) => Number(row.featured_media ?? 0))
-      .filter((id) => Number.isFinite(id) && id > 0),
-  )];
-  // Featured media is already available through _embed on the REST rows.\n  // Avoid an extra media round-trip during the cold catalog load.\n  const mediaMap = new Map<number, string>();
+  // Featured media is already available through _embed on the REST rows.
+  // Avoid an extra media round-trip during the cold catalog load.
+  const mediaMap = new Map<number, string>();
 
   // WordPress REST is the authoritative source for taxonomy membership.
   // Listeo geo data is still used below to enrich listings with coordinates,
@@ -1695,29 +1692,31 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
       !listeoGeo.has(row.slug) &&
       (!row.meta?._friendly_address || !row.meta?.google_place_id),
   );
-  await Promise.all(
-    Array.from({ length: Math.min(4, missingHtmlRows.length) }, async (_, workerIndex) => {
-      for (let i = workerIndex; i < missingHtmlRows.length; i += 4) {
-        const row = missingHtmlRows[i];
-        if (!row?.slug) continue;
-        const urls = [
-          row.link,
-          WP_ORIGIN + "/listing/service/" + row.slug + "/",
-          WP_ORIGIN + "/listing/" + row.slug + "/",
-        ].filter((url): url is string => Boolean(url));
-        const page = await loadListingPageHtml(urls, 9000);
-        if (!page) continue;
-        try {
-          htmlEnriched.set(
-            row.slug,
-            enrichListingFromHtml(mapListing(row, { mediaMap, catMap: categoryMap }), page.html),
-          );
-        } catch {
-          /* keep the REST/Jet archive data */
+  if (missingHtmlRows.length <= 12) {
+    await Promise.all(
+      Array.from({ length: Math.min(4, missingHtmlRows.length) }, async (_, workerIndex) => {
+        for (let i = workerIndex; i < missingHtmlRows.length; i += 4) {
+          const row = missingHtmlRows[i];
+          if (!row?.slug) continue;
+          const urls = [
+            row.link,
+            WP_ORIGIN + "/listing/service/" + row.slug + "/",
+            WP_ORIGIN + "/listing/" + row.slug + "/",
+          ].filter((url): url is string => Boolean(url));
+          const page = await loadListingPageHtml(urls, 9000);
+          if (!page) continue;
+          try {
+            htmlEnriched.set(
+              row.slug,
+              enrichListingFromHtml(mapListing(row, { mediaMap, catMap: categoryMap }), page.html),
+            );
+          } catch {
+            /* keep the REST/Jet archive data */
+          }
         }
-      }
-    }),
-  );
+      }),
+    );
+  }
 
   function applyLive(item: Listing, slug: string): Listing {
     const hit = jetMeta.get(slug) ?? jetMeta.get(urlTail(item.siteUrl));
