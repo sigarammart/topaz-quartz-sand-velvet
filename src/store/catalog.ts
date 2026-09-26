@@ -159,7 +159,7 @@ export const useCatalog = create<CatalogState>((set, get) => ({
   items: localListings,
   guides: localGuides,
   source: "local",
-  status: "idle",
+  status: "ready",
   total: localListings.length,
   error: null,
   openNowTotal: 0,
