@@ -603,7 +603,7 @@ function ConfirmStep({
   externalBookingUrl?: string;
 }) {
   const requiredDetailsComplete = Object.entries(details).every(
-    ([key, value]) => key === "message" || value.trim().length > 0,
+    ([key, value]) => key === "message" || key === "lastName" || value.trim().length > 0,
   );
 
   return (
