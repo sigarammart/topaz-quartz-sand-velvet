@@ -62,6 +62,7 @@ type BookingPanelProps = {
   onContinue?: (selection: BookingSelection) => void;
   onConfirm?: (details: BookingDetails, selection: BookingSelection) => void;
   successMessage?: string;
+  externalBookingUrl?: string;
 };
 
 export type BookingDetails = {
@@ -116,6 +117,7 @@ export function BookingPanel({
   onContinue,
   onConfirm,
   successMessage = "Your booking has been confirmed.",
+  externalBookingUrl,
 }: BookingPanelProps) {
   const [step, setStep] = useState<BookingStep>("datetime");
   const [guestOpen, setGuestOpen] = useState(false);
@@ -305,6 +307,7 @@ function DateTimeStep({
   onGuestsToggle,
   onGuestsChange,
   onNext,
+  externalBookingUrl,
 }: {
   dates: BookingDateOption[];
   slots: BookingSlot[];
@@ -322,6 +325,7 @@ function DateTimeStep({
   onGuestsToggle: () => void;
   onGuestsChange: (next: Partial<BookingGuestCounts>) => void;
   onNext: () => void;
+  externalBookingUrl?: string;
 }) {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-5 sm:px-6 sm:py-7">
@@ -493,7 +497,7 @@ function DateTimeStep({
         </p>
       )}
 
-      <div className="sticky bottom-0 mt-5 -mx-4 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:pb-0">
+      <div className="sticky bottom-0 mt-5 -mx-4 space-y-2 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:pb-0">
         <Button
           type="button"
           className="h-12 w-full rounded-full text-sm font-bold shadow-sm"
@@ -504,6 +508,16 @@ function DateTimeStep({
           Next
           {!loading && <ChevronRight className="size-4" />}
         </Button>
+        {externalBookingUrl && slots.length === 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 w-full rounded-full text-sm font-semibold"
+            onClick={() => window.open(externalBookingUrl, "_blank", "noopener,noreferrer")}
+          >
+            Continue with live booking
+          </Button>
+        )}
       </div>
     </div>
   );
