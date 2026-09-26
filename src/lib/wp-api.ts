@@ -1571,7 +1571,7 @@ async function loadListingPages() {
     return { rows: [], total: 0 };
   }
   const total = Number(first.headers.get("X-WP-Total") ?? first.data.length);
-  const pages = Math.min(Number(first.headers.get("X-WP-TotalPages") ?? "1"), 4);
+  const pages = Math.min(Number(first.headers.get("X-WP-TotalPages") ?? "1"), 2);
   const rest =
     pages > 1
       ? await Promise.all(
@@ -1629,238 +1629,73 @@ const HTML_TTL = 0;
 const CATALOG_VERSION = 41;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
-  const [listeoResult, wpCatalog, categoryMap] = await Promise.all([
-    loadListeoGeo(),
-    loadListingPages(),
-    loadTerms("listing_category"),
-  ]);
-  const { map: listeoGeo, total: listeoTotal } = listeoResult;
-  // Either live source is sufficient. Listeo is preferred for geo/enrichment, but
-  // a healthy WordPress REST catalog must still be usable when the Listeo
-  // AJAX feed is temporarily unavailable. Only fall back to the curated set
-  // when both live sources fail.
-  if (listeoGeo.size < 8 && wpCatalog.rows.length < 80) {
+  // Keep the initial catalog request deliberately lightweight. The PWA must
+  // receive live WordPress listings before optional Listeo/JetEngine/HTML
+  // enrichment runs; otherwise a slow plugin stack can make the whole server
+  // function time out and incorrectly show the curated fallback.
+  const wpCatalog = await loadListingPages();
+
+  if (wpCatalog.rows.length >= 80) {
+    const listings = mergeLocal(
+      wpCatalog.rows
+        .filter((row) => Boolean(row?.slug))
+        .map((row) => mapListing(row))
+        .filter((row): row is Listing => Boolean(row)),
+    );
+    return {
+      listings,
+      total: Math.max(wpCatalog.total, listings.length),
+    };
+  }
+
+  // REST is the preferred live source, but retain the existing Listeo path as
+  // a recovery route if WordPress REST returns too few rows.
+  const { map: listeoGeo, total: listeoTotal } = await loadListeoGeo();
+  if (listeoGeo.size < 8) {
     throw new Error("live-sources-empty");
   }
 
-  // Resolve WordPress featured-media IDs once so each listing can use its
-  // actual featured image instead of falling back to a shared/local image.
-  // Featured media is already available through _embed on the REST rows.
-  // Avoid an extra media round-trip during the cold catalog load.
-  const mediaMap = new Map<number, string>();
-
-  // WordPress REST is the authoritative source for taxonomy membership.
-  // Listeo geo data is still used below to enrich listings with coordinates,
-  // ratings, images, hours, etc.
-  const wpBySlug = new Map<string, WpListing>();
-  for (const row of wpCatalog.rows) {
-    if (row.slug) wpBySlug.set(row.slug, row);
-  }
-
-  const jetMeta = new Map<string, JetArchiveHit>();
-
-  // Some newly published WordPress listings are present in REST but have not
-  // appeared in the Listeo geo feed yet. Pull their archive marker data so
-  // cards still receive coordinates (and therefore distance-from-user).
-  const archiveSlugsForMissingGeo = [
-    ...new Set(
-      wpCatalog.rows
-        .filter((row) => row.slug && !listeoGeo.has(row.slug))
-        .flatMap((row) =>
-          (row.class_list ?? [])
-            .filter((value) => value.startsWith("listing_category-"))
-            .map((value) => value.slice("listing_category-".length)),
-        )
-        .filter(Boolean),
-    ),
-  ];
-  if (archiveSlugsForMissingGeo.length) {
-    await loadJetArchiveMeta(archiveSlugsForMissingGeo, jetMeta);
-  }
-
-  const seen = new Set<string>();
   const listings: Listing[] = [];
-
-  // New WordPress listings can be missing from the Listeo geo feed and may
-  // also have _friendly_address / rating fields that are not exposed by REST.
-  // Enrich only those listings from their own listing page so address and
-  // rating are listing-specific rather than inferred from an archive card.
-  const htmlEnriched = new Map<string, Listing>();
-  const missingHtmlRows = wpCatalog.rows.filter(
-    (row) =>
-      row.slug &&
-      !listeoGeo.has(row.slug) &&
-      (!row.meta?._friendly_address || !row.meta?.google_place_id),
-  );
-  if (missingHtmlRows.length <= 12) {
-    await Promise.all(
-      Array.from({ length: Math.min(4, missingHtmlRows.length) }, async (_, workerIndex) => {
-        for (let i = workerIndex; i < missingHtmlRows.length; i += 4) {
-          const row = missingHtmlRows[i];
-          if (!row?.slug) continue;
-          const urls = [
-            row.link,
-            WP_ORIGIN + "/listing/service/" + row.slug + "/",
-            WP_ORIGIN + "/listing/" + row.slug + "/",
-          ].filter((url): url is string => Boolean(url));
-          const page = await loadListingPageHtml(urls, 9000);
-          if (!page) continue;
-          try {
-            htmlEnriched.set(
-              row.slug,
-              enrichListingFromHtml(mapListing(row, { mediaMap, catMap: categoryMap }), page.html),
-            );
-          } catch {
-            /* keep the REST/Jet archive data */
-          }
-        }
-      }),
-    );
-  }
-
-  function applyLive(item: Listing, slug: string): Listing {
-    const hit = jetMeta.get(slug) ?? jetMeta.get(urlTail(item.siteUrl));
-    const geo = listeoGeo.get(slug) ?? listeoGeo.get(urlTail(item.siteUrl));
-    const local = findLocal(slug, item.siteUrl);
-    const kind = decodeHtml(hit?.kind || item.kind);
-    const category = hit?.category ?? categoryFromKindName(kind) ?? item.category;
-    return {
-      ...item,
-      category,
-      kind,
-      wpId: item.wpId ?? geo?.id ?? local?.wpId,
-      mustTry: item.mustTry?.length ? item.mustTry : hit?.mustTry,
-      cafeTypes: item.cafeTypes?.length ? item.cafeTypes : hit?.cafeTypes,
-      metaFacets: hit?.facets.length ? hit.facets : item.metaFacets,
-      metaGroups: item.metaGroups?.length ? item.metaGroups : hit?.groups,
-      lat: geo?.lat ?? hit?.lat ?? item.lat,
-      lng: geo?.lng ?? hit?.lng ?? item.lng,
-      hours: hit?.hours || item.hours || local?.hours || "",
-      openNow: hit?.openNow ?? item.openNow ?? local?.openNow,
-      weeklyHours: hit?.weeklyHours?.length ? hit.weeklyHours : (item.weeklyHours ?? local?.weeklyHours),
-      rating: item.rating || hit?.rating || geo?.rating || local?.rating || 0,
-      reviews: item.reviews || hit?.reviews || geo?.reviews || local?.reviews || 0,
-      address: item.address || geo?.address,
-      // _friendly_address is the only address value exposed to listing cards.
-      // Never fall back to the raw _address/Listeo geo address.
-      // When WP REST is unavailable, preserve the same _friendly_address
-      // value exposed by Listeo's data-friendly-address field.
-      friendlyAddress: item.friendlyAddress || geo?.friendlyAddress || undefined,
-      location: item.location === "Pondicherry" && geo?.address ? geo.address : item.location,
-      area: item.area === "Pondicherry" && geo?.address ? geo.address : item.area,
-      featured:
-        isFeaturedMeta(wpBySlug.get(slug)?.meta?._featured) ??
-        item.featured ??
-        hit?.featured ??
-        geo?.featured,
-      listingPackage:
-        toListingPackage(wpBySlug.get(slug)?.meta?.["listing-package"]) ??
-        item.listingPackage,
-      // Prefer the WordPress featured image for the card cover. Listeo's
-      // geo image is only a fallback when WordPress has no featured image.
-      image: pickListingImage(item.image, geo?.image, local?.image) || item.image || FALLBACK_IMAGE[item.category],
-      gallery: uniqueImages(geo?.gallery, item.gallery, local?.gallery),
-    };
-  }
+  const seen = new Set<string>();
 
   for (const geo of listeoGeo.values()) {
     if (seen.has(geo.slug)) continue;
     seen.add(geo.slug);
-
-    const wpRaw = wpBySlug.get(geo.slug);
-    const wpListing = wpRaw ? mapListing(wpRaw, { mediaMap, catMap: categoryMap }) : null;
-    const category = wpListing?.category ?? geo.category ?? "places";
     const local = findLocal(geo.slug);
-
-    listings.push(
-      applyLive(
-        wpListing
-          ? {
-              ...wpListing,
-              image: wpListing.image || geo.image || FALLBACK_IMAGE[category],
-              gallery: geo.gallery ?? wpListing.gallery,
-            }
-          : {
-              slug: geo.slug,
-              name: geo.name,
-              category,
-              kind: decodeHtml(geo.kind ?? local?.kind ?? "Listing"),
-              rating: geo.rating ?? 0,
-              reviews: geo.reviews ?? 0,
-              location: geo.address ?? "Pondicherry",
-              area: geo.address ?? "Pondicherry",
-              distance: "",
-              hours: local?.hours ?? "",
-              description: local?.description ?? "",
-              tags: geo.kind ? [decodeHtml(geo.kind)] : (local?.tags ?? []),
-              bestFor: local?.bestFor ?? [],
-              image: geo.image ?? FALLBACK_IMAGE[category],
-              gallery: geo.gallery,
-              siteUrl: `${WP_ORIGIN}/listing/${geo.slug}/`,
-              wpId: geo.id ?? local?.wpId,
-              lat: geo.lat,
-              lng: geo.lng,
-              address: geo.address,
-              friendlyAddress: geo.friendlyAddress,
-              featured: geo.featured,
-              taxonomies: geo.categoryTerms?.length
-                ? [{ key: "listing_category", label: "Categories", terms: geo.categoryTerms }]
-                : undefined,
-            },
-        geo.slug,
-      ),
-    );
+    const category = geo.category ?? local?.category ?? "places";
+    listings.push({
+      slug: geo.slug,
+      name: geo.name,
+      category,
+      kind: decodeHtml(geo.kind ?? local?.kind ?? "Listing"),
+      rating: geo.rating ?? local?.rating ?? 0,
+      reviews: geo.reviews ?? local?.reviews ?? 0,
+      location: geo.address ?? local?.location ?? "Pondicherry",
+      area: geo.address ?? local?.area ?? "Pondicherry",
+      distance: "",
+      hours: local?.hours ?? "",
+      description: local?.description ?? "",
+      tags: geo.kind ? [decodeHtml(geo.kind)] : (local?.tags ?? []),
+      bestFor: local?.bestFor ?? [],
+      image: geo.image ?? local?.image ?? FALLBACK_IMAGE[category],
+      gallery: geo.gallery,
+      siteUrl: `${WP_ORIGIN}/listing/${geo.slug}/`,
+      wpId: geo.id ?? local?.wpId,
+      lat: geo.lat,
+      lng: geo.lng,
+      address: geo.address,
+      friendlyAddress: geo.friendlyAddress,
+      featured: geo.featured,
+      taxonomies: geo.categoryTerms?.length
+        ? [{ key: "listing_category", label: "Categories", terms: geo.categoryTerms }]
+        : undefined,
+    });
   }
 
-  // Add published WordPress listings that are missing from the Listeo geo feed.
-  // This prevents taxonomy archives from being silently truncated by the geo endpoint.
-  for (const raw of wpCatalog.rows) {
-    if (seen.has(raw.slug)) continue;
-    seen.add(raw.slug);
-    listings.push(
-      applyLive(
-        htmlEnriched.get(raw.slug) ?? mapListing(raw, { mediaMap, catMap: categoryMap }),
-        raw.slug,
-      ),
-    );
-  }
-
-  for (const [slug, hit] of jetMeta) {
-    if (seen.has(slug)) continue;
-    seen.add(slug);
-    const local = findLocal(slug);
-    const category = local?.category ?? "places";
-    listings.push(
-      applyLive(
-        {
-          slug,
-          name: local?.name ?? slug,
-          category,
-          kind: local?.kind ?? "Listing",
-          rating: local?.rating ?? 0,
-          reviews: local?.reviews ?? 0,
-          location: local?.location ?? "Pondicherry",
-          area: local?.area ?? "Pondicherry",
-          distance: "",
-          hours: hit.hours || local?.hours || "",
-          description: local?.description ?? "",
-          tags: local?.tags ?? [],
-          bestFor: local?.bestFor ?? [],
-          image: local?.image ?? FALLBACK_IMAGE[category],
-          siteUrl: `${WP_ORIGIN}/listing/${slug}/`,
-          wpId: local?.wpId,
-          lat: hit.lat ?? local?.lat,
-          lng: hit.lng ?? local?.lng,
-          featured: hit.featured,
-          listingPackage: hit.listingPackage,
-        },
-        slug,
-      ),
-    );
-  }
-
-  const merged = mergeLocal(listings);
-  return { listings: merged, total: Math.max(merged.length, wpCatalog.total, listeoGeo.size, listeoTotal) };
+  return {
+    listings: mergeLocal(listings),
+    total: Math.max(listings.length, listeoTotal),
+  };
 }
 
 async function loadGuidesFromWp(): Promise<Guide[]> {
