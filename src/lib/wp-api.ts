@@ -825,7 +825,7 @@ function metaValueItems(value: unknown): ListingMetaItem[] {
   const items: ListingMetaItem[] = [];
   const add = (value: unknown, included = true) => {
     if (value == null || value === false || value === "") return;
-    const label = decodeHtml(String(value)).replace(/[_-]+/g, " ").replace(/\\s+/g, " ").trim();
+    const label = decodeHtml(String(value)).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
     if (!label || items.some((item) => item.label.toLowerCase() === label.toLowerCase())) return;
     items.push({ label, included });
   };
@@ -871,7 +871,7 @@ function keyLabelFromMeta(key: string) {
     .replace(/^_/, "")
     .replace(/_amp_/g, " & ")
     .replace(/_/g, " ")
-    .replace(/\\b\\w/g, (char) => char.toUpperCase());
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function extractProfileMetaGroups(
