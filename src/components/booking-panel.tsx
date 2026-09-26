@@ -273,7 +273,7 @@ export function BookingPanel({
           {step === "datetime" && (
             <DateTimeStep
               dates={dates}
-              slots={slots}
+              slots={activeSlots}
               selectedDate={activeDate}
               selectedSlot={activeSlotId}
               guests={activeGuests}
