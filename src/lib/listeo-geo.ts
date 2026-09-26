@@ -77,6 +77,19 @@ export function parseListeoGeoHtml(html: string): ListeoGeo[] {
       .flatMap((match) => decode(match[1] ?? "").split(","))
       .map((name) => name.trim())
       .filter(Boolean);
+
+    // Some Listeo templates expose the complete category membership in
+    // listing_category-* classes even when the visible category label only
+    // contains the primary category.
+    const categorySlugsFromClasses = [
+      ...window.matchAll(/(?:^|[\s"'])listing_category-([a-z0-9-]+)/gi),
+    ].map((match) => match[1] ?? "").filter(Boolean);
+    for (const slug of categorySlugsFromClasses) {
+      if (categoryNames.some((name) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-") === slug)) continue;
+      categoryNames.push(
+        slug.replace(/-/g, " ").replace(/\b\w/g, (char) => char.toUpperCase()),
+      );
+    }
     const categoryTerms: ListingTaxTerm[] = [];
     const categorySeen = new Set<string>();
     for (const name of categoryNames) {
