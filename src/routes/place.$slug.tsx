@@ -250,6 +250,13 @@ function PlacePage() {
         day: new Intl.DateTimeFormat("en-IN", { day: "2-digit" }).format(date),
         month: new Intl.DateTimeFormat("en-IN", { month: "short" }).format(date),
         available: true,
+        slots: index === 2 ? [
+          { id: "09:00-09:30", start: "9:00 AM", end: "9:30 AM" },
+          { id: "10:00-10:30", start: "10:00 AM", end: "10:30 AM" },
+          { id: "10:30-11:00", start: "10:30 AM", end: "11:00 AM" },
+        ] : index === 1 ? [
+          { id: "09:00-09:30", start: "9:00 AM", end: "9:30 AM" },
+        ] : [],
       };
     });
   }, []);
