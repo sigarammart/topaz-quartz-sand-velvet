@@ -214,14 +214,14 @@ export const useCatalog = create<CatalogState>((set, get) => ({
       const keepPrevious = previous.length > incoming.length && previous.length >= 300;
       const listings = keepPrevious ? previous : incoming;
       const total = Math.max(result.total, listings.length, previous.length >= 300 ? previous.length : 0);
-      if (incoming.length < 80 && previous.length >= 80) {
+      if (incoming.length < 30 && previous.length >= 30) {
         set({ items: previous, source: previousSource, status: "ready", total: previous.length, error: null });
         void hydrateHours(get().applyHours, previous);
         return;
       }
       set({
         items: listings,
-        source: listings.length >= 80 ? "live" : "local",
+        source: listings.length >= 30 ? "live" : "local",
         status: "ready",
         total,
         error: null,
