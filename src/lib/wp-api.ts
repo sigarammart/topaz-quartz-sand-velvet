@@ -15,6 +15,108 @@ import { extractOgImage, pickListingImage, uncropImage, uniqueImages } from "@/l
 
 export const WP_ORIGIN = "https://xplorepondy.com";
 export const WP_APP_PASSWORD_URL = `${WP_ORIGIN}/wp-admin/authorize-application.php?app_name=Xplore%20Pondy%20App`;
+
+export type ListeoBookingSlot = {
+  id: string;
+  start: string;
+  end: string;
+  available: boolean;
+  availableCount?: number;
+};
+
+export type ListeoBookingDate = {
+  value: string;
+  slots: ListeoBookingSlot[];
+};
+
+function stripBookingHtml(value: string) {
+  return decodeHtml(value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+}
+
+async function listeoAjax(action: string, fields: Record<string, string | number>) {
+  const body = new URLSearchParams({
+    action,
+    ...Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, String(value)])),
+  });
+  const response = await fetch(WP_ORIGIN + "/wp-admin/admin-ajax.php", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      "User-Agent": WP_HTML_HEADERS["User-Agent"],
+    },
+    body,
+    signal: AbortSignal.timeout(12000),
+  });
+  const payload = (await response.json().catch(() => null)) as
+    | { success?: boolean; data?: unknown }
+    | null;
+  if (!response.ok || !payload?.success) return null;
+  return payload.data;
+}
+
+function parseListeoSlotHtml(html: string): ListeoBookingSlot[] {
+  const slots: ListeoBookingSlot[] = [];
+  const pattern = /<div\b[^>]*class=["'][^"']*\btime-slot\b[^"']*["'][^>]*>[\s\S]*?<input\b[^>]*id=["']([^"']+)["'][^>]*>[\s\S]*?<strong[^>]*>([\s\S]*?)<\/strong>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>[\s\S]*?<\/div>/gi;
+  for (const match of html.matchAll(pattern)) {
+    const label = stripBookingHtml(match[2] ?? "");
+    const parts = label.split(/\s+-\s+/);
+    if (parts.length < 2) continue;
+    const countText = stripBookingHtml(match[3] ?? "");
+    const countMatch = countText.match(/(\d+)/);
+    slots.push({
+      id: match[1],
+      start: parts[0].trim(),
+      end: parts.slice(1).join(" - ").trim(),
+      available: true,
+      availableCount: countMatch ? Number(countMatch[1]) : undefined,
+    });
+  }
+  return slots;
+}
+
+function parseListeoAvailabilityRanges(data: unknown): ListeoBookingSlot[] {
+  if (!Array.isArray(data)) return [];
+  return data.flatMap((row, index) => {
+    if (!row || typeof row !== "object") return [];
+    const value = row as Record<string, unknown>;
+    const start = String(value.start ?? "").split(" ").slice(1).join(" ").trim();
+    const end = String(value.end ?? "").split(" ").slice(1).join(" ").trim();
+    if (!start || !end) return [];
+    return [{ id: "range-" + index + "-" + start + "-" + end, start, end, available: true }];
+  });
+}
+
+export const fetchListeoBookingAvailability = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      listingId: z.number().int().positive(),
+      dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(14),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const dates = await Promise.all(
+      data.dates.map(async (date): Promise<ListeoBookingDate> => {
+        const slotHtml = await listeoAjax("update_slots", {
+          listing_id: data.listingId,
+          date_start: date,
+          date_end: date,
+        });
+        let slots = typeof slotHtml === "string" ? parseListeoSlotHtml(slotHtml) : [];
+
+        if (!slots.length) {
+          const ranges = await listeoAjax("get_available_hours", {
+            listing_id: data.listingId,
+            date,
+          });
+          slots = parseListeoAvailabilityRanges(ranges);
+        }
+
+        return { value: date, slots };
+      }),
+    );
+    return { ok: true as const, dates };
+  });
 const WP_HTML_HEADERS = {
   Accept: "text/html",
   "User-Agent":
