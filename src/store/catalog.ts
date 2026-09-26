@@ -41,7 +41,7 @@ const hoursDone = new Set<string>();
 const hoursQueued = new Set<string>();
 const pendingSlugs = new Set<string>();
 let slugTimer: ReturnType<typeof setTimeout> | undefined;
-const SESSION_KEY = "xp-catalog-v37";
+const SESSION_KEY = "xp-catalog-v38";
 // Keep the last known live catalog through transient server/WordPress outages.
 // A successful live refresh replaces it automatically.
 const SESSION_TTL = 24 * 60 * 60 * 1000;
