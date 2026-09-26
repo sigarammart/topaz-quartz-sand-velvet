@@ -741,9 +741,13 @@ function enrichListingFromHtml(listing: Listing, html: string): Listing {
       groups.push(group);
       continue;
     }
-    const seen = new Set(existing.items.map((item) => item.label.toLowerCase()));
+    const seen = new Set(existing.items.map((item) => item.label.toLowerCase().replace(/[^a-z0-9]+/g, "")));
     for (const item of group.items) {
-      if (!seen.has(item.label.toLowerCase())) existing.items.push(item);
+      const normalized = item.label.toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (normalized && !seen.has(normalized)) {
+        existing.items.push(item);
+        seen.add(normalized);
+      }
     }
     if (!existing.text && group.text) existing.text = group.text;
   }
@@ -826,7 +830,9 @@ function metaValueItems(value: unknown): ListingMetaItem[] {
   const add = (value: unknown, included = true) => {
     if (value == null || value === false || value === "") return;
     const label = decodeHtml(String(value)).replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
-    if (!label || items.some((item) => item.label.toLowerCase() === label.toLowerCase())) return;
+    if (!label || /^(false|true|0|1|no|yes|none|null|undefined)$/i.test(label)) return;
+    const normalized = label.toLowerCase().replace(/[^a-z0-9]+/g, "");
+    if (!normalized || items.some((item) => item.label.toLowerCase().replace(/[^a-z0-9]+/g, "") === normalized)) return;
     items.push({ label, included });
   };
 
