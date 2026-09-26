@@ -307,9 +307,9 @@ export function queueOpenNow(slug: string) {
 
 export function resolveListing(slug: string, items: Listing[]) {
   return (
-    items.find((l) => l.slug === slug) ||
-    items.find((l) => l.siteUrl.includes(`/${slug}/`)) ||
-    items.find((l) => l.slug.startsWith(`${slug}-`) || slug.startsWith(`${l.slug}-`)) ||
+    items.find((l) => l?.slug === slug) ||
+    items.find((l) => Boolean(l?.siteUrl) && l.siteUrl.includes(`/${slug}/`)) ||
+    items.find((l) => Boolean(l?.slug) && (l.slug.startsWith(`${slug}-`) || slug.startsWith(`${l.slug}-`))) ||
     getListing(slug)
   );
 }
