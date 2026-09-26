@@ -343,11 +343,11 @@ function archiveRank(listing: Listing): number {
   return 1;
 }
 
-function packageRank(listing: Listing): number {
-  return listing.listingPackage ?? Number.POSITIVE_INFINITY;
-}
-
-/** Default archive order: `_featured` first, then `listing-package` lowest to highest. */
+/** Default PWA archive order: featured listings first, then preserve the
+ * order supplied by the live WordPress/Listeo catalog. We deliberately do
+ * not sort by listing-package: Listeo's archive sort is configurable and
+ * package ID is not an archive ranking field.
+ */
 export function sortListings(
   rows: Listing[],
   opts?: { origin?: LatLng | null; nearMe?: boolean },
@@ -366,18 +366,10 @@ export function sortListings(
 }
 
 function compareArchive(a: Listing, b: Listing) {
-  // Match the WordPress/Listeo archive ordering exactly:
-  // 1. _featured: on first, then 0/off
-  // 2. listing-package: numeric ascending
-  // Do not let rating or name reorder listings that have the same archive
-  // priority/package; the source order remains the tie-breaker.
-  const featured = archiveRank(a) - archiveRank(b);
-  if (featured) return featured;
-
-  const pack = packageRank(a) - packageRank(b);
-  if (pack) return pack;
-
-  return 0;
+  // Featured is the explicit PWA archive priority. Returning 0 for ties is
+  // intentional: JavaScript's stable sort preserves the live catalog order
+  // for listings with the same featured state.
+  return archiveRank(a) - archiveRank(b);
 }
 
 export function catalogFeatured(items: Listing[]) {
