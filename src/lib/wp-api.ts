@@ -1625,12 +1625,13 @@ const CATALOG_TTL = 20 * 60 * 1000;
 const CATALOG_STALE = 2 * 60 * 60 * 1000;
 const LISTING_PAGE_TTL = 30 * 60 * 1000;
 const HTML_TTL = 30 * 60 * 1000;
-const CATALOG_VERSION = 39;
+const CATALOG_VERSION = 40;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
-  const [listeoResult, wpCatalog] = await Promise.all([
+  const [listeoResult, wpCatalog, categoryMap] = await Promise.all([
     loadListeoGeo(),
     loadListingPages(),
+    loadTerms("listing_category"),
   ]);
   const { map: listeoGeo, total: listeoTotal } = listeoResult;
   // Either live source is sufficient. Listeo is preferred for geo/enrichment, but
@@ -1708,7 +1709,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
         try {
           htmlEnriched.set(
             row.slug,
-            enrichListingFromHtml(mapListing(row, { mediaMap }), page.html),
+            enrichListingFromHtml(mapListing(row, { mediaMap, catMap: categoryMap }), page.html),
           );
         } catch {
           /* keep the REST/Jet archive data */
@@ -1767,7 +1768,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
     seen.add(geo.slug);
 
     const wpRaw = wpBySlug.get(geo.slug);
-    const wpListing = wpRaw ? mapListing(wpRaw, { mediaMap }) : null;
+    const wpListing = wpRaw ? mapListing(wpRaw, { mediaMap, catMap: categoryMap }) : null;
     const category = wpListing?.category ?? geo.category ?? "places";
     const local = findLocal(geo.slug);
 
@@ -1818,7 +1819,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
     seen.add(raw.slug);
     listings.push(
       applyLive(
-        htmlEnriched.get(raw.slug) ?? mapListing(raw, { mediaMap }),
+        htmlEnriched.get(raw.slug) ?? mapListing(raw, { mediaMap, catMap: categoryMap }),
         raw.slug,
       ),
     );
