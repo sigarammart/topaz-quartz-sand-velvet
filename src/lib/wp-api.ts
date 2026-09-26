@@ -1493,7 +1493,14 @@ async function loadListingPages() {
 
 function isFeaturedMeta(value: unknown): boolean | undefined {
   if (value == null || value === "") return undefined;
-  if (value === true || value === 1 || value === "1" || value === "true" || value === "yes") return true;
+  if (
+    value === true ||
+    value === 1 ||
+    value === "1" ||
+    value === "true" ||
+    value === "yes" ||
+    value === "on"
+  ) return true;
   if (value === false || value === 0 || value === "0" || value === "false" || value === "no") return false;
   return undefined;
 }
@@ -1523,7 +1530,7 @@ const CATALOG_TTL = 20 * 60 * 1000;
 const CATALOG_STALE = 2 * 60 * 60 * 1000;
 const LISTING_PAGE_TTL = 30 * 60 * 1000;
 const HTML_TTL = 30 * 60 * 1000;
-const CATALOG_VERSION = 35;
+const CATALOG_VERSION = 36;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   const [listeoResult, wpCatalog] = await Promise.all([
