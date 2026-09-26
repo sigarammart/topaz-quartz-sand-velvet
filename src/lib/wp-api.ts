@@ -1571,7 +1571,7 @@ async function loadListingPages() {
     return { rows: [], total: 0 };
   }
   const total = Number(first.headers.get("X-WP-Total") ?? first.data.length);
-  const pages = Math.min(Number(first.headers.get("X-WP-TotalPages") ?? "1"), 8);
+  const pages = Math.min(Number(first.headers.get("X-WP-TotalPages") ?? "1"), 4);
   const rest =
     pages > 1
       ? await Promise.all(
@@ -1650,7 +1650,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
       .map((row) => Number(row.featured_media ?? 0))
       .filter((id) => Number.isFinite(id) && id > 0),
   )];
-  const mediaMap = await loadMedia(featuredMediaIds);
+  // Featured media is already available through _embed on the REST rows.\n  // Avoid an extra media round-trip during the cold catalog load.\n  const mediaMap = new Map<number, string>();
 
   // WordPress REST is the authoritative source for taxonomy membership.
   // Listeo geo data is still used below to enrich listings with coordinates,
