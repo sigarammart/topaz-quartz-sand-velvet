@@ -1555,15 +1555,16 @@ async function loadMedia(ids: number[]) {
 }
 
 async function loadListingPages() {
+  // Keep the first RPC payload small enough for shared hosting/LiteSpeed.
+  // Deeper listing data is loaded on the listing detail route.
   const fields = [
-    "id,slug,title,link,featured_media,listing_category,region,listing_feature,class_list,yoast_head_json",
-    "pub-type,cuisine-type,restaurant-types,resto-bar-type,water-sport,land-adventures,sport-type",
-    "activity-type,property-type,property-category,by-theme,explore-type",
+    "id,slug,title,link,featured_media,listing_category,region,listing_feature,class_list",
+    "meta._friendly_address,meta.google_place_id,meta._google_place_id,meta.googlePlaceId,meta._geolocation_lat,meta._geolocation_long,meta._featured,meta.listing-package",
   ].join(",");
   const first = await wpGet<WpListing[]>(
-    `/wp-json/wp/v2/listing?per_page=100&page=1&_embed=wp:featuredmedia,wp:term&_fields=${fields},meta._friendly_address,meta.google_place_id,meta._google_place_id,meta.googlePlaceId,meta._geolocation_lat,meta._geolocation_long,meta._featured,meta.listing-package,_embedded`,
+    `/wp-json/wp/v2/listing?per_page=50&page=1&_fields=${fields}`,
     {},
-    12000,
+    8000,
   );
   if (!first.ok || !Array.isArray(first.data)) {
     // The catalog can still be built from the Listeo geo feed when the
@@ -1635,7 +1636,7 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
   // function time out and incorrectly show the curated fallback.
   const wpCatalog = await loadListingPages();
 
-  if (wpCatalog.rows.length >= 80) {
+  if (wpCatalog.rows.length >= 30) {
     const listings = mergeLocal(
       wpCatalog.rows
         .filter((row) => Boolean(row?.slug))
@@ -1747,7 +1748,7 @@ export const fetchWpCatalog = createServerFn({ method: "GET" }).handler(async ()
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         fresh = await loadCatalogFromWp();
-        if (fresh.listings.length >= 80 || attempt === 1) break;
+        if (fresh.listings.length >= 30 || attempt === 1) break;
       } catch (error) {
         lastError = error;
         if (attempt === 1) throw error;
@@ -1761,7 +1762,7 @@ export const fetchWpCatalog = createServerFn({ method: "GET" }).handler(async ()
     }
     return fresh;
   } catch {
-    if (catalogCache && catalogCache.listings.length >= 80) {
+    if (catalogCache && catalogCache.listings.length >= 30) {
       return { listings: catalogCache.listings, total: catalogCache.total };
     }
     return { listings: localListings, total: localListings.length };
