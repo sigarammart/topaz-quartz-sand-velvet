@@ -178,6 +178,7 @@ function PlacePage() {
   const origin = useGeo((s) => s.origin);
   const fromGps = useGeo((s) => s.source === "gps");
   const detailsLoading = extra === undefined;
+  const bookingEnabled = /hook[\s-]*lounge/i.test(String(listing.slug) + " " + String(listing.name) + " " + String(listing.siteUrl ?? ""));
 
   useEffect(() => {
     try {
@@ -295,6 +296,12 @@ function PlacePage() {
           {listing.price && <p className="mt-1.5 text-sm font-medium">{listing.price}</p>}
 
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:hidden">
+            {bookingEnabled && (
+              <Button type="button" size="sm" className="col-span-2 h-10 w-full font-bold sm:col-span-4" onClick={() => setBookingOpen(true)}>
+                <Ticket />
+                Book Now
+              </Button>
+            )}
             <AddToTrip slug={listing.slug} name={listing.name} wpId={listing.wpId} className="w-full" />
             <Button variant="outline" size="sm" asChild className="h-10 w-full">
               <a href={maps} target="_blank" rel="noreferrer">
@@ -541,6 +548,12 @@ function PlacePage() {
               <SaveButton slug={listing.slug} name={listing.name} wpId={listing.wpId} />
             </div>
             <div className="mt-3 flex flex-col gap-2">
+              {bookingEnabled && (
+                <Button type="button" className="h-10 w-full font-bold" onClick={() => setBookingOpen(true)}>
+                  <Ticket />
+                  Book Now
+                </Button>
+              )}
               <AddToTrip slug={listing.slug} name={listing.name} wpId={listing.wpId} />
               <Button variant="outline" size="sm" asChild className="h-10 w-full">
                 <a href={maps} target="_blank" rel="noreferrer">
