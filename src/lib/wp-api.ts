@@ -1834,13 +1834,43 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
     // The REST catalog already contains the authoritative listing data,
     // including Listeo meta such as coordinates, rating, address and guests.
     // Geo remains the recovery source when REST itself is unavailable.
-    const listings = wpCatalog.rows
+    const restListings = wpCatalog.rows
       .filter((row) => Boolean(row?.slug))
       .map((row) => mapListing(row))
       .filter((row): row is Listing => Boolean(row));
+
+    // Listeo exposes important archive data through its geo feed rather than
+    // public REST meta. Merge that data onto the complete REST catalog so
+    // cards do not render with generic images/blank ratings/addresses.
+    const { map: geoMap, total: geoTotal } = await loadListeoGeo();
+    const listings = restListings.map((listing) => {
+      const geo = geoMap.get(listing.slug);
+      if (!geo) return listing;
+      return {
+        ...listing,
+        name: geo.name || listing.name,
+        rating: geo.rating ?? listing.rating,
+        reviews: geo.reviews ?? listing.reviews,
+        image: geo.image || listing.image,
+        gallery: geo.gallery?.length ? geo.gallery : listing.gallery,
+        address: geo.address || listing.address,
+        friendlyAddress: geo.friendlyAddress || listing.friendlyAddress || geo.address || listing.address,
+        lat: geo.lat ?? listing.lat,
+        lng: geo.lng ?? listing.lng,
+        featured: geo.featured ?? listing.featured,
+        wpId: listing.wpId ?? geo.id,
+        kind: listing.kind !== "Listing" ? listing.kind : (geo.kind || listing.kind),
+        taxonomies: geo.categoryTerms?.length
+          ? [{ key: "listing_category", label: "Categories", terms: geo.categoryTerms }]
+          : listing.taxonomies,
+        categorySlugs: geo.categoryTerms?.length
+          ? [...new Set([...(listing.categorySlugs ?? []), ...geo.categoryTerms.map((term) => term.slug)])]
+          : listing.categorySlugs,
+      };
+    });
     return {
       listings,
-      total: Math.max(wpCatalog.total, listings.length),
+      total: Math.max(wpCatalog.total, geoTotal, listings.length),
     };
   }
 
