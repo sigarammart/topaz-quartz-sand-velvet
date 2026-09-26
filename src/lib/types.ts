@@ -76,6 +76,9 @@ export type Listing = {
   accessibility?: string[];
   tripDays?: string;
   groupSize?: string;
+  /** Listeo Core guest limits for the listing booking widget. */
+  bookingMinGuests?: number;
+  bookingMaxGuests?: number;
   taxonomies?: ListingTaxGroup[];
   categorySlugs?: string[];
   itinerary?: ListingStop[];
