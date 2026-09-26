@@ -1622,10 +1622,10 @@ let catalogCache: { at: number; listings: Listing[]; total: number; v: number } 
 let guidesCache: { at: number; guides: Guide[] } | null = null;
 let openNowCache: { at: number; snapshot: Awaited<ReturnType<typeof loadOpenNowSnapshot>> } | null = null;
 const listingPageCache = new Map<string, { at: number; listing: Listing }>();
-const CATALOG_TTL = 20 * 60 * 1000;
-const CATALOG_STALE = 2 * 60 * 60 * 1000;
-const LISTING_PAGE_TTL = 30 * 60 * 1000;
-const HTML_TTL = 30 * 60 * 1000;
+const CATALOG_TTL = 0;
+const CATALOG_STALE = 0;
+const LISTING_PAGE_TTL = 0;
+const HTML_TTL = 0;
 const CATALOG_VERSION = 41;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
