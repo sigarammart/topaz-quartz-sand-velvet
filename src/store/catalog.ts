@@ -168,7 +168,7 @@ export const useCatalog = create<CatalogState>((set, get) => ({
   ensure: async () => {
     const current = get();
     if (current.source !== "live") {
-      const snap = null;
+      const snap = readSession();
       if (snap) {
         set({
           items: snap.listings,
