@@ -1558,8 +1558,8 @@ async function loadListingPages() {
   // Keep the first RPC payload small enough for shared hosting/LiteSpeed.
   // Deeper listing data is loaded on the listing detail route.
   const fields = [
-    "id,slug,title,link,featured_media,listing_category,region,listing_feature,class_list",
-    "meta._friendly_address,meta.google_place_id,meta._google_place_id,meta.googlePlaceId,meta._geolocation_lat,meta._geolocation_long,meta._featured,meta.listing-package",
+    "id,slug,title,link,content,excerpt,featured_media,listing_category,region,listing_feature,class_list",
+    "meta",
   ].join(",");
   const perPage = 100;
   const first = await wpGet<WpListing[]>(
@@ -1628,7 +1628,7 @@ const CATALOG_TTL = 0;
 const CATALOG_STALE = 0;
 const LISTING_PAGE_TTL = 0;
 const HTML_TTL = 0;
-const CATALOG_VERSION = 42;
+const CATALOG_VERSION = 43;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   // Keep the initial catalog request deliberately lightweight. The PWA must
@@ -1641,9 +1641,17 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
     // REST is the authoritative catalog source. Do not append the curated
     // local set here: doing so made the UI report the WordPress total (e.g.
     // 567) while actually rendering only the first REST page plus local extras.
+    // Resolve featured_media IDs in one batched REST pass. The lightweight
+    // listing query only returns the media ID; without this map every live
+    // listing fell back to the same generic category image.
+    const mediaMap = await loadMedia(
+      wpCatalog.rows
+        .map((row) => Number(row?.featured_media ?? 0))
+        .filter((id) => Number.isFinite(id) && id > 0),
+    );
     const listings = wpCatalog.rows
       .filter((row) => Boolean(row?.slug))
-      .map((row) => mapListing(row))
+      .map((row) => mapListing(row, { mediaMap }))
       .filter((row): row is Listing => Boolean(row));
     return {
       listings,
