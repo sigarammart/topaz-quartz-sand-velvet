@@ -185,7 +185,7 @@ export const useCatalog = create<CatalogState>((set, get) => ({
         return;
       }
     }
-    if (current.status === "loading" && Date.now() - loadStarted < 25000) return;
+    if (current.status === "loading" && Date.now() - loadStarted < 15000) return;
     if (current.openNowStatus !== "ready") void hydrateHours(get().applyHours, current.items);
     if (current.source === "live" && current.items.length >= 350 && current.items.some((item) => item.wpId)) {
       void hydrateGuides((guides) => set({ guides }));
@@ -200,7 +200,7 @@ export const useCatalog = create<CatalogState>((set, get) => ({
       const result = await Promise.race([
         fetchWpCatalog(),
         new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("catalog-timeout")), 25000);
+          setTimeout(() => reject(new Error("catalog-timeout")), 15000);
         }),
       ]);
       const incoming = result.listings;
