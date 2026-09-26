@@ -1194,8 +1194,8 @@ function mapListing(
     accessibility,
     tripDays,
     groupSize,
-    bookingMinGuests: positiveInteger(meta._min_guests) ?? listing.bookingMinGuests,
-    bookingMaxGuests: positiveInteger(meta._max_guests) ?? listing.bookingMaxGuests,
+    bookingMinGuests: positiveInteger(meta._min_guests) ?? local?.bookingMinGuests,
+    bookingMaxGuests: positiveInteger(meta._max_guests) ?? local?.bookingMaxGuests,
     taxonomies,
     metaGroups: rawMetaGroups.length ? rawMetaGroups : undefined,
     categorySlugs: (raw.class_list ?? [])
