@@ -725,8 +725,6 @@ function PlacePage() {
             target.searchParams.set("booking_adults", String(selection.guests.adults));
             target.searchParams.set("booking_children", String(selection.guests.children));
             target.searchParams.set("booking_infants", String(selection.guests.infants));
-            if (details.email) target.searchParams.set("booking_email", details.email);
-            if (details.phone) target.searchParams.set("booking_phone", details.phone);
             window.open(target.toString(), "_blank", "noopener,noreferrer");
             setBookingOpen(false);
           }}
