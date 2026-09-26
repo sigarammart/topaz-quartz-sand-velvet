@@ -1561,7 +1561,7 @@ async function loadListingPages() {
     "activity-type,property-type,property-category,by-theme,explore-type",
   ].join(",");
   const first = await wpGet<WpListing[]>(
-    `/wp-json/wp/v2/listing?per_page=100&page=1&_embed=1&_fields=${fields},meta,_embedded`,
+    `/wp-json/wp/v2/listing?per_page=100&page=1&_embed=wp:featuredmedia,wp:term&_fields=${fields},meta._friendly_address,meta.google_place_id,meta._google_place_id,meta.googlePlaceId,meta._geolocation_lat,meta._geolocation_long,meta._featured,meta.listing-package,_embedded`,
     {},
     12000,
   );
@@ -1571,7 +1571,7 @@ async function loadListingPages() {
     return { rows: [], total: 0 };
   }
   const total = Number(first.headers.get("X-WP-Total") ?? first.data.length);
-  const pages = Math.min(Number(first.headers.get("X-WP-TotalPages") ?? "1"), 2);
+  const pages = 1;
   const rest =
     pages > 1
       ? await Promise.all(
@@ -1747,7 +1747,7 @@ export const fetchWpCatalog = createServerFn({ method: "GET" }).handler(async ()
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         fresh = await loadCatalogFromWp();
-        if (fresh.listings.length >= 300 || attempt === 1) break;
+        if (fresh.listings.length >= 80 || attempt === 1) break;
       } catch (error) {
         lastError = error;
         if (attempt === 1) throw error;
