@@ -133,8 +133,8 @@ export function BookingPanel({
     message: "",
   });
 
-  const activeDate = selectedDate ?? internalDate;
-  const activeSlotId = selectedSlot ?? internalSlot;
+  const activeDate = onDateChange ? selectedDate : internalDate;
+  const activeSlotId = onSlotChange ? selectedSlot : internalSlot;
   const activeGuests = onGuestsChange ? guests : internalGuests;
   const activeSlots = dates.find((date) => date.value === activeDate)?.slots ?? slots;
   const selected = activeSlots.find((slot) => slot.id === activeSlotId) ?? null;
