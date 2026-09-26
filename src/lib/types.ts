@@ -1,4 +1,4 @@
-export const CATEGORIES = ["places", "activities", "food", "stay"] as const;
+export const CATEGORIES = ["places", "activities", "food", "stay", "services"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
 export type ListingTaxTerm = {
@@ -163,6 +163,12 @@ export const CATEGORY_META: Record<
     kicker: "Hotels & homestays",
     description: "Heritage villas, beach inns, and city hotels.",
     image: "/images/hotel.jpg",
+  },
+  services: {
+    label: "Services",
+    kicker: "Local services",
+    description: "Essential services, support, transport, health, shopping, and travel assistance in Pondicherry.",
+    image: "/images/cafe.jpg",
   },
 };
 
