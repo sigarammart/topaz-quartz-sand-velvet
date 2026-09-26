@@ -788,11 +788,9 @@ function PlacePage() {
               const fields: Record<string, string> = {
                 value,
                 confirmed: "yessir",
-                firstname: details.firstName,
-                lastname: details.lastName,
-                email: details.email,
-                phone: details.phone,
-                message: details.message,
+                ...Object.fromEntries(
+                  Object.entries(details).map(([key, fieldValue]) => [key, String(fieldValue)]),
+                ),
               };
 
               for (const [name, fieldValue] of Object.entries(fields)) {
