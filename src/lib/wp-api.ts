@@ -1738,15 +1738,18 @@ async function loadMedia(ids: number[]) {
 async function loadListingPages() {
   // Keep the first RPC payload small enough for shared hosting/LiteSpeed.
   // Deeper listing data is loaded on the listing detail route.
+  // Fetch featured media in the same REST response. A separate media
+  // lookup for hundreds of listing IDs was the main bottleneck preventing
+  // the 564-item catalog from reaching the PWA.
   const fields = [
     "id,slug,title,link,content,excerpt,featured_media,listing_category,region,listing_feature,class_list",
-    "meta",
+    "meta,_embedded",
   ].join(",");
   const perPage = 100;
   const first = await wpGet<WpListing[]>(
-    `/wp-json/wp/v2/listing?per_page=${perPage}&page=1&_fields=${fields}`,
+    `/wp-json/wp/v2/listing?per_page=${perPage}&page=1&_embed=wp:featuredmedia,wp:term&_fields=${fields}`,
     {},
-    8000,
+    12000,
   );
   if (!first.ok || !Array.isArray(first.data)) {
     // The catalog can still be built from the Listeo geo feed when the
@@ -1760,9 +1763,9 @@ async function loadListingPages() {
       ? await Promise.all(
           Array.from({ length: pages - 1 }, (_, i) =>
             wpGet<WpListing[]>(
-              `/wp-json/wp/v2/listing?per_page=${perPage}&page=${i + 2}&_fields=${fields}`,
+              `/wp-json/wp/v2/listing?per_page=${perPage}&page=${i + 2}&_embed=wp:featuredmedia,wp:term&_fields=${fields}`,
               {},
-              10000,
+              12000,
             ).then((r) => (r.ok && Array.isArray(r.data) ? r.data : [])),
           ),
         )
@@ -1831,14 +1834,9 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
     // The REST catalog already contains the authoritative listing data,
     // including Listeo meta such as coordinates, rating, address and guests.
     // Geo remains the recovery source when REST itself is unavailable.
-    const mediaMap = await loadMedia(
-      wpCatalog.rows
-        .map((row) => Number(row?.featured_media ?? 0))
-        .filter((id) => Number.isFinite(id) && id > 0),
-    );
     const listings = wpCatalog.rows
       .filter((row) => Boolean(row?.slug))
-      .map((row) => mapListing(row, { mediaMap }))
+      .map((row) => mapListing(row))
       .filter((row): row is Listing => Boolean(row));
     return {
       listings,
