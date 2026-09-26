@@ -119,6 +119,8 @@ function mergeListing(base?: Listing | null, extra?: Listing | null): Listing | 
     gallery: extra.gallery?.length ? extra.gallery : base.gallery,
     mustTry: extra.mustTry?.length ? extra.mustTry : base.mustTry,
     featured: extra.featured ?? base.featured,
+    bookingMinGuests: extra.bookingMinGuests ?? base.bookingMinGuests,
+    bookingMaxGuests: extra.bookingMaxGuests ?? base.bookingMaxGuests,
     image: extra.image || base.image,
   };
 }
@@ -751,6 +753,8 @@ function PlacePage() {
           error={bookingError}
           reservationFee={50}
           currency="INR"
+          minGuests={listing.bookingMinGuests ?? 1}
+          maxGuests={listing.bookingMaxGuests ?? 10}
           externalBookingUrl={listing.siteUrl}
           onConfirm={async (details, selection) => {
             setBookingSubmitLoading(true);
