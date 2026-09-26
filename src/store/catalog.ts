@@ -205,7 +205,10 @@ export const useCatalog = create<CatalogState>((set, get) => ({
       const result = await Promise.race([
         fetchWpCatalog(),
         new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("catalog-timeout")), 15000);
+          // The live WordPress catalog contains hundreds of listings and
+          // requires several REST/media requests. Do not abandon it after
+          // 15s and incorrectly fall back to the 47-item curated catalog.
+          setTimeout(() => reject(new Error("catalog-timeout")), 60000);
         }),
       ]);
       const incoming = result.listings;
