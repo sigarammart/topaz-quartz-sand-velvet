@@ -44,7 +44,7 @@ export const Route = createFileRoute("/place/$slug")({
   component: PlacePage,
 });
 
-const DETAIL_TTL = 30 * 60 * 1000;
+const DETAIL_TTL = 0;
 const RECENTLY_VIEWED_KEY = "xplore-pondy-recently-viewed";
 const MAX_RECENTLY_VIEWED = 20;
 const detailCache = new Map<string, { at: number; listing: Listing }>();
@@ -64,7 +64,7 @@ function cachedDetail(slug: string) {
     const raw = sessionStorage.getItem(placeKey(slug));
     if (!raw) return undefined;
     const saved = JSON.parse(raw) as { at: number; listing: Listing };
-    if (!saved?.listing || Date.now() - saved.at > DETAIL_TTL) return undefined;
+    if (!saved?.listing || DETAIL_TTL <= 0 || Date.now() - saved.at > DETAIL_TTL) return undefined;
     detailCache.set(slug, saved);
     return saved.listing;
   } catch {
