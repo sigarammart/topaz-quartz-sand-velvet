@@ -1531,7 +1531,13 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
     loadListingPages(),
   ]);
   const { map: listeoGeo, total: listeoTotal } = listeoResult;
-  if (listeoGeo.size < 8) throw new Error("listeo-empty");
+  // Either live source is sufficient. Listeo is preferred for geo/enrichment, but
+  // a healthy WordPress REST catalog must still be usable when the Listeo
+  // AJAX feed is temporarily unavailable. Only fall back to the curated set
+  // when both live sources fail.
+  if (listeoGeo.size < 8 && wpCatalog.rows.length < 80) {
+    throw new Error("live-sources-empty");
+  }
 
   // Resolve WordPress featured-media IDs once so each listing can use its
   // actual featured image instead of falling back to a shared/local image.
@@ -1794,7 +1800,24 @@ export const fetchWpCatalog = createServerFn({ method: "GET" }).handler(async ()
     return { listings: catalogCache.listings, total: catalogCache.total };
   }
   try {
-    const fresh = await loadCatalogFromWp();
+    let fresh: { listings: Listing[]; total: number } | null = null;
+    let lastError: unknown = null;
+
+    // A transient timeout from either WordPress REST or the Listeo AJAX feed
+    // should not immediately downgrade a cold PWA load to the curated set.
+    // Retry the complete live-source build once before using local data.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        fresh = await loadCatalogFromWp();
+        if (fresh.listings.length >= 300 || attempt === 1) break;
+      } catch (error) {
+        lastError = error;
+        if (attempt === 1) throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 350));
+    }
+
+    if (!fresh) throw lastError ?? new Error("catalog-unavailable");
     if (fresh.listings.length >= 300) {
       catalogCache = { at: now, v: CATALOG_VERSION, ...fresh };
     }
