@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { getListing } from "@/data/listings";
 import { CATEGORY_META } from "@/lib/types";
 import type { Listing } from "@/lib/types";
-import { fetchListeoBookingAvailability, fetchWpListing } from "@/lib/wp-api";
+import { fetchListeoBookingAvailability, fetchListeoBookingConfirmationUrl, fetchWpListing } from "@/lib/wp-api";
 import { exploreSearchForTerm } from "@/lib/filters";
 import { listingPhotos } from "@/lib/media";
 import { catalogListing, catalogNearby, useCatalog } from "@/store/catalog";
@@ -146,8 +146,9 @@ function PlacePage() {
   }));
   const [relatedShown, setRelatedShown] = useState(6);
   const [bookingOpen, setBookingOpen] = useState(false);
-  const [bookingDates, setBookingDates] = useState<Array<{ value: string; weekday: string; day: string; month: string; available: boolean; slots: { id: string; start: string; end: string; available?: boolean }[] }>>([]);
+  const [bookingDates, setBookingDates] = useState<Array<{ value: string; weekday: string; day: string; month: string; available: boolean; slots: { id: string; start: string; end: string; available?: boolean; availableCount?: number }[] }>>([]);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingSubmitLoading, setBookingSubmitLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string>();
   const [relatedSort, setRelatedSort] = useState<"featured" | "package" | "near">("featured");
 
@@ -746,20 +747,64 @@ function PlacePage() {
           dates={bookingDates}
           slots={[]}
           selectedDate={firstBookableDate}
-          loading={bookingLoading}
+          loading={bookingLoading || bookingSubmitLoading}
           error={bookingError}
           reservationFee={50}
           currency="INR"
           externalBookingUrl={listing.siteUrl}
-          onConfirm={(_details, selection) => {
-            const target = new URL(listing.siteUrl);
-            target.searchParams.set("booking_date", selection.date);
-            target.searchParams.set("booking_time", selection.slot.start);
-            target.searchParams.set("booking_adults", String(selection.guests.adults));
-            target.searchParams.set("booking_children", String(selection.guests.children));
-            target.searchParams.set("booking_infants", String(selection.guests.infants));
-            window.open(target.toString(), "_blank", "noopener,noreferrer");
-            setBookingOpen(false);
+          onConfirm={async (details, selection) => {
+            setBookingSubmitLoading(true);
+            setBookingError(undefined);
+
+            try {
+              const confirmationUrl = await fetchListeoBookingConfirmationUrl({
+                data: { listingUrl: listing.siteUrl },
+              });
+              const liveDate = bookingDates.find((date) => date.value === selection.date);
+              const liveSlot = liveDate?.slots.find((slot) => slot.id === selection.slot.id) ?? selection.slot;
+              const slotCapacity = Math.max(1, liveSlot.availableCount ?? 1);
+              const value = JSON.stringify({
+                listing_id: listing.wpId,
+                date_start: selection.date,
+                date_end: selection.date,
+                slot: JSON.stringify([selection.slot.start + " - " + selection.slot.end + "|" + slotCapacity]),
+                adults: selection.guests.adults,
+                children: selection.guests.children,
+                infants: selection.guests.infants,
+                animals: 0,
+                services: [],
+              });
+
+              const form = document.createElement("form");
+              form.method = "POST";
+              form.action = confirmationUrl;
+              form.target = "_self";
+              form.style.display = "none";
+
+              const fields: Record<string, string> = {
+                value,
+                confirmed: "yessir",
+                firstname: details.firstName,
+                lastname: details.lastName,
+                email: details.email,
+                phone: details.phone,
+                message: details.message,
+              };
+
+              for (const [name, fieldValue] of Object.entries(fields)) {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = name;
+                input.value = fieldValue;
+                form.appendChild(input);
+              }
+
+              document.body.appendChild(form);
+              form.submit();
+            } catch (error) {
+              setBookingSubmitLoading(false);
+              setBookingError(error instanceof Error ? error.message : "Booking could not be submitted. Please try again.");
+            }
           }}
         />
       )}
