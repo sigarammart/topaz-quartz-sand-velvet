@@ -718,7 +718,7 @@ function PlacePage() {
           reservationFee={50}
           currency="INR"
           externalBookingUrl={listing.siteUrl}
-          onConfirm={(details, selection) => {
+          onConfirm={(_details, selection) => {
             const target = new URL(listing.siteUrl);
             target.searchParams.set("booking_date", selection.date);
             target.searchParams.set("booking_time", selection.slot.start);
