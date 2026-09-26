@@ -945,6 +945,23 @@ function mapListing(
   const local = findLocal(raw.slug, raw.link);
   const meta = raw.meta ?? {};
   const googlePlaceId = extractGooglePlaceId(meta as Record<string, unknown>);
+  const metaRecord = meta as Record<string, unknown>;
+  const metaRating = Number(
+    metaRecord.rating ??
+      metaRecord._rating ??
+      metaRecord.average_rating ??
+      metaRecord._average_rating ??
+      metaRecord.rating_value ??
+      metaRecord._rating_value,
+  );
+  const metaReviews = Number(
+    metaRecord.reviews ??
+      metaRecord._reviews ??
+      metaRecord.review_count ??
+      metaRecord._review_count ??
+      metaRecord.rating_count ??
+      metaRecord._rating_count,
+  );
   const cafeTypes = (meta.cafe_type ?? []).map((t) => decodeHtml(t)).filter(Boolean);
   const accessibility = Object.entries(meta.accessibility ?? {})
     .filter(([, v]) => truthyMeta(v))
@@ -987,8 +1004,8 @@ function mapListing(
     name,
     category,
     kind,
-    rating: local?.rating ?? 0,
-    reviews: local?.reviews ?? 0,
+    rating: Number.isFinite(metaRating) && metaRating > 0 ? metaRating : (local?.rating ?? 0),
+    reviews: Number.isFinite(metaReviews) && metaReviews > 0 ? metaReviews : (local?.reviews ?? 0),
     location: local?.location ?? region,
     area: local?.area ?? region,
     distance: local?.distance ?? "",
@@ -1005,7 +1022,8 @@ function mapListing(
     mustTry: local?.mustTry,
     duration: local?.duration || tripDays,
     entry: local?.entry,
-    featured: undefined,
+    featured: isFeaturedMeta(meta._featured),
+    listingPackage: toListingPackage(meta["listing-package"]),
     phone: listeo.phone,
     website: listeo.website,
     address: listeo.address,
@@ -1628,7 +1646,7 @@ const CATALOG_TTL = 0;
 const CATALOG_STALE = 0;
 const LISTING_PAGE_TTL = 0;
 const HTML_TTL = 0;
-const CATALOG_VERSION = 43;
+const CATALOG_VERSION = 44;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   // Keep the initial catalog request deliberately lightweight. The PWA must
@@ -1644,14 +1662,31 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
     // Resolve featured_media IDs in one batched REST pass. The lightweight
     // listing query only returns the media ID; without this map every live
     // listing fell back to the same generic category image.
-    const mediaMap = await loadMedia(
-      wpCatalog.rows
-        .map((row) => Number(row?.featured_media ?? 0))
-        .filter((id) => Number.isFinite(id) && id > 0),
-    );
+    const [mediaMap, listeoGeo] = await Promise.all([
+      loadMedia(
+        wpCatalog.rows
+          .map((row) => Number(row?.featured_media ?? 0))
+          .filter((id) => Number.isFinite(id) && id > 0),
+      ),
+      loadListeoGeo(),
+    ]);
     const listings = wpCatalog.rows
       .filter((row) => Boolean(row?.slug))
-      .map((row) => mapListing(row, { mediaMap }))
+      .map((row) => {
+        const listing = mapListing(row, { mediaMap });
+        const geo = listeoGeo.map.get(row.slug);
+        if (!geo) return listing;
+        return {
+          ...listing,
+          rating: geo.rating ?? listing.rating,
+          reviews: geo.reviews ?? listing.reviews,
+          lat: listing.lat ?? geo.lat,
+          lng: listing.lng ?? geo.lng,
+          address: listing.address ?? geo.address,
+          friendlyAddress: listing.friendlyAddress ?? geo.friendlyAddress,
+          featured: listing.featured ?? geo.featured,
+        };
+      })
       .filter((row): row is Listing => Boolean(row));
     return {
       listings,
