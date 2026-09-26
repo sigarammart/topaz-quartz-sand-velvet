@@ -165,23 +165,20 @@ function ingest(html: string, map: Map<string, ListeoGeo>) {
 
 export async function loadListeoGeo(): Promise<{ map: Map<string, ListeoGeo>; total: number }> {
   const map = new Map<string, ListeoGeo>();
-  // Keep the cold-start live fetch bounded. WordPress REST remains the
-  // authoritative source for the full catalog; Listeo geo is enrichment.
-  const pageNos = [1, 2];
-  const results = await Promise.all(pageNos.map(async (page) => ({ page, ...(await fetchListeoPage(page, 100)) })));
-  let total = 0;
-  for (const row of results) {
-    ingest(row.html, map);
-    if (row.total > total) total = row.total;
-  }
-  const weak = results.filter((row) => !row.html);
-  if (weak.length || (total > 0 && map.size < total * 0.9)) {
-    const retryPages = weak.length ? weak.map((row) => row.page) : pageNos;
-    const again = await Promise.all(retryPages.map((page) => fetchListeoPage(page, 100)));
-    for (const row of again) {
-      ingest(row.html, map);
-      if (row.total > total) total = row.total;
-    }
-  }
+  // REST supplies the complete catalog, while Listeo's geo feed supplies
+  // the card-level data that is not reliably exposed through WP REST meta:
+  // rating, review count, address, coordinates and the real listing image.
+  // Load every geo page in parallel so the 564+ REST listings can be enriched
+  // without making individual HTML requests for every listing.
+  const first = await fetchListeoPage(1, 100);
+  const total = first.total;
+  const pages = Math.max(1, first.pages);
+  ingest(first.html, map);
+  const restPages = pages > 1
+    ? await Promise.all(
+        Array.from({ length: pages - 1 }, (_, i) => fetchListeoPage(i + 2, 100)),
+      )
+    : [];
+  for (const row of restPages) ingest(row.html, map);
   return { map, total: Math.max(total, map.size) };
 }
