@@ -602,6 +602,10 @@ function ConfirmStep({
   reservationFee: number;
   externalBookingUrl?: string;
 }) {
+  const requiredDetailsComplete = Object.entries(details).every(
+    ([key, value]) => key === "message" || value.trim().length > 0,
+  );
+
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-5 sm:px-6 sm:py-7">
       <div>
@@ -663,7 +667,7 @@ function ConfirmStep({
           <ChevronLeft className="size-4" />
           Back
         </Button>
-        <Button type="button" className="h-12 flex-[1.6] rounded-full font-bold" disabled={loading} onClick={onConfirm}>
+        <Button type="button" className="h-12 flex-[1.6] rounded-full font-bold" disabled={loading || !requiredDetailsComplete} onClick={onConfirm}>
           {loading && <Loader2 className="size-4 animate-spin" />}
           {externalBookingUrl ? "Continue to live booking" : "Confirm booking"}
         </Button>
