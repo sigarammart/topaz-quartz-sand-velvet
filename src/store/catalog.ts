@@ -41,7 +41,7 @@ const hoursDone = new Set<string>();
 const hoursQueued = new Set<string>();
 const pendingSlugs = new Set<string>();
 let slugTimer: ReturnType<typeof setTimeout> | undefined;
-const SESSION_KEY = "xp-catalog-v35";
+const SESSION_KEY = "xp-catalog-v36";
 // Keep the last known live catalog through transient server/WordPress outages.
 // A successful live refresh replaces it automatically.
 const SESSION_TTL = 24 * 60 * 60 * 1000;
@@ -339,12 +339,18 @@ export function sortListings(
 }
 
 function compareArchive(a: Listing, b: Listing) {
+  // Match the WordPress/Listeo archive ordering exactly:
+  // 1. _featured: on first, then 0/off
+  // 2. listing-package: numeric ascending
+  // Do not let rating or name reorder listings that have the same archive
+  // priority/package; the source order remains the tie-breaker.
   const featured = archiveRank(a) - archiveRank(b);
   if (featured) return featured;
+
   const pack = packageRank(a) - packageRank(b);
   if (pack) return pack;
-  if (b.rating !== a.rating) return b.rating - a.rating;
-  return a.name.localeCompare(b.name);
+
+  return 0;
 }
 
 export function catalogFeatured(items: Listing[]) {
