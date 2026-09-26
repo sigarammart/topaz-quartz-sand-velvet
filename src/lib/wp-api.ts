@@ -1523,7 +1523,7 @@ const CATALOG_TTL = 20 * 60 * 1000;
 const CATALOG_STALE = 2 * 60 * 60 * 1000;
 const LISTING_PAGE_TTL = 30 * 60 * 1000;
 const HTML_TTL = 30 * 60 * 1000;
-const CATALOG_VERSION = 34;
+const CATALOG_VERSION = 35;
 
 async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number }> {
   const [listeoResult, wpCatalog] = await Promise.all([
@@ -1692,7 +1692,11 @@ async function loadCatalogFromWp(): Promise<{ listings: Listing[]; total: number
               lat: geo.lat,
               lng: geo.lng,
               address: geo.address,
+              friendlyAddress: geo.friendlyAddress,
               featured: geo.featured,
+              taxonomies: geo.categoryTerms?.length
+                ? [{ key: "listing_category", label: "Categories", terms: geo.categoryTerms }]
+                : undefined,
             },
         geo.slug,
       ),
