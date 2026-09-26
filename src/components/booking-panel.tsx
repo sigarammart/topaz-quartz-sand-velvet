@@ -547,7 +547,7 @@ function DateTimeStep({
           Next
           {!loading && <ChevronRight className="size-4" />}
         </Button>
-        {externalBookingUrl && slots.length === 0 && (
+        {externalBookingUrl && error && !loading && (
           <Button
             type="button"
             variant="outline"
