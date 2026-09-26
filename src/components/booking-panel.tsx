@@ -501,7 +501,7 @@ function DateTimeStep({
         <Button
           type="button"
           className="h-12 w-full rounded-full text-sm font-bold shadow-sm"
-          disabled={!selectedDate || !selected || loading}
+          disabled={!selectedDate || !selectedSlot || loading}
           onClick={onNext}
         >
           {loading ? <Loader2 className="size-4 animate-spin" /> : null}
