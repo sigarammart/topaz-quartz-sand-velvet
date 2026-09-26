@@ -64,12 +64,13 @@ function parseListeoSlotHtml(html: string): ListeoBookingSlot[] {
     if (parts.length < 2) continue;
     const countText = stripBookingHtml(match[3] ?? "");
     const countMatch = countText.match(/(\d+)/);
+    const availableCount = countMatch ? Number(countMatch[1]) : undefined;
     slots.push({
       id: match[1],
       start: parts[0].trim(),
       end: parts.slice(1).join(" - ").trim(),
-      available: true,
-      availableCount: countMatch ? Number(countMatch[1]) : undefined,
+      available: availableCount == null || availableCount > 0,
+      availableCount,
     });
   }
   return slots;
