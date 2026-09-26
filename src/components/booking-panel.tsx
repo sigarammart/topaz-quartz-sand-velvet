@@ -19,6 +19,7 @@ export type BookingDateOption = {
   day: string;
   month?: string;
   available?: boolean;
+  slots?: BookingSlot[];
 };
 
 export type BookingSlot = {
@@ -121,6 +122,9 @@ export function BookingPanel({
 }: BookingPanelProps) {
   const [step, setStep] = useState<BookingStep>("datetime");
   const [guestOpen, setGuestOpen] = useState(false);
+  const [internalDate, setInternalDate] = useState(selectedDate ?? dates[0]?.value);
+  const [internalSlot, setInternalSlot] = useState(selectedSlot);
+  const [internalGuests, setInternalGuests] = useState<BookingGuestCounts>(guests);
   const [details, setDetails] = useState<BookingDetails>({
     firstName: "",
     lastName: "",
@@ -129,17 +133,21 @@ export function BookingPanel({
     message: "",
   });
 
-  const selected = slots.find((slot) => slot.id === selectedSlot) ?? null;
-  const totalGuests = guests.adults + guests.children + guests.infants;
+  const activeDate = selectedDate ?? internalDate;
+  const activeSlotId = selectedSlot ?? internalSlot;
+  const activeGuests = onGuestsChange ? guests : internalGuests;
+  const activeSlots = dates.find((date) => date.value === activeDate)?.slots ?? slots;
+  const selected = activeSlots.find((slot) => slot.id === activeSlotId) ?? null;
+  const totalGuests = activeGuests.adults + activeGuests.children + activeGuests.infants;
 
   const selection = useMemo<BookingSelection | null>(() => {
     if (!selectedDate || !selected) return null;
     return {
-      date: selectedDate,
+      date: activeDate,
       slot: selected,
-      guests,
+      guests: activeGuests,
     };
-  }, [guests, selected, selectedDate]);
+  }, [activeDate, activeGuests, selected]);
 
   useEffect(() => {
     if (!open) {
@@ -170,7 +178,21 @@ export function BookingPanel({
   if (!open) return null;
 
   function updateGuests(next: Partial<BookingGuestCounts>) {
-    onGuestsChange?.({ ...guests, ...next });
+    const updated = { ...activeGuests, ...next };
+    setInternalGuests(updated);
+    onGuestsChange?.(updated);
+  }
+
+  function changeDate(date: string) {
+    setInternalDate(date);
+    setInternalSlot(undefined);
+    onDateChange?.(date);
+    onSlotChange?.("");
+  }
+
+  function changeSlot(slotId: string) {
+    setInternalSlot(slotId);
+    onSlotChange?.(slotId);
   }
 
   function nextStep() {
