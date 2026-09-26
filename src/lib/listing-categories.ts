@@ -11,19 +11,19 @@ export const WP_PARENT_ARCHIVES: Array<{
   { slug: "activities", category: "activities", label: "Things to do" },
   { slug: "food-beverage", category: "food", label: "Eat & drink" },
   { slug: "accommodation", category: "stay", label: "Stay" },
+  { slug: "services", category: "services", label: "Services" },
 ];
 
-/** Extra parents that still hold listings (mapped into Things to do). */
+/** Extra parents that still hold listings outside the four primary archives. */
 export const WP_EXTRA_ARCHIVES: Array<{ slug: string; category: Category }> = [
   { slug: "rentals", category: "activities" },
-  { slug: "services", category: "activities" },
 ];
 
 const PARENT_TO_APP: Record<string, Category> = {
   "tourist-attractions": "places",
   activities: "activities",
   rentals: "activities",
-  services: "activities",
+  services: "services",
   events: "activities",
   "food-beverage": "food",
   accommodation: "stay",
