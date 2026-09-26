@@ -32,7 +32,7 @@ export async function cachedOriginText(
   if (pending) return pending;
   const job = (async () => {
     try {
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+      const res = await fetch(url, { cache: "no-store", headers, signal: AbortSignal.timeout(timeoutMs) });
       const body = await res.text();
       const next = {
         at: Date.now(),
