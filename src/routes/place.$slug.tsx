@@ -773,6 +773,7 @@ function NearbyCategories({ current, items }: { current: Listing; items: Listing
   ];
 
   const rows = items
+    .filter((item): item is Listing => Boolean(item))
     .filter((item) => item.slug !== current.slug)
     .map((item) => ({
       item,
