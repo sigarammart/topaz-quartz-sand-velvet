@@ -46,7 +46,7 @@ let slugTimer: ReturnType<typeof setTimeout> | undefined;
 const SESSION_KEY = "xp-catalog-v41";
 // Keep the last known live catalog through transient server/WordPress outages.
 // A successful live refresh replaces it automatically.
-const SESSION_TTL = 24 * 60 * 60 * 1000;
+const SESSION_TTL = 0;
 
 type SessionSnap = {
   at: number;
@@ -168,7 +168,7 @@ export const useCatalog = create<CatalogState>((set, get) => ({
   ensure: async () => {
     const current = get();
     if (current.source !== "live") {
-      const snap = readSession();
+      const snap = null;
       if (snap) {
         set({
           items: snap.listings,
@@ -224,7 +224,7 @@ export const useCatalog = create<CatalogState>((set, get) => ({
         total,
         error: null,
       });
-      persistSession();
+      // Live-only mode: do not persist catalog snapshots.
       void hydrateHours(get().applyHours, listings);
       void hydrateGuides((guides) => set({ guides }));
     } catch {
