@@ -64,6 +64,8 @@ type BookingPanelProps = {
   onConfirm?: (details: BookingDetails, selection: BookingSelection) => void;
   successMessage?: string;
   externalBookingUrl?: string;
+  minGuests?: number;
+  maxGuests?: number;
 };
 
 export type BookingDetails = {
@@ -119,6 +121,8 @@ export function BookingPanel({
   onConfirm,
   successMessage = "Your booking has been confirmed.",
   externalBookingUrl,
+  minGuests = 1,
+  maxGuests = 10,
 }: BookingPanelProps) {
   const [step, setStep] = useState<BookingStep>("datetime");
   const [guestOpen, setGuestOpen] = useState(false);
@@ -182,6 +186,8 @@ export function BookingPanel({
 
   function updateGuests(next: Partial<BookingGuestCounts>) {
     const updated = { ...activeGuests, ...next };
+    const minAdults = Math.max(1, minGuests);
+    if (updated.adults < minAdults || updated.adults + updated.children + updated.infants > maxGuests) return;
     setInternalGuests(updated);
     onGuestsChange?.(updated);
   }
@@ -279,6 +285,8 @@ export function BookingPanel({
               guests={activeGuests}
               guestOpen={guestOpen}
               totalGuests={totalGuests}
+              minGuests={minGuests}
+              maxGuests={maxGuests}
               reservationFee={reservationFee}
               currency={currency}
               loading={loading}
@@ -333,6 +341,8 @@ function DateTimeStep({
   guests,
   guestOpen,
   totalGuests,
+  minGuests,
+  maxGuests,
   reservationFee,
   currency,
   loading,
@@ -353,6 +363,8 @@ function DateTimeStep({
   guests: BookingGuestCounts;
   guestOpen: boolean;
   totalGuests: number;
+  minGuests: number;
+  maxGuests: number;
   reservationFee: number;
   currency: string;
   loading: boolean;
@@ -475,6 +487,7 @@ function DateTimeStep({
             <Users className="size-4 text-primary" />
             <span className="text-sm font-semibold">Guests</span>
             <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold">{totalGuests}</span>
+            <span className="text-[10px] text-muted-foreground">max {maxGuests}</span>
           </span>
           <ChevronDown className={cn("size-4 text-muted-foreground transition", guestOpen && "rotate-180")} />
         </button>
@@ -487,7 +500,8 @@ function DateTimeStep({
               ["infants", "Infants", "Under 2"],
             ].map(([key, label, hint]) => {
               const count = guests[key as keyof BookingGuestCounts];
-              const min = key === "adults" ? 1 : 0;
+              const min = key === "adults" ? Math.max(1, minGuests) : 0;
+              const canIncrease = totalGuests < maxGuests;
               return (
                 <div key={key} className="flex items-center justify-between gap-3 rounded-lg px-2 py-2.5">
                   <div>
@@ -506,8 +520,9 @@ function DateTimeStep({
                     <span className="w-5 text-center text-sm font-semibold tabular-nums">{count}</span>
                     <button
                       type="button"
+                      disabled={!canIncrease}
                       onClick={() => onGuestsChange({ [key]: count + 1 })}
-                      className="grid size-8 place-items-center rounded-full border border-border text-sm"
+                      className="grid size-8 place-items-center rounded-full border border-border text-sm disabled:opacity-40"
                     >
                       +
                     </button>
