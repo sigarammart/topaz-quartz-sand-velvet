@@ -182,14 +182,12 @@ export function parseArchiveHtml(html: string, archiveSlug?: string): JetArchive
   const archiveCat = archiveSlug ? archiveCategory(archiveSlug) : undefined;
   const hits: JetArchiveHit[] = [];
   const chunks = html.split(/data-post-id="/).slice(1);
-  let rank = 0;
   for (const chunk of chunks) {
     const id = Number(chunk.slice(0, chunk.indexOf('"')));
     const href = chunk.match(/https:\/\/xplorepondy\.com\/listing\/[^"\s>]+/);
     if (!href) continue;
     const slug = href[0].replace(/\/$/, "").split("/").pop();
     if (!slug) continue;
-    rank += 1;
     const window = chunk.slice(0, 36000);
     const facets = new Map<string, ListingTaxGroup>();
     const mustTry: string[] = [];
@@ -261,7 +259,6 @@ export function parseArchiveHtml(html: string, archiveSlug?: string): JetArchive
       openNow: hoursInfo.openNow,
       weeklyHours: hoursInfo.weeklyHours.length ? hoursInfo.weeklyHours : undefined,
       featured: featured || undefined,
-      listingPackage: rank,
       category: archiveCat ?? (kind ? archiveCategory(facetSlug(kind)) : undefined),
       kind: kind || undefined,
     });
