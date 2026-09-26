@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { getListing } from "@/data/listings";
 import { CATEGORY_META } from "@/lib/types";
 import type { Listing } from "@/lib/types";
-import { fetchWpListing } from "@/lib/wp-api";
+import { fetchListeoBookingAvailability, fetchWpListing } from "@/lib/wp-api";
 import { exploreSearchForTerm } from "@/lib/filters";
 import { listingPhotos } from "@/lib/media";
 import { catalogListing, catalogNearby, useCatalog } from "@/store/catalog";
@@ -146,6 +146,9 @@ function PlacePage() {
   }));
   const [relatedShown, setRelatedShown] = useState(6);
   const [bookingOpen, setBookingOpen] = useState(false);
+  const [bookingDates, setBookingDates] = useState<Array<{ value: string; weekday: string; day: string; month: string; available: boolean; slots: { id: string; start: string; end: string; available?: boolean }[] }>>([]);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [bookingError, setBookingError] = useState<string>();
   const [relatedSort, setRelatedSort] = useState<"featured" | "package" | "near">("featured");
 
   useEffect(() => {
@@ -196,29 +199,57 @@ function PlacePage() {
     }
   }, [slug]);
 
-  const bookingDates = useMemo(() => {
+  const bookingDateValues = useMemo(() => {
     const now = new Date();
     return Array.from({ length: 7 }, (_, index) => {
       const date = new Date(now);
       date.setDate(now.getDate() + index);
-      return {
-        value: date.toISOString().slice(0, 10),
-        weekday: new Intl.DateTimeFormat("en-IN", { weekday: "short" }).format(date),
-        day: new Intl.DateTimeFormat("en-IN", { day: "2-digit" }).format(date),
-        month: new Intl.DateTimeFormat("en-IN", { month: "short" }).format(date),
-        available: true,
-        slots: index === 2 ? [
-          { id: "09:00-09:30", start: "9:00 AM", end: "9:30 AM" },
-          { id: "10:00-10:30", start: "10:00 AM", end: "10:30 AM" },
-          { id: "10:30-11:00", start: "10:30 AM", end: "11:00 AM" },
-        ] : index === 1 ? [
-          { id: "09:00-09:30", start: "9:00 AM", end: "9:30 AM" },
-        ] : [],
-      };
+      return date.toISOString().slice(0, 10);
     });
   }, []);
 
-  const firstBookableDate = bookingDates.find((date) => (date.slots?.length ?? 0) > 0)?.value ?? bookingDates[0]?.value;
+  useEffect(() => {
+    if (!bookingOpen || !listing?.wpId) return;
+    let cancelled = false;
+    setBookingLoading(true);
+    setBookingError(undefined);
+
+    void fetchListeoBookingAvailability({
+      data: {
+        listingId: listing.wpId,
+        dates: bookingDateValues,
+      },
+    })
+      .then((result) => {
+        if (cancelled) return;
+        const dates = result.dates.map((date) => {
+          const parsed = new Date(date.value + "T00:00:00");
+          return {
+            ...date,
+            weekday: new Intl.DateTimeFormat("en-IN", { weekday: "short" }).format(parsed),
+            day: new Intl.DateTimeFormat("en-IN", { day: "2-digit" }).format(parsed),
+            month: new Intl.DateTimeFormat("en-IN", { month: "short" }).format(parsed),
+            available: date.slots.length > 0,
+          };
+        });
+        setBookingDates(dates);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBookingDates([]);
+          setBookingError("Live availability could not be loaded. Please try again.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setBookingLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bookingOpen, bookingDateValues, listing?.wpId]);
+
+  const firstBookableDate = bookingDates.find((date) => date.slots.length > 0)?.value;
 
   if (!listing) {
     if (extra === undefined || status === "loading" || status === "idle") {
@@ -715,6 +746,8 @@ function PlacePage() {
           dates={bookingDates}
           slots={[]}
           selectedDate={firstBookableDate}
+          loading={bookingLoading}
+          error={bookingError}
           reservationFee={50}
           currency="INR"
           externalBookingUrl={listing.siteUrl}
