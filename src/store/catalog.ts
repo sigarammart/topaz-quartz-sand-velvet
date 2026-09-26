@@ -36,6 +36,8 @@ type CatalogState = {
 
 let loadStarted = 0;
 let hoursStarted = 0;
+let catalogRetryTimer: ReturnType<typeof setTimeout> | undefined;
+let catalogRetryDelay = 5000;
 let guidesStarted = 0;
 const hoursDone = new Set<string>();
 const hoursQueued = new Set<string>();
@@ -202,6 +204,11 @@ export const useCatalog = create<CatalogState>((set, get) => ({
         }),
       ]);
       const incoming = result.listings;
+      if (catalogRetryTimer) {
+        clearTimeout(catalogRetryTimer);
+        catalogRetryTimer = undefined;
+      }
+      catalogRetryDelay = 5000;
       const keepPrevious = previous.length > incoming.length && previous.length >= 300;
       const listings = keepPrevious ? previous : incoming;
       const total = Math.max(result.total, listings.length, previous.length >= 300 ? previous.length : 0);
@@ -238,6 +245,18 @@ export const useCatalog = create<CatalogState>((set, get) => ({
         status: "offline",
         error: "Could not reach xplorepondy.com. Showing the curated set.",
       });
+
+      // Keep the curated set usable immediately, but automatically retry the
+      // live catalog in the background. This lets a temporary WordPress/API
+      // outage recover without requiring the user to refresh the page.
+      if (!catalogRetryTimer) {
+        const delay = catalogRetryDelay;
+        catalogRetryDelay = Math.min(catalogRetryDelay * 2, 30000);
+        catalogRetryTimer = setTimeout(() => {
+          catalogRetryTimer = undefined;
+          void get().ensure();
+        }, delay);
+      }
     }
   },
   patchListing: (row) => {
