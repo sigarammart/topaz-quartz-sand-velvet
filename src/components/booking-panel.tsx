@@ -303,6 +303,7 @@ export function BookingPanel({
               loading={loading}
               currency={currency}
               reservationFee={reservationFee}
+              externalBookingUrl={externalBookingUrl}
             />
           )}
 
@@ -570,6 +571,7 @@ function ConfirmStep({
   loading,
   currency,
   reservationFee,
+  externalBookingUrl,
 }: {
   selection: BookingSelection;
   details: BookingDetails;
@@ -579,6 +581,7 @@ function ConfirmStep({
   loading: boolean;
   currency: string;
   reservationFee: number;
+  externalBookingUrl?: string;
 }) {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-5 sm:px-6 sm:py-7">
@@ -637,7 +640,7 @@ function ConfirmStep({
         </Button>
         <Button type="button" className="h-12 flex-[1.6] rounded-full font-bold" disabled={loading} onClick={onConfirm}>
           {loading && <Loader2 className="size-4 animate-spin" />}
-          Confirm booking
+          {externalBookingUrl ? "Continue to live booking" : "Confirm booking"}
         </Button>
       </div>
     </div>
