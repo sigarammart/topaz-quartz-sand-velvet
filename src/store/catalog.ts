@@ -186,7 +186,9 @@ export const useCatalog = create<CatalogState>((set, get) => ({
       }
     }
     if (current.status === "loading" && Date.now() - loadStarted < 15000) return;
-    if (current.openNowStatus !== "ready") void hydrateHours(get().applyHours, current.items);
+    // Do not start the expensive Open Now server functions while the catalog
+    // is still on the local/curated set. Multiple concurrent server functions
+    // were causing LiteSpeed/Node request aborts before the live catalog reply.
     if (current.source === "live" && current.items.length >= 350 && current.items.some((item) => item.wpId)) {
       void hydrateGuides((guides) => set({ guides }));
       return;
