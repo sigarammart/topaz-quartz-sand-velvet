@@ -134,6 +134,7 @@ const FALLBACK_IMAGE: Record<Category, string> = {
   places: "/images/french-quarter.jpg",
   activities: "/images/scuba.jpg",
   food: "/images/cafe.jpg",
+  services: "/images/cafe.jpg",
   stay: "/images/hotel.jpg",
 };
 
@@ -157,7 +158,7 @@ const PARENT_TO_CATEGORY: Record<string, Category> = {
   "bike-rental": "activities",
   "car-rental": "activities",
   rentals: "activities",
-  services: "activities",
+  services: "services",
   "food-beverage": "food",
   cafes: "food",
   restaurants: "food",
@@ -266,7 +267,7 @@ function categoryFromTerms(
 ): { category: Category; kind: string; tags: string[] } {
   const slugs = terms.map((t) => t.slug ?? "");
   let category: Category = "places";
-  const rank: Category[] = ["stay", "food", "activities", "places"];
+  const rank: Category[] = ["stay", "services", "food", "activities", "places"];
   for (const c of rank) {
     if (slugs.some((s) => PARENT_TO_CATEGORY[s] === c)) {
       category = c;
