@@ -92,15 +92,22 @@ add_action('rest_api_init', function () {
             // The PWA sends its timestamp immediately before submitting the booking.
             $created_after = max($created_after - 15, time() - (15 * MINUTE_IN_SECONDS));
 
-            $orders = wc_get_orders([
+            $user = get_user_by('email', $email);
+            $query = [
                 'limit'        => 10,
                 'orderby'      => 'date',
                 'order'        => 'DESC',
                 'return'       => 'objects',
-                'billing_email' => $email,
-                'date_created' => '>' . gmdate('Y-m-d H:i:s', $created_after),
-                'status'       => ['pending', 'on-hold', 'failed'],
-            ]);
+                'customer'     => $email,
+                'date_created' => '>' . (int) $created_after,
+                'status'       => ['pending', 'on-hold', 'failed', 'processing'],
+            ];
+
+            if ($user instanceof WP_User) {
+                $query['customer_id'] = (int) $user->ID;
+            }
+
+            $orders = wc_get_orders($query);
 
             foreach ($orders as $order) {
                 if (!$order instanceof WC_Order) {
