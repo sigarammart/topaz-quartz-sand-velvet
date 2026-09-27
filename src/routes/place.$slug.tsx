@@ -772,8 +772,8 @@ function PlacePage() {
                 }
               : grokUser
                 ? {
-                    firstName: grokUser.displayName?.split(/\\s+/)[0],
-                    lastName: grokUser.displayName?.split(/\\s+/).slice(1).join(" "),
+                    firstName: grokUser.displayName?.split(/\s+/)[0],
+                    lastName: grokUser.displayName?.split(/\s+/).slice(1).join(" "),
                     email: grokUser.primaryEmail ?? undefined,
                     isWordPressSession: false,
                   }
