@@ -169,13 +169,16 @@ async function resolveListeoPaymentUrlFromOrder(
     );
   }
 
-  if (lastBridgeVersion !== "2026-09-27-order-lookup-v9") {
+  if (lastBridgeVersion !== "2026-09-27-order-lookup-v10") {
     throw new Error("The live xplorepondy.com payment bridge is still running an older WPCode snippet. Replace the WPCode snippet with the latest repository version before testing again.");
   }
   if (lastBridgeReason === "submitted_product_id_does_not_match_listing_product") {
     const expected = (lastDiagnostics?.expected_product_ids ?? []).join(",") || "none";
     const submitted = (lastDiagnostics?.submitted_product_ids ?? []).join(",") || "none";
     throw new Error(`Listeo submitted product ${submitted}, but the listing is linked to WooCommerce product ${expected}.`);
+  }
+  if (lastBridgeReason === "multiple_fresh_product_orders_without_customer_match") {
+    throw new Error("Listeo created multiple fresh WooCommerce orders for this product, but none is linked to the WordPress customer/email. The booking needs a stronger order correlation token.");
   }
   if (lastBridgeReason === "recent_orders_found_but_customer_did_not_match") {
     const submitted = (lastDiagnostics?.submitted_product_ids ?? []).join(",") || "none";
