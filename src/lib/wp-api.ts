@@ -157,6 +157,9 @@ export type WpUser = {
   email: string;
   avatar: string;
   roles: string[];
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
 };
 
 export type WpTrip = {
@@ -1217,13 +1220,32 @@ function mapListing(
 function mapUser(raw: WpMe): WpUser {
   const avatars = raw.avatar_urls ?? {};
   const avatar = avatars["96"] || avatars["48"] || Object.values(avatars)[0] || "";
+  const meta = raw.meta ?? {};
+  const value = (...keys: string[]) => {
+    for (const key of keys) {
+      const candidate = meta[key];
+      if (candidate == null) continue;
+      const text = String(candidate).trim();
+      if (text) return decodeHtml(text);
+    }
+    return "";
+  };
+  const fullName = raw.name || raw.slug || "WordPress user";
+  const firstName = value("first_name", "first-name", "firstName");
+  const lastName = value("last_name", "last-name", "lastName");
+  const phone = value("phone", "_phone", "billing_phone", "mobile", "mobile_number", "contact_phone");
+  const derivedFirst = firstName || fullName.split(/\s+/)[0] || "";
+  const derivedLast = lastName || fullName.split(/\s+/).slice(1).join(" ");
   return {
     id: raw.id,
-    name: raw.name || raw.slug || "WordPress user",
+    name: fullName,
     slug: raw.slug || "",
     email: raw.email || "",
     avatar,
     roles: raw.roles ?? [],
+    firstName: derivedFirst || undefined,
+    lastName: derivedLast || undefined,
+    phone: phone || undefined,
   };
 }
 
