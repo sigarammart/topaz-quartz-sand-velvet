@@ -2907,6 +2907,27 @@ export const wpLogin = createServerFn({ method: "POST" })
     }
 
     const user = mapUser(me);
+
+    // Application-password authentication proves the credentials are valid
+    // for REST, but it does not create the browser normal WordPress login
+    // cookie. Try the regular login as well so Listeo can recognize this user
+    // when the booking confirmation opens on xplorepondy.com.
+    if (!cookie) {
+      const browserCookie = await wpCookieLogin(username, password);
+      if (browserCookie) {
+        const loggedInCookie = browserCookie
+          .split("; ")
+          .find((pair) => pair.startsWith("wordpress_logged_in_="));
+        if (loggedInCookie) {
+          setResponseHeader(
+            "Set-Cookie",
+            `${loggedInCookie}; Domain=.xplorepondy.com; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=1209600`,
+          );
+        }
+        authHeaders = { Cookie: browserCookie };
+      }
+    }
+
     const { myListings, myTrips } = await loadAuthorContent(user.id, authHeaders);
     const bookmarkIds = bookmarkIdsFromUserMeta(me.meta);
     return { ok: true as const, user, myListings, myTrips, bookmarkIds, method };
