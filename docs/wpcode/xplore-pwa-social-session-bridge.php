@@ -169,22 +169,49 @@ add_action('rest_api_init', function () {
                         continue;
                     }
 
+                    $normalized_email = strtolower(trim($email));
                     $order_email = strtolower(trim((string) $order->get_billing_email()));
-                    if ($order_email !== strtolower(trim($email))) {
+                    $email_matches = $order_email !== '' && $order_email === $normalized_email;
+                    $customer_id_matches = $user instanceof WP_User
+                        && (int) $order->get_customer_id() === (int) $user->ID;
+
+                    // Listeo can create the WooCommerce order before the
+                    // billing email is populated, while still attaching the
+                    // order to the logged-in WordPress customer. Accept either
+                    // identity signal, but never accept an unrelated order.
+                    if (!$email_matches && !$customer_id_matches) {
                         continue;
                     }
 
-                    // Listeo normally leaves the booking order pending/on-hold
-                    // until payment. Keep the status guard explicit, but do not
-                    // rely on needs_payment(): some configured gateways/order
-                    // flows can report false while the native order-pay URL is
-                    // still the correct continuation URL.
+                    // Do not require one hard-coded WooCommerce status.
+                    // Custom gateways/plugins can use another unpaid status.
+                    // Reject orders that are already paid or clearly terminal.
                     $status = (string) $order->get_status();
-                    if (!in_array($status, ['pending', 'on-hold', 'failed', 'processing'], true)) {
+                    if ($order->is_paid() || in_array($status, ['cancelled', 'refunded', 'completed'], true)) {
                         continue;
                     }
 
+                    // WooCommerce's native method builds the real
+                    // /checkout/order-pay/{id}/?pay_for_order=true&key=...
+                    // URL using this order's actual key.
                     $payment_url = $order->get_checkout_payment_url(false);
+
+                    // Defensive fallback if a theme/plugin filter empties the
+                    // native URL. This reproduces WooCommerce's documented
+                    // order-pay URL construction.
+                    if (!$payment_url) {
+                        $checkout_url = function_exists('wc_get_checkout_url')
+                            ? wc_get_checkout_url()
+                            : home_url('/checkout/');
+                        $payment_url = add_query_arg(
+                            [
+                                'pay_for_order' => 'true',
+                                'key' => $order->get_order_key(),
+                            ],
+                            wc_get_endpoint_url('order-pay', $order_id, $checkout_url)
+                        );
+                    }
+
                     if (!$payment_url) {
                         continue;
                     }
