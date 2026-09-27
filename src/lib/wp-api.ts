@@ -32,42 +32,6 @@ export type ListeoBookingDate = {
   slots: ListeoBookingSlot[];
 };
 
-function extractListeoPaymentUrl(value: string): string | undefined {
-  const htmlDecoded = decodeHtml(value)
-    .replace(/\\\//g, "/")
-    .replace(/\\u0026/gi, "&")
-    .replace(/&amp;/gi, "&");
-
-  const candidates = [htmlDecoded];
-  try {
-    const decoded = decodeURIComponent(htmlDecoded);
-    if (decoded !== htmlDecoded) candidates.push(decoded);
-  } catch {
-    // The response may contain a partially encoded URL; keep the original candidate.
-  }
-
-  for (const candidate of candidates) {
-    const match = candidate.match(
-      /(?:https?:\/\/xplorepondy\.com)?(\/checkout\/order-pay\/\d+\/\?[^"'<>\s\\]+)/i,
-    );
-    if (!match?.[1]) continue;
-
-    try {
-      const url = new URL(match[1], WP_ORIGIN);
-      if (url.origin !== new URL(WP_ORIGIN).origin) continue;
-      const orderId = url.pathname.match(/\/order-pay\/(\d+)\/?$/i)?.[1];
-      const key = url.searchParams.get("key");
-      if (!orderId || !key) continue;
-
-      return `${WP_ORIGIN}/checkout/order-pay/${orderId}/?pay_for_order=true&key=${encodeURIComponent(key)}`;
-    } catch {
-      // Try the next representation.
-    }
-  }
-
-  return undefined;
-}
-
 async function resolveListeoPaymentUrlFromOrder(
   email: string,
   createdAfter: number,
@@ -463,7 +427,6 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
     });
 
     let redirectUrl: string | undefined;
-    const redirectUrls: string[] = [];
     let responseCookie = cookieHeader(
       typeof response.headers.getSetCookie === "function"
         ? response.headers.getSetCookie()
@@ -474,7 +437,6 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
       const location = response.headers.get("location");
       if (!location) break;
       redirectUrl = new URL(location, confirmation.actionUrl).toString();
-      redirectUrls.push(redirectUrl);
 
       const nextCookie = responseCookie || cookie;
       response = await fetch(redirectUrl, {
