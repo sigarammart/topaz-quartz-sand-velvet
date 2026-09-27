@@ -35,6 +35,7 @@ export type ListeoBookingDate = {
 async function resolveListeoPaymentUrlFromOrder(
   email: string,
   createdAfter: number,
+  listingId: number,
 ): Promise<{ orderId: number; paymentUrl: string } | undefined> {
   const secret = process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim();
   if (!secret) {
@@ -44,6 +45,20 @@ async function resolveListeoPaymentUrlFromOrder(
   let lastStatus: number | undefined;
   let lastBridgeReason: string | undefined;
   let lastBridgeVersion: string | undefined;
+  let lastDiagnostics: {
+    orders_scanned?: number;
+    identity_matches?: number;
+    unpaid_matches?: number;
+    recent_orders?: Array<{
+      id?: number;
+      status?: string;
+      created?: string;
+      customer_id?: number;
+      billing_email?: string;
+      product_ids?: number[];
+      product_names?: string[];
+    }>;
+  } | undefined;
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
     try {
@@ -57,6 +72,7 @@ async function resolveListeoPaymentUrlFromOrder(
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           created_after: createdAfter,
+          listing_id: listingId,
         }),
         signal: AbortSignal.timeout(12000),
       });
@@ -77,9 +93,30 @@ async function resolveListeoPaymentUrlFromOrder(
 
       if (response.ok) {
         const body = (await response.json().catch(() => null)) as
-          | { ok?: boolean; order_id?: number; payment_url?: string; reason?: string; bridge_version?: string }
+          | {
+              ok?: boolean;
+              order_id?: number;
+              payment_url?: string;
+              reason?: string;
+              bridge_version?: string;
+              diagnostics?: {
+                orders_scanned?: number;
+                identity_matches?: number;
+                unpaid_matches?: number;
+                recent_orders?: Array<{
+                  id?: number;
+                  status?: string;
+                  created?: string;
+                  customer_id?: number;
+                  billing_email?: string;
+                  product_ids?: number[];
+                  product_names?: string[];
+                }>;
+              };
+            }
           | null;
         if (body?.bridge_version) lastBridgeVersion = body.bridge_version;
+        if (body?.diagnostics) lastDiagnostics = body.diagnostics;
         if (body?.ok && body.payment_url && Number(body.order_id) > 0) {
           return {
             orderId: Number(body.order_id),
@@ -121,7 +158,18 @@ async function resolveListeoPaymentUrlFromOrder(
     throw new Error("A matching unpaid WooCommerce order exists, but WooCommerce did not return its payment URL.");
   }
   if (lastBridgeReason === "no_recent_matching_order") {
-    throw new Error("No matching WooCommerce order was created by the Listeo booking request. The booking confirmation response was not enough to prove that an order was created.");
+    const recent = lastDiagnostics?.recent_orders ?? [];
+    const summary = recent.length
+      ? recent
+          .slice(0, 5)
+          .map((order) =>
+            `#${order.id ?? "?"} ${order.status ?? "?"} ${order.billing_email || "no-email"} products:${(order.product_ids ?? []).join(",") || "-"}`,
+          )
+          .join(" | ")
+      : "none";
+    throw new Error(
+      `No matching fresh WooCommerce order was detected for this booking attempt. Recent candidates: ${summary}`,
+    );
   }
   return undefined;
 }
@@ -479,7 +527,7 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
      * booking attempt. The bridge returns its actual order ID and native
      * order-pay URL.
      */
-    const bookingOrder = await resolveListeoPaymentUrlFromOrder(bookingEmail, bookingStartedAt);
+    const bookingOrder = await resolveListeoPaymentUrlFromOrder(bookingEmail, bookingStartedAt, data.listingId);
 
     if (!bookingOrder) {
       throw new Error(
