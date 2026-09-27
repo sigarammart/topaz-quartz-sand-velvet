@@ -40,6 +40,7 @@ import { decodeEntities, cn } from "@/lib/utils";
 import { preferListeoAddress, websiteHref } from "@/lib/listeo";
 import { filterListingGroups, orderListingGroups, profileFromSlugs } from "@/lib/listing-layouts";
 import { useSession } from "@/store/session";
+import { useAppLoggedIn } from "@/lib/app-session";
 
 export const Route = createFileRoute("/place/$slug")({
   component: PlacePage,
@@ -142,6 +143,7 @@ function PlacePage() {
   const { slug } = Route.useParams();
   const items = useCatalog((s) => s.items);
   const wpUser = useSession((s) => s.user);
+  const { grokUser } = useAppLoggedIn();
   const status = useCatalog((s) => s.status);
   const catalogHit = catalogListing(slug, items) ?? getListing(slug);
   const [fetched, setFetched] = useState<{ slug: string; listing: Listing | null | undefined }>(() => ({
@@ -766,8 +768,16 @@ function PlacePage() {
                   lastName: wpUser.lastName,
                   email: wpUser.email,
                   phone: wpUser.phone,
+                  isWordPressSession: true,
                 }
-              : undefined
+              : grokUser
+                ? {
+                    firstName: grokUser.displayName?.split(/\\s+/)[0],
+                    lastName: grokUser.displayName?.split(/\\s+/).slice(1).join(" "),
+                    email: grokUser.primaryEmail ?? undefined,
+                    isWordPressSession: false,
+                  }
+                : undefined
           }
           onConfirm={async (details, selection) => {
             setBookingSubmitLoading(true);
