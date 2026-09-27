@@ -855,8 +855,9 @@ function PlacePage() {
                 bookingUrl: result.bookingUrl,
                 successMessage: result.paymentUrl
                   ? "Your booking was submitted successfully. Continue to payment when you are ready."
-                  : "Your booking was submitted successfully.",
+                  : "Your booking was submitted, but the payment page could not be located.",
               };
+
             } catch (error) {
               setBookingError(
                 error instanceof Error
