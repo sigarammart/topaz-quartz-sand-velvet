@@ -61,7 +61,7 @@ type BookingPanelProps = {
   onSlotChange?: (slotId: string) => void;
   onGuestsChange?: (guests: BookingGuestCounts) => void;
   onContinue?: (selection: BookingSelection) => void;
-  onConfirm?: (details: BookingDetails, selection: BookingSelection) => void;
+  onConfirm?: (details: BookingDetails, selection: BookingSelection) => void | Promise<{ ok?: boolean; paymentUrl?: string; successMessage?: string } | void>;
   successMessage?: string;
   successAction?: { label: string; url: string };
   externalBookingUrl?: string;
@@ -142,6 +142,7 @@ export function BookingPanel({
   const [internalDate, setInternalDate] = useState(selectedDate ?? dates[0]?.value);
   const [internalSlot, setInternalSlot] = useState(selectedSlot);
   const [internalGuests, setInternalGuests] = useState<BookingGuestCounts>(guests);
+  const [successAction, setSuccessAction] = useState<{ label: string; url: string }>();
   const [details, setDetails] = useState<BookingDetails>({
     username: "",
     password: "",
@@ -175,6 +176,7 @@ export function BookingPanel({
       setInternalDate(selectedDate ?? dates[0]?.value);
       setInternalSlot(selectedSlot);
       setInternalGuests(guests);
+      setSuccessAction(undefined);
       setDetails({ username: "", password: "", firstName: "", lastName: "", email: "", phone: "", message: "" });
     }
   }, [open]);
@@ -252,9 +254,13 @@ export function BookingPanel({
     if (next && next.available !== false) changeDate(next.value);
   }
 
-  function confirm() {
+  async function confirm() {
     if (!selection || !onConfirm) return;
-    onConfirm(details, selection);
+    const result = await onConfirm(details, selection);
+    if (result?.ok !== false) {
+      setSuccessAction(result?.paymentUrl ? { label: "Continue to payment", url: result.paymentUrl } : undefined);
+      setStep("success");
+    }
   }
 
   function review() {
