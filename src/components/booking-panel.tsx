@@ -42,7 +42,7 @@ export type BookingSelection = {
   coupon?: string;
 };
 
-type BookingStep = "datetime" | "confirm" | "success";
+type BookingStep = "datetime" | "confirm" | "review" | "success";
 
 type BookingPanelProps = {
   open: boolean;
@@ -255,13 +255,28 @@ export function BookingPanel({
     onConfirm(details, selection);
   }
 
+  function review() {
+    if (!selection || !requiredDetailsComplete()) return;
+    setStep("review");
+  }
+
+  function requiredDetailsComplete() {
+    return Object.entries(details).every(
+      ([key, value]) =>
+        key === "message" ||
+        key === "lastName" ||
+        (key === "password" && Boolean(signedInUser?.isWordPressSession)) ||
+        value.trim().length > 0,
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-label={`Book ${listingName}`}>
       <div className="flex h-[100dvh] w-full flex-col overflow-hidden bg-background sm:mx-auto sm:my-5 sm:h-[calc(100dvh-2.5rem)] sm:max-w-3xl sm:rounded-2xl sm:shadow-2xl">
         <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3.5 sm:px-5">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              {step === "success" ? "Booking confirmed" : `Step ${step === "datetime" ? 1 : 2} of 2`}
+              {step === "success" ? "Booking confirmed" : `Step ${step === "datetime" ? 1 : step === "confirm" ? 2 : 3} of 3`}
             </p>
             <h2 className="mt-0.5 truncate font-display text-lg font-semibold">{listingName}</h2>
           </div>
@@ -279,7 +294,8 @@ export function BookingPanel({
           <div className="grid shrink-0 grid-cols-2 gap-1 border-b border-border bg-muted/35 p-2 sm:hidden">
             {[
               ["datetime", "Date & time"],
-              ["confirm", "Confirm"],
+              ["confirm", "Personal details"],
+              ["review", "Review"],
             ].map(([key, label], index) => {
               const active = step === key;
               const complete = step === "confirm" && index === 0;
@@ -720,6 +736,80 @@ function ConfirmStep({
       </div>
     </div>
   );
+}
+
+function BookingReviewStep({
+  selection,
+  details,
+  onBack,
+  onConfirm,
+  loading,
+  currency,
+  reservationFee,
+  signedInUser,
+}: {
+  selection: BookingSelection;
+  details: BookingDetails;
+  onBack: () => void;
+  onConfirm: () => void;
+  loading: boolean;
+  currency: string;
+  reservationFee: number;
+  signedInUser?: BookingPanelProps["signedInUser"];
+}) {
+  const total = reservationFee;
+  return (
+    <div className="mx-auto w-full max-w-4xl px-4 py-5 sm:px-6 sm:py-7">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">Booking confirmation</p>
+      <h3 className="mt-1 font-display text-xl font-semibold sm:text-2xl">Personal Details</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Review your details and booking before submitting.</p>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-[1.45fr_0.85fr]">
+        <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
+          <h4 className="font-semibold">Your information</h4>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <ReviewValue label={signedInUser?.isWordPressSession ? "Account" : "Username"} value={details.username || signedInUser?.email || "—"} />
+            <ReviewValue label="First Name" value={details.firstName} />
+            <ReviewValue label="Last Name" value={details.lastName || "—"} />
+            <ReviewValue label="E-Mail Address" value={details.email} />
+            <ReviewValue label="Phone" value={details.phone} />
+            <ReviewValue label="Message" value={details.message || "—"} />
+          </div>
+          {signedInUser && (
+            <div className="mt-4 rounded-lg bg-primary/8 px-3 py-2 text-xs text-muted-foreground">
+              {signedInUser.isWordPressSession ? "You are signed in to your Xplore Pondy account." : "You are signed in to Xplore Pondy. Your profile details have been prefilled."}
+            </div>
+          )}
+        </section>
+
+        <aside className="rounded-xl border border-border bg-card p-4 sm:p-5">
+          <h4 className="font-semibold">Booking Summary</h4>
+          <div className="mt-4 space-y-3 text-sm">
+            <div className="flex justify-between gap-4"><span className="text-muted-foreground">Date</span><strong>{dateLabel(selection.date)}</strong></div>
+            <div className="flex justify-between gap-4"><span className="text-muted-foreground">Time</span><strong>{selection.slot.start}–{selection.slot.end}</strong></div>
+            <div className="flex justify-between gap-4"><span className="text-muted-foreground">Service rate</span><strong>{money(0, currency)} × {selection.guests.adults} guests</strong></div>
+            <div className="border-t border-border pt-3">
+              <div className="flex justify-between gap-4"><span className="text-muted-foreground">Reservation Fee</span><strong>{money(reservationFee, currency)}</strong></div>
+              <div className="mt-2 flex justify-between gap-4 text-base"><span className="font-semibold">Total Cost</span><strong className="text-primary">{money(total, currency)}</strong></div>
+            </div>
+          </div>
+          <div className="mt-4 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground">Coupon discounts can be applied by the Listeo booking engine when enabled for this listing.</div>
+        </aside>
+      </div>
+
+      <div className="sticky bottom-0 mt-6 flex gap-2 border-t border-border bg-background/95 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent">
+        <Button type="button" variant="outline" className="h-12 flex-1 rounded-full" onClick={onBack}> <ChevronLeft className="size-4" /> Back </Button>
+        <Button type="button" className="h-12 flex-[1.6] rounded-full font-bold" disabled={loading} onClick={onConfirm}>
+          {loading && <Loader2 className="size-4 animate-spin" />}
+          Confirm Booking
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ReviewValue({ label, value }: { label: string; value: string }) {
+  return <div><span className="block text-[10px] uppercase tracking-wide text-muted-foreground">{label}</span><span className="mt-0.5 block break-words font-medium">{value}</span></div>;
 }
 
 function Field({
