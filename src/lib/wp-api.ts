@@ -32,6 +32,30 @@ export type ListeoBookingDate = {
   slots: ListeoBookingSlot[];
 };
 
+function extractListeoPaymentUrl(value: string): string | undefined {
+  const normalized = decodeHtml(value)
+    .replace(/\\\//g, "/")
+    .replace(/\\u0026/gi, "&")
+    .replace(/&amp;/gi, "&");
+
+  const match = normalized.match(
+    /(?:https?:\\/\\/xplorepondy\\.com)?(\\/checkout\\/order-pay\\/\\d+\\/\\?(?:[^"'<>\\s\\\\]+))/i,
+  );
+  if (!match?.[1]) return undefined;
+
+  try {
+    const url = new URL(match[1], WP_ORIGIN);
+    if (url.origin !== new URL(WP_ORIGIN).origin) return undefined;
+    const orderId = url.pathname.match(/\\/order-pay\\/(\\d+)\\/?$/i)?.[1];
+    const key = url.searchParams.get("key");
+    if (!orderId || !key) return undefined;
+
+    return `${WP_ORIGIN}/checkout/order-pay/${orderId}/?pay_for_order=true&key=${encodeURIComponent(key)}`;
+  } catch {
+    return undefined;
+  }
+}
+
 function stripBookingHtml(value: string) {
   return decodeHtml(value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
 }
@@ -309,14 +333,13 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
       throw new Error(errorText || `Listeo booking submission failed (HTTP ${response.status}).`);
     }
 
-    const orderPayMatch = combined.match(
-      /https?:\/\/xplorepondy\.com\/checkout\/order-pay\/\d+\/\?pay_for_order=true&key=[^"'\s<]+/i,
-    );
-    const discoveredRedirect = orderPayMatch?.[0] || redirectUrl;
+    const paymentUrl = [redirectUrl, combined]
+      .map((value) => (value ? extractListeoPaymentUrl(value) : undefined))
+      .find((value): value is string => Boolean(value));
 
     return {
       ok: true as const,
-      paymentUrl: discoveredRedirect,
+      paymentUrl,
       bookingUrl: redirectUrl,
     };
   });
