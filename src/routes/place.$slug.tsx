@@ -774,7 +774,7 @@ function PlacePage() {
             setBookingError(undefined);
 
             try {
-              const confirmationUrl = await fetchListeoBookingConfirmationUrl({
+              const confirmation = await fetchListeoBookingConfirmationUrl({
                 data: { listingUrl: listing.siteUrl },
               });
               const liveDate = bookingDates.find((date) => date.value === selection.date);
@@ -794,16 +794,20 @@ function PlacePage() {
 
               const form = document.createElement("form");
               form.method = "POST";
-              form.action = confirmationUrl;
+              form.action = confirmation.actionUrl;
               form.target = "_self";
               form.style.display = "none";
 
               const fields: Record<string, string> = {
+                ...confirmation.hiddenFields,
                 value,
                 confirmed: "yessir",
                 ...Object.fromEntries(
                   Object.entries(details).map(([key, fieldValue]) => [key, String(fieldValue)]),
                 ),
+                // Listeo's confirmation form includes a required privacy
+                // checkbox on this site. Native browser submission sends "on".
+                privacy_policy: "on",
               };
 
               for (const [name, fieldValue] of Object.entries(fields)) {
