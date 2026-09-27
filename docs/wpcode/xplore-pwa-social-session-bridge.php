@@ -88,54 +88,91 @@ add_action('rest_api_init', function () {
                 return new WP_Error('invalid_created_after', 'created_after is required.', ['status' => 400]);
             }
 
-            // Keep this endpoint tightly scoped to the immediately-created order.
-            // The PWA sends its timestamp immediately before submitting the booking.
-            $created_after = max($created_after - 15, time() - (15 * MINUTE_IN_SECONDS));
+            /*
+             * The PWA timestamp is generated immediately before submitting
+             * the Listeo form, but the PWA server and WordPress server can
+             * have small clock differences. Give the order query a generous
+             * lower bound instead of accidentally excluding a just-created
+             * order because the two clocks differ.
+             */
+            $created_after = max(0, $created_after - (30 * MINUTE_IN_SECONDS));
 
             $user = get_user_by('email', $email);
-            $query = [
-                'limit'        => 10,
+            $queries = [];
+
+            // Query by billing/customer email first. This also finds guest
+            // orders if Listeo created the order without a customer ID.
+            $queries[] = [
+                'limit'        => 20,
                 'orderby'      => 'date',
                 'order'        => 'DESC',
                 'return'       => 'objects',
                 'customer'     => $email,
                 'date_created' => '>' . (int) $created_after,
-                'status'       => ['pending', 'on-hold', 'failed', 'processing'],
             ];
 
+            // If the booking was attached to an existing WordPress account,
+            // query by customer ID as a second path. Do not combine customer
+            // email and customer_id in one query because either field can be
+            // absent/mismatched on older Listeo orders.
             if ($user instanceof WP_User) {
-                $query['customer_id'] = (int) $user->ID;
+                $queries[] = [
+                    'limit'        => 20,
+                    'orderby'      => 'date',
+                    'order'        => 'DESC',
+                    'return'       => 'objects',
+                    'customer_id'  => (int) $user->ID,
+                    'date_created' => '>' . (int) $created_after,
+                ];
             }
 
-            $orders = wc_get_orders($query);
+            $seen = [];
 
-            foreach ($orders as $order) {
-                if (!$order instanceof WC_Order) {
-                    continue;
+            foreach ($queries as $query) {
+                $orders = wc_get_orders($query);
+
+                foreach ($orders as $order) {
+                    if (!$order instanceof WC_Order) {
+                        continue;
+                    }
+
+                    $order_id = (int) $order->get_id();
+                    if (isset($seen[$order_id])) {
+                        continue;
+                    }
+                    $seen[$order_id] = true;
+
+                    // Keep the endpoint restricted to orders created around
+                    // this booking attempt, even if a custom query adapter
+                    // ignores the date filter.
+                    $order_created = $order->get_date_created();
+                    if (!$order_created || $order_created->getTimestamp() < $created_after) {
+                        continue;
+                    }
+
+                    // Do not send the user to a payment page for an order
+                    // that is already paid or otherwise no longer needs payment.
+                    if (!$order->needs_payment()) {
+                        continue;
+                    }
+
+                    $order_email = strtolower(trim((string) $order->get_billing_email()));
+                    if ($order_email !== strtolower(trim($email))) {
+                        continue;
+                    }
+
+                    $payment_url = $order->get_checkout_payment_url(false);
+                    if (!$payment_url) {
+                        continue;
+                    }
+
+                    return [
+                        'ok' => true,
+                        'order_id' => $order_id,
+                        'status' => (string) $order->get_status(),
+                        'payment_url' => esc_url_raw($payment_url),
+                    ];
                 }
-
-                // Do not send the user to a payment page for an order that
-                // is already paid or otherwise no longer needs payment.
-                if (!$order->needs_payment()) {
-                    continue;
-                }
-
-                $order_email = strtolower(trim((string) $order->get_billing_email()));
-                if ($order_email !== strtolower(trim($email))) {
-                    continue;
-                }
-
-                $payment_url = $order->get_checkout_payment_url(false);
-                if (!$payment_url) {
-                    continue;
-                }
-
-                return [
-                    'ok' => true,
-                    'order_id' => (int) $order->get_id(),
-                    'status' => (string) $order->get_status(),
-                    'payment_url' => esc_url_raw($payment_url),
-                ];
             }
 
             return [
