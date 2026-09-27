@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { getListing } from "@/data/listings";
 import { CATEGORY_META } from "@/lib/types";
 import type { Listing } from "@/lib/types";
-import { fetchListeoBookingAvailability, fetchListeoBookingConfirmationUrl, fetchWpListing } from "@/lib/wp-api";
+import { fetchListeoBookingAvailability, fetchListeoBookingConfirmationUrl, fetchWpBookingProfile, fetchWpListing } from "@/lib/wp-api";
 import { exploreSearchForTerm } from "@/lib/filters";
 import { listingPhotos } from "@/lib/media";
 import { catalogListing, catalogNearby, useCatalog } from "@/store/catalog";
@@ -156,6 +156,7 @@ function PlacePage() {
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingSubmitLoading, setBookingSubmitLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string>();
+  const [socialWpProfile, setSocialWpProfile] = useState<Awaited<ReturnType<typeof fetchWpBookingProfile>>>(null);
   const [relatedSort, setRelatedSort] = useState<"featured" | "package" | "near">("featured");
 
   useEffect(() => {
@@ -188,6 +189,24 @@ function PlacePage() {
   const origin = useGeo((s) => s.origin);
   const fromGps = useGeo((s) => s.source === "gps");
   const detailsLoading = extra === undefined;
+  useEffect(() => {
+    if (!grokUser?.primaryEmail) {
+      setSocialWpProfile(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchWpBookingProfile({ data: { email: grokUser.primaryEmail } })
+      .then((profile) => {
+        if (!cancelled) setSocialWpProfile(profile);
+      })
+      .catch(() => {
+        if (!cancelled) setSocialWpProfile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [grokUser?.primaryEmail]);
+
   const bookingEnabled = /hook[\s-]*lounge/i.test(
     String(listing?.slug ?? "") + " " + String(listing?.name ?? "") + " " + String(listing?.siteUrl ?? ""),
   );
@@ -773,9 +792,11 @@ function PlacePage() {
                 }
               : grokUser
                 ? {
-                    firstName: grokUser.displayName?.split(/\s+/)[0],
-                    lastName: grokUser.displayName?.split(/\s+/).slice(1).join(" "),
-                    email: grokUser.primaryEmail ?? undefined,
+                    username: socialWpProfile?.username,
+                    firstName: socialWpProfile?.firstName ?? grokUser.displayName?.split(/\s+/)[0],
+                    lastName: socialWpProfile?.lastName ?? grokUser.displayName?.split(/\s+/).slice(1).join(" "),
+                    email: socialWpProfile?.email ?? grokUser.primaryEmail ?? undefined,
+                    phone: socialWpProfile?.phone,
                     isWordPressSession: false,
                   }
                 : undefined
