@@ -880,7 +880,9 @@ function extractJetMetaGroups(html: string, profile: ListingFieldProfile | null 
       .replace(/\s+/g, " ")
       .trim();
     if (!title || /nearby|related|popular |contact\s*\/\s*address|sponsored|share this|review/i.test(title)) continue;
-    if (profile && !/price for two/i.test(title) && !headingMatchesProfile(profile, title)) continue;
+    // On the single-listing page we want the complete set of visible
+    // Listeo/JetEngine sections. Profile matching is useful for archive
+    // layout, but filtering here silently dropped valid listing content.
     const priceMatch = title.match(/^price for two\s*:?\s*(.+)$/i);
     if (priceMatch) {
       price = priceMatch[1].trim();
