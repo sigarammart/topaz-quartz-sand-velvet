@@ -231,7 +231,7 @@ add_action('rest_api_init', function () {
                         'order_id' => $order_id,
                         'status' => $status,
                         'payment_url' => esc_url_raw($payment_url),
-                        'bridge_version' => '2026-09-27-order-lookup-v5',
+                        'bridge_version' => '2026-09-27-order-lookup-v6',
                     ];
                 }
             }
@@ -250,7 +250,7 @@ add_action('rest_api_init', function () {
                 'order_id' => 0,
                 'payment_url' => '',
                 'reason' => $reason,
-                'bridge_version' => '2026-09-27-order-lookup-v5',
+                'bridge_version' => '2026-09-27-order-lookup-v6',
             ];
         },
     ]);
