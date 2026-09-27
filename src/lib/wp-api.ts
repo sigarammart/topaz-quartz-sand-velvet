@@ -70,7 +70,11 @@ function extractListeoPaymentUrl(value: string): string | undefined {
 
 async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: number): Promise<string | undefined> {
   const secret = process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim();
-  if (!secret) return undefined;
+  if (!secret) {
+    throw new Error("The PWA booking bridge is not configured. Set WP_SOCIAL_SESSION_BRIDGE_SECRET on the PWA server.");
+  }
+
+  let lastStatus: number | undefined;
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
@@ -88,19 +92,42 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
         signal: AbortSignal.timeout(12000),
       });
 
+      lastStatus = response.status;
+
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(
+          "The WordPress booking bridge rejected the PWA secret. WP_SOCIAL_SESSION_BRIDGE_SECRET and XPLORE_PWA_SESSION_SECRET must contain the same value.",
+        );
+      }
+
+      if (response.status === 404) {
+        throw new Error(
+          "The WordPress payment-order bridge is not installed. Update the xplore-pwa-social-session-bridge.php WPCode snippet on xplorepondy.com.",
+        );
+      }
+
       if (response.ok) {
         const body = (await response.json().catch(() => null)) as
           | { ok?: boolean; payment_url?: string }
           | null;
         if (body?.ok && body.payment_url) return body.payment_url;
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && /booking bridge|payment-order bridge|WP_SOCIAL_SESSION_BRIDGE_SECRET|XPLORE_PWA_SESSION_SECRET/i.test(error.message)) {
+        throw error;
+      }
       // The order may not be visible yet; retry briefly.
     }
 
     if (attempt < 4) {
       await new Promise((resolve) => setTimeout(resolve, 1500));
     }
+  }
+
+  if (lastStatus && lastStatus >= 500) {
+    throw new Error(
+      "The WordPress payment-order bridge returned a server error. Check the WPCode snippet and WooCommerce on xplorepondy.com.",
+    );
   }
 
   return undefined;
