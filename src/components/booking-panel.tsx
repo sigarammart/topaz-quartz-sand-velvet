@@ -142,7 +142,6 @@ export function BookingPanel({
   const [internalDate, setInternalDate] = useState(selectedDate ?? dates[0]?.value);
   const [internalSlot, setInternalSlot] = useState(selectedSlot);
   const [internalGuests, setInternalGuests] = useState<BookingGuestCounts>(guests);
-  const [successAction, setSuccessAction] = useState<{ label: string; url: string }>();
   const [details, setDetails] = useState<BookingDetails>({
     username: "",
     password: "",
