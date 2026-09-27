@@ -146,6 +146,9 @@ add_action('rest_api_init', function () {
             }
 
             $seen = [];
+            $orders_scanned = 0;
+            $identity_matches = 0;
+            $unpaid_matches = 0;
 
             foreach ($queries as $query) {
                 $orders = wc_get_orders($query);
@@ -155,6 +158,7 @@ add_action('rest_api_init', function () {
                         continue;
                     }
 
+                    $orders_scanned++;
                     $order_id = (int) $order->get_id();
                     if (isset($seen[$order_id])) {
                         continue;
@@ -182,6 +186,7 @@ add_action('rest_api_init', function () {
                     if (!$email_matches && !$customer_id_matches) {
                         continue;
                     }
+                    $identity_matches++;
 
                     // Do not require one hard-coded WooCommerce status.
                     // Custom gateways/plugins can use another unpaid status.
@@ -190,6 +195,7 @@ add_action('rest_api_init', function () {
                     if ($order->is_paid() || in_array($status, ['cancelled', 'refunded', 'completed'], true)) {
                         continue;
                     }
+                    $unpaid_matches++;
 
                     // WooCommerce's native method builds the real
                     // /checkout/order-pay/{id}/?pay_for_order=true&key=...
@@ -225,10 +231,20 @@ add_action('rest_api_init', function () {
                 }
             }
 
+            $reason = 'no_recent_matching_order';
+            if ($orders_scanned > 0 && $identity_matches === 0) {
+                $reason = 'recent_orders_found_but_customer_did_not_match';
+            } elseif ($identity_matches > 0 && $unpaid_matches === 0) {
+                $reason = 'matching_order_was_paid_or_terminal';
+            } elseif ($unpaid_matches > 0) {
+                $reason = 'matching_unpaid_order_has_no_payment_url';
+            }
+
             return [
                 'ok' => false,
                 'order_id' => 0,
                 'payment_url' => '',
+                'reason' => $reason,
             ];
         },
     ]);
