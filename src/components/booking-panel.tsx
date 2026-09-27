@@ -617,7 +617,7 @@ function ConfirmStep({
     ([key, value]) =>
       key === "message" ||
       key === "lastName" ||
-      key === "password" && signedInUser ||
+      key === "password" && Boolean(signedInUser) ||
       value.trim().length > 0,
   );
 
