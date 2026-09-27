@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { getListing } from "@/data/listings";
 import { CATEGORY_META } from "@/lib/types";
 import type { Listing } from "@/lib/types";
-import { fetchListeoBookingAvailability, fetchListeoBookingConfirmationUrl, fetchWpBookingProfile, fetchWpListing } from "@/lib/wp-api";
+import { ensureWpBookingSession, fetchListeoBookingAvailability, fetchListeoBookingConfirmationUrl, fetchWpBookingProfile, fetchWpListing } from "@/lib/wp-api";
 import { exploreSearchForTerm } from "@/lib/filters";
 import { listingPhotos } from "@/lib/media";
 import { catalogListing, catalogNearby, useCatalog } from "@/store/catalog";
@@ -189,6 +189,11 @@ function PlacePage() {
   const origin = useGeo((s) => s.origin);
   const fromGps = useGeo((s) => s.source === "gps");
   const detailsLoading = extra === undefined;
+  useEffect(() => {
+    if (!grokUser) return;
+    void ensureWpBookingSession().catch(() => undefined);
+  }, [grokUser?.id]);
+
   useEffect(() => {
     if (!grokUser?.primaryEmail) {
       setSocialWpProfile(null);
