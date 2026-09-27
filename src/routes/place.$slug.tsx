@@ -38,7 +38,7 @@ import { useGeo } from "@/store/geo";
 import { formatDistance, listingDistanceKm, haversineKm } from "@/lib/geo";
 import { decodeEntities, cn } from "@/lib/utils";
 import { preferListeoAddress, websiteHref } from "@/lib/listeo";
-import { filterListingGroups, orderListingGroups, profileFromSlugs } from "@/lib/listing-layouts";
+import { orderListingGroups, profileFromSlugs } from "@/lib/listing-layouts";
 import { useSession } from "@/store/session";
 import { useAppLoggedIn } from "@/lib/app-session";
 
@@ -309,9 +309,10 @@ function PlacePage() {
     ...(listing.taxonomies ?? []).flatMap((g) => g.terms.map((t) => t.slug)),
     listing.kind,
   ]);
-  const metaGroups = profile
-    ? filterListingGroups(profile, listing.metaGroups ?? [])
-    : orderListingGroups(listing.category, listing.metaGroups ?? []);
+  // The detail page should expose every section available on the WordPress/Listeo
+  // listing. Profile filtering is reserved for archive/card presentation because
+  // it can hide valid fields that exist on an individual listing.
+  const metaGroups = orderListingGroups(listing.category, listing.metaGroups ?? []);
   const photos = listingPhotos(listing);
   const tel = listing.phone?.replace(/[^\d+]/g, "") ?? "";
   const metaTitles = new Set(metaGroups.map((g) => g.title.toLowerCase()));
