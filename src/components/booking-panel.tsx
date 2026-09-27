@@ -130,7 +130,6 @@ export function BookingPanel({
   onContinue,
   onConfirm,
   successMessage = "Your booking has been confirmed.",
-  successAction,
   externalBookingUrl,
   minGuests = 1,
   maxGuests = 10,
