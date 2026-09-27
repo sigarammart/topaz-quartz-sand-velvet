@@ -149,7 +149,7 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
     throw new Error("A matching unpaid WooCommerce order exists, but WooCommerce did not return its payment URL.");
   }
   if (lastBridgeReason === "no_recent_matching_order") {
-    throw new Error("Listeo accepted the booking request, but no recent WooCommerce order was created for this booking.");
+    throw new Error("No matching WooCommerce order was created by the Listeo booking request. The booking confirmation response was not enough to prove that an order was created.");
   }
   return undefined;
 }
