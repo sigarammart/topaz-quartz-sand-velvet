@@ -95,7 +95,7 @@ add_action('rest_api_init', function () {
              * lower bound instead of accidentally excluding a just-created
              * order because the two clocks differ.
              */
-            $created_after = max(0, $created_after - (2 * HOUR_IN_SECONDS));
+            $created_after = max(0, $created_after - (6 * HOUR_IN_SECONDS));
 
             $user = get_user_by('email', $email);
             $queries = [];
@@ -116,12 +116,18 @@ add_action('rest_api_init', function () {
             // Listeo order creation where the customer index can lag or the
             // order may have been created as a guest before being associated
             // with the WordPress account.
+            /*
+             * Final broad query: ask WooCommerce for the newest orders without
+             * customer/date filters and do the matching in PHP below. This is
+             * deliberately the fallback for HPOS/custom Listeo order flows
+             * where a customer or date query can miss an order even though the
+             * order is already visible in WooCommerce.
+             */
             $queries[] = [
-                'limit'        => 50,
-                'orderby'      => 'date',
-                'order'        => 'DESC',
-                'return'       => 'objects',
-                'date_created' => '>' . (int) $created_after,
+                'limit'   => 100,
+                'orderby' => 'date',
+                'order'   => 'DESC',
+                'return'  => 'objects',
             ];
 
             // If the booking was attached to an existing WordPress account,
