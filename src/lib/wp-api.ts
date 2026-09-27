@@ -2301,6 +2301,22 @@ async function loadListingPageHtml(urls: string[], timeout = 10000) {
   return fallback;
 }
 
+function extractWordPressPostId(html: string) {
+  const patterns = [
+    /<body\\b[^>]*\\bclass=["'][^"']*\\bpostid-(\\d+)\\b/i,
+    /\\bdata-post-id=["'](\\d+)["']/i,
+    /\\bdata-listing-id=["'](\\d+)["']/i,
+    /\\bname=["']post_id["']\\s+value=["'](\\d+)["']/i,
+    /\\bname=["']listing_id["']\\s+value=["'](\\d+)["']/i,
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    const id = Number(match?.[1] ?? 0);
+    if (Number.isInteger(id) && id > 0) return id;
+  }
+  return undefined;
+}
+
 function listingAliases(slug: string, url?: string) {
   const tail = url ? url.split("/").filter(Boolean).pop() ?? "" : "";
   return [...new Set([tail, slug].filter((s) => s.length > 2))];
@@ -2364,6 +2380,10 @@ export const fetchWpListing = createServerFn({ method: "GET" })
           siteUrl: page.url,
         } satisfies Listing);
       result = enrichListingFromHtml({ ...base, siteUrl: base.siteUrl || page.url }, page.html);
+    }
+    if (result && !result.wpId && page) {
+      const pageWpId = extractWordPressPostId(page.html);
+      if (pageWpId) result = { ...result, wpId: pageWpId };
     }
     if (result && (page || rest?.ok)) listingPageCache.set(data.slug, { at: Date.now(), listing: result });
     return result;
