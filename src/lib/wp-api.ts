@@ -361,6 +361,7 @@ async function fetchWpBookingSessionCookie(email: string): Promise<string | unde
 }
 
 export const submitListeoBooking = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .validator(
     z.object({
       listingUrl: z.string().url(),
@@ -381,7 +382,12 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
       message: z.string(),
     }),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const accountUsers = await getSql().then((sql) => sql.query<{ email?: string }>('select "email" from "user" where "id" = $1 limit 1', [context.userId]));
+    const accountEmail = String(accountUsers[0]?.email ?? "").trim().toLowerCase();
+    if (!accountEmail) throw new Error("Your Xplore Pondy account does not have an email address available for booking.");
+    const bookingEmail = accountEmail;
+
     const bookingStartedAt = Math.floor(Date.now() / 1000);
     const confirmation = await loadListeoBookingConfirmationData(data.listingUrl);
     const value = JSON.stringify({
@@ -406,14 +412,14 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
       password: data.password,
       first_name: data.firstName,
       last_name: data.lastName,
-      email: data.email,
+      email: bookingEmail,
       phone: data.phone,
       message: data.message,
       privacy_policy: "on",
     };
 
     const browserCookie = getRequestHeader("cookie") ?? "";
-    const wpBookingCookie = await fetchWpBookingSessionCookie(data.email).catch((error) => {
+    const wpBookingCookie = await fetchWpBookingSessionCookie(bookingEmail).catch((error) => {
       if (process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim()) throw error;
       return undefined;
     });
@@ -482,7 +488,7 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
       .find((value): value is string => Boolean(value));
 
     if (!paymentUrl) {
-      paymentUrl = await resolveListeoPaymentUrlFromOrder(data.email, bookingStartedAt);
+      paymentUrl = await resolveListeoPaymentUrlFromOrder(bookingEmail, bookingStartedAt);
     }
 
     return {
