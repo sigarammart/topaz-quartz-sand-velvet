@@ -177,6 +177,26 @@ export function BookingPanel({
   }, [open]);
 
   useEffect(() => {
+    if (!open || !signedInUser) return;
+    setDetails((current) => ({
+      ...current,
+      username: signedInUser.username ?? current.username,
+      firstName: signedInUser.firstName ?? current.firstName,
+      lastName: signedInUser.lastName ?? current.lastName,
+      email: signedInUser.email ?? current.email,
+      phone: signedInUser.phone ?? current.phone,
+      password: "",
+    }));
+  }, [
+    open,
+    signedInUser?.username,
+    signedInUser?.firstName,
+    signedInUser?.lastName,
+    signedInUser?.email,
+    signedInUser?.phone,
+  ]);
+
+  useEffect(() => {
     if (!open) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -325,6 +345,7 @@ export function BookingPanel({
               currency={currency}
               reservationFee={reservationFee}
               externalBookingUrl={externalBookingUrl}
+              signedInUser={signedInUser}
             />
           )}
 
@@ -602,6 +623,7 @@ function ConfirmStep({
   currency,
   reservationFee,
   externalBookingUrl,
+  signedInUser,
 }: {
   selection: BookingSelection;
   details: BookingDetails;
@@ -612,6 +634,7 @@ function ConfirmStep({
   currency: string;
   reservationFee: number;
   externalBookingUrl?: string;
+  signedInUser?: BookingPanelProps["signedInUser"];
 }) {
   const requiredDetailsComplete = Object.entries(details).every(
     ([key, value]) =>
