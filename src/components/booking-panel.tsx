@@ -61,7 +61,7 @@ type BookingPanelProps = {
   onSlotChange?: (slotId: string) => void;
   onGuestsChange?: (guests: BookingGuestCounts) => void;
   onContinue?: (selection: BookingSelection) => void;
-  onConfirm?: (details: BookingDetails, selection: BookingSelection) => void | Promise<{ ok?: boolean; paymentUrl?: string; successMessage?: string } | void>;
+  onConfirm?: (details: BookingDetails, selection: BookingSelection) => void | Promise<{ ok?: boolean; paymentUrl?: string; bookingUrl?: string; successMessage?: string } | void>;
   successMessage?: string;
   externalBookingUrl?: string;
   minGuests?: number;
@@ -258,6 +258,10 @@ export function BookingPanel({
     if (result?.ok !== false) {
       if (result?.paymentUrl) {
         window.location.assign(result.paymentUrl);
+        return;
+      }
+      if (result?.bookingUrl) {
+        window.location.assign(result.bookingUrl);
         return;
       }
       setSuccessAction(undefined);
