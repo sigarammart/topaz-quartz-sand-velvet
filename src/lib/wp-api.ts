@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
+import { authMiddleware } from "@/lib/auth/middleware";
+import { getSql } from "@/lib/db";
 import { guides as localGuides } from "@/data/guides";
 import { listings as localListings } from "@/data/listings";
 import type { Category, Guide, GuideBlock, GuideSection, Listing, ListingFaq, ListingMetaGroup, ListingMetaItem, ListingStop, ListingTaxGroup, ListingTaxTerm } from "@/lib/types";
@@ -2353,6 +2355,44 @@ async function wpTripStoreRequest(
     listingIds,
   };
 }
+
+export const ensureWpBookingSession = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const secret = process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim();
+    if (!secret) return { ok: false as const, configured: false as const };
+
+    const sql = await getSql();
+    const users = await sql.query<{ email?: string }>(
+      'select "email" from "user" where "id" = $1 limit 1',
+      [context.userId],
+    );
+    const email = String(users[0]?.email ?? "").trim().toLowerCase();
+    if (!email) return { ok: false as const, configured: true as const };
+
+    const response = await fetch(`${WP_ORIGIN}/wp-json/xplore/v1/pwa/session`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify({ email }),
+      signal: AbortSignal.timeout(12000),
+    });
+    const body = (await response.json().catch(() => null)) as
+      | { ok?: boolean; logged_in_cookie?: string }
+      | null;
+    if (!response.ok || !body?.logged_in_cookie) {
+      return { ok: false as const, configured: true as const };
+    }
+
+    setResponseHeader(
+      "Set-Cookie",
+      `${body.logged_in_cookie}; Domain=.xplorepondy.com; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=1209600`,
+    );
+    return { ok: true as const, configured: true as const };
+  });
 
 export type WpBookingProfile = {
   username?: string;
