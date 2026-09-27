@@ -93,17 +93,28 @@ add_action('rest_api_init', function () {
             $created_after = max($created_after - 15, time() - (15 * MINUTE_IN_SECONDS));
 
             $orders = wc_get_orders([
-                'limit'        => 5,
+                'limit'        => 10,
                 'orderby'      => 'date',
                 'order'        => 'DESC',
                 'return'       => 'objects',
-                'customer'     => $email,
-                'date_created' => '>' . $created_after,
-                'status'       => ['pending', 'on-hold'],
+                'billing_email' => $email,
+                'date_created' => '>' . gmdate('Y-m-d H:i:s', $created_after),
+                'status'       => ['pending', 'on-hold', 'failed'],
             ]);
 
             foreach ($orders as $order) {
                 if (!$order instanceof WC_Order) {
+                    continue;
+                }
+
+                // Do not send the user to a payment page for an order that
+                // is already paid or otherwise no longer needs payment.
+                if (!$order->needs_payment()) {
+                    continue;
+                }
+
+                $order_email = strtolower(trim((string) $order->get_billing_email()));
+                if ($order_email !== strtolower(trim($email))) {
                     continue;
                 }
 
