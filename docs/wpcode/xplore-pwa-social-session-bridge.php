@@ -102,6 +102,23 @@ add_action('rest_api_init', function () {
             // A small clock-skew tolerance is sufficient for the two servers.
             $created_after = max(0, $created_after - (90));
 
+            // Listeo stores the WooCommerce product associated with a listing
+            // in the listing's product_id meta field. It may be stored as a
+            // serialized array, so normalize both scalar and array values.
+            $listing_id = absint($request->get_param('listing_id'));
+            $expected_product_ids = [];
+            if ($listing_id > 0) {
+                $product_meta = get_post_meta($listing_id, 'product_id', true);
+                $product_values = is_array($product_meta) ? $product_meta : [$product_meta];
+                foreach ($product_values as $product_value) {
+                    $product_id = absint($product_value);
+                    if ($product_id > 0) {
+                        $expected_product_ids[] = $product_id;
+                    }
+                }
+                $expected_product_ids = array_values(array_unique($expected_product_ids));
+            }
+
             $user = get_user_by('email', $email);
             $queries = [];
 
@@ -154,6 +171,7 @@ add_action('rest_api_init', function () {
             $orders_scanned = 0;
             $identity_matches = 0;
             $unpaid_matches = 0;
+            $product_matches = 0;
 
             foreach ($queries as $query) {
                 $orders = wc_get_orders($query);
@@ -192,6 +210,30 @@ add_action('rest_api_init', function () {
                         continue;
                     }
                     $identity_matches++;
+
+                    // Correlate the order to the exact Listeo listing product.
+                    // An identity match alone is not sufficient because the same
+                    // customer can have multiple unpaid booking orders.
+                    $order_product_ids = [];
+                    foreach ($order->get_items() as $item) {
+                        if (!is_object($item) || !method_exists($item, 'get_product_id')) {
+                            continue;
+                        }
+                        $product_id = (int) $item->get_product_id();
+                        if ($product_id > 0) {
+                            $order_product_ids[] = $product_id;
+                        }
+                    }
+                    $order_product_ids = array_values(array_unique($order_product_ids));
+
+                    $product_matches_listing = empty($expected_product_ids)
+                        ? true
+                        : !empty(array_intersect($expected_product_ids, $order_product_ids));
+
+                    if (!$product_matches_listing) {
+                        continue;
+                    }
+                    $product_matches++;
 
                     // Do not require one hard-coded WooCommerce status.
                     // Custom gateways/plugins can use another unpaid status.
@@ -232,7 +274,7 @@ add_action('rest_api_init', function () {
                         'order_id' => $order_id,
                         'status' => $status,
                         'payment_url' => esc_url_raw($payment_url),
-                        'bridge_version' => '2026-09-27-order-lookup-v7',
+                        'bridge_version' => '2026-09-27-order-lookup-v8',
                     ];
                 }
             }
@@ -279,9 +321,13 @@ add_action('rest_api_init', function () {
             }
 
             $reason = 'no_recent_matching_order';
-            if ($orders_scanned > 0 && $identity_matches === 0) {
+            if ($listing_id > 0 && empty($expected_product_ids)) {
+                $reason = 'listing_product_id_missing';
+            } elseif ($orders_scanned > 0 && $identity_matches === 0) {
                 $reason = 'recent_orders_found_but_customer_did_not_match';
-            } elseif ($identity_matches > 0 && $unpaid_matches === 0) {
+            } elseif ($identity_matches > 0 && $product_matches === 0) {
+                $reason = 'customer_matched_but_order_product_did_not_match_listing';
+            } elseif ($product_matches > 0 && $unpaid_matches === 0) {
                 $reason = 'matching_order_was_paid_or_terminal';
             } elseif ($unpaid_matches > 0) {
                 $reason = 'matching_unpaid_order_has_no_payment_url';
@@ -292,11 +338,13 @@ add_action('rest_api_init', function () {
                 'order_id' => 0,
                 'payment_url' => '',
                 'reason' => $reason,
-                'bridge_version' => '2026-09-27-order-lookup-v7',
+                'bridge_version' => '2026-09-27-order-lookup-v8',
                 'diagnostics' => [
                     'listing_id_requested' => $listing_id,
+                    'expected_product_ids' => $expected_product_ids,
                     'orders_scanned' => $orders_scanned,
                     'identity_matches' => $identity_matches,
+                    'product_matches' => $product_matches,
                     'unpaid_matches' => $unpaid_matches,
                     'recent_orders' => $recent_orders,
                 ],
