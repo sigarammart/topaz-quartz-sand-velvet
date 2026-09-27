@@ -52,22 +52,18 @@ async function listeoAjax(action: string, fields: Record<string, string | number
   });
   const text = await response.text();
   if (!response.ok) return null;
-
   try {
     const payload = JSON.parse(text) as { success?: boolean; data?: unknown };
     return payload.success ? payload.data : null;
   } catch {
-    // Listeo can return the slot markup as raw HTML.
     return text.trim() ? text : null;
   }
 }
 
 function extractListeoBookingNonce(html: string): string | undefined {
   const patterns = [
-    /<input\b[^>]*(?:name|id)=["'](?:listeo_booking_nonce|listeo[_-]?(?:core[_-]?)?nonce|security|nonce)["'][^>]*value=["']([^"']+)["'][^>]*>/i,
-    /<input\b[^>]*value=["']([^"']+)["'][^>]*(?:name|id)=["'](?:listeo_booking_nonce|listeo[_-]?(?:core[_-]?)?nonce|security|nonce)["'][^>]*>/i,
+    /<input\b[^>]*(?:name|id)=["']listeo_booking_nonce["'][^>]*value=["']([^"']+)["'][^>]*>/i,
     /listeo_booking_nonce[\s:=\"']+([a-zA-Z0-9_-]{8,})/i,
-    /(?:security|nonce)[\s:=\"']+([a-zA-Z0-9_-]{8,})/i,
   ];
   for (const pattern of patterns) {
     const match = html.match(pattern);
@@ -117,38 +113,25 @@ export const fetchListeoBookingAvailability = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
-    // Listeo 2.2.0 tightened validation around public booking calendars.
-    // Fetch the listing page first so the current booking nonce can be sent
-    // with the AJAX availability requests.
     let bookingNonce: string | undefined;
     try {
       const listingUrl = new URL(data.listingUrl, WP_ORIGIN);
-      if (listingUrl.origin !== new URL(WP_ORIGIN).origin) {
-        throw new Error("Invalid Listeo listing origin");
+      if (listingUrl.origin === new URL(WP_ORIGIN).origin) {
+        const page = await fetch(listingUrl.toString(), {
+          headers: WP_HTML_HEADERS,
+          signal: AbortSignal.timeout(20000),
+        });
+        if (page.ok) bookingNonce = extractListeoBookingNonce(await page.text());
       }
-      const page = await fetch(listingUrl.toString(), {
-        headers: WP_HTML_HEADERS,
-        signal: AbortSignal.timeout(20000),
-      });
-      if (page.ok) bookingNonce = extractListeoBookingNonce(await page.text());
     } catch {
-      // Older Listeo versions do not require a public nonce.
+      // Continue for installations that do not require a public booking nonce.
     }
 
     let failedRequests = 0;
     const dates: ListeoBookingDate[] = [];
-
-    // Avoid seven simultaneous admin-ajax requests on shared hosting.
     for (const date of data.dates) {
       try {
-        const nonceFields = bookingNonce
-          ? {
-              listeo_booking_nonce: bookingNonce,
-              nonce: bookingNonce,
-              security: bookingNonce,
-            }
-          : {};
-
+        const nonceFields = bookingNonce ? { listeo_booking_nonce: bookingNonce } : {};
         const slotHtml = await listeoAjax("update_slots", {
           listing_id: data.listingId,
           date_start: date,
@@ -163,13 +146,9 @@ export const fetchListeoBookingAvailability = createServerFn({ method: "POST" })
             date,
             ...nonceFields,
           });
-          if (ranges === null) {
-            failedRequests += 1;
-          } else {
-            slots = parseListeoAvailabilityRanges(ranges);
-          }
+          if (ranges === null) failedRequests += 1;
+          else slots = parseListeoAvailabilityRanges(ranges);
         }
-
         dates.push({ value: date, slots });
       } catch {
         failedRequests += 1;
@@ -180,7 +159,6 @@ export const fetchListeoBookingAvailability = createServerFn({ method: "POST" })
     if (failedRequests === data.dates.length) {
       throw new Error("Listeo live availability endpoint could not be reached.");
     }
-
     return { ok: true as const, dates };
   });
 
