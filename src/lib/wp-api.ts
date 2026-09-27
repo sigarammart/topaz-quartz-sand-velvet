@@ -36,6 +36,7 @@ async function resolveListeoPaymentUrlFromOrder(
   email: string,
   createdAfter: number,
   listingId: number,
+  submittedProductIds: number[] = [],
 ): Promise<{ orderId: number; paymentUrl: string } | undefined> {
   const secret = process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim();
   if (!secret) {
@@ -441,6 +442,11 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
     const bookingEmail = accountEmail;
 
     const confirmation = await loadListeoBookingConfirmationData(data.listingUrl);
+    const submittedProductIds = Object.entries(confirmation.hiddenFields)
+      .filter(([key]) => /^product_id(?:\[\d+\])?$/i.test(key))
+      .map(([, value]) => Number(value))
+      .filter((id) => Number.isFinite(id) && id > 0);
+
     const value = JSON.stringify({
       listing_id: data.listingId,
       date_start: data.date,
@@ -556,7 +562,12 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
      * booking attempt. The bridge returns its actual order ID and native
      * order-pay URL.
      */
-    const bookingOrder = await resolveListeoPaymentUrlFromOrder(bookingEmail, bookingStartedAt, data.listingId);
+    const bookingOrder = await resolveListeoPaymentUrlFromOrder(
+      bookingEmail,
+      bookingStartedAt,
+      data.listingId,
+      submittedProductIds,
+    );
 
     if (!bookingOrder) {
       throw new Error(
