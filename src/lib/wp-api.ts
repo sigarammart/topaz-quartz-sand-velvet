@@ -127,9 +127,9 @@ export const fetchListeoBookingConfirmationUrl = createServerFn({ method: "POST"
     const response = await fetch(listingUrl.toString(), { headers: WP_HTML_HEADERS, signal: AbortSignal.timeout(12000) });
     if (!response.ok) throw new Error("Listeo listing could not be loaded");
     const html = await response.text();
-    const formMatch = html.match(/<form\\b[^>]*\\bid=["']form-booking["'][^>]*>[\\s\\S]*?<\\/form>/i);
+    const formMatch = html.match(/<form\b[^>]*\bid=["']form-booking["'][^>]*>[\s\S]*?<\/form>/i);
     const formHtml = formMatch?.[0] ?? "";
-    const actionMatch = formHtml.match(/\\baction=["']([^"']+)["']/i);
+    const actionMatch = formHtml.match(/\baction=["']([^"']+)["']/i);
     let actionUrl: URL | null = actionMatch?.[1] ? new URL(decodeHtml(actionMatch[1]), listingUrl) : null;
     if (!actionUrl) {
       const pagesResponse = await fetch(WP_ORIGIN + "/wp-json/wp/v2/pages?search=booking&per_page=100&_fields=link,slug,title,content", {
@@ -150,11 +150,11 @@ export const fetchListeoBookingConfirmationUrl = createServerFn({ method: "POST"
     if (actionUrl.origin !== new URL(WP_ORIGIN).origin) throw new Error("Invalid Listeo booking confirmation origin");
     const hiddenFields: Record<string, string> = {};
     const hiddenSource = formHtml || html;
-    for (const input of hiddenSource.matchAll(/<input\\b[^>]*type=["']hidden["'][^>]*>/gi)) {
+    for (const input of hiddenSource.matchAll(/<input\b[^>]*type=["']hidden["'][^>]*>/gi)) {
       const tag = input[0];
-      const name = tag.match(/\\bname=["']([^"']+)["']/i)?.[1];
+      const name = tag.match(/\bname=["']([^"']+)["']/i)?.[1];
       if (!name) continue;
-      hiddenFields[name] = decodeHtml(tag.match(/\\bvalue=["']([^"']*)["']/i)?.[1] ?? "");
+      hiddenFields[name] = decodeHtml(tag.match(/\bvalue=["']([^"']*)["']/i)?.[1] ?? "");
     }
     return { actionUrl: actionUrl.toString(), hiddenFields };
   });
