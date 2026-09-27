@@ -33,27 +33,39 @@ export type ListeoBookingDate = {
 };
 
 function extractListeoPaymentUrl(value: string): string | undefined {
-  const normalized = decodeHtml(value)
+  const htmlDecoded = decodeHtml(value)
     .replace(/\\\//g, "/")
     .replace(/\\u0026/gi, "&")
     .replace(/&amp;/gi, "&");
 
-  const match = normalized.match(
-    /(?:https?:\/\/xplorepondy\.com)?(\/checkout\/order-pay\/\d+\/\?(?:[^"'<>\s\\]+))/i,
-  );
-  if (!match?.[1]) return undefined;
-
+  const candidates = [htmlDecoded];
   try {
-    const url = new URL(match[1], WP_ORIGIN);
-    if (url.origin !== new URL(WP_ORIGIN).origin) return undefined;
-    const orderId = url.pathname.match(/\/order-pay\/(\d+)\/?$/i)?.[1];
-    const key = url.searchParams.get("key");
-    if (!orderId || !key) return undefined;
-
-    return `${WP_ORIGIN}/checkout/order-pay/${orderId}/?pay_for_order=true&key=${encodeURIComponent(key)}`;
+    const decoded = decodeURIComponent(htmlDecoded);
+    if (decoded !== htmlDecoded) candidates.push(decoded);
   } catch {
-    return undefined;
+    // The response may contain a partially encoded URL; keep the original candidate.
   }
+
+  for (const candidate of candidates) {
+    const match = candidate.match(
+      /(?:https?:\\/\\/xplorepondy\\.com)?(\\/checkout\\/order-pay\\/\\d+\\/\\?[^"'<>\\s\\\\]+)/i,
+    );
+    if (!match?.[1]) continue;
+
+    try {
+      const url = new URL(match[1], WP_ORIGIN);
+      if (url.origin !== new URL(WP_ORIGIN).origin) continue;
+      const orderId = url.pathname.match(/\\/order-pay\\/(\\d+)\\/?$/i)?.[1];
+      const key = url.searchParams.get("key");
+      if (!orderId || !key) continue;
+
+      return `${WP_ORIGIN}/checkout/order-pay/${orderId}/?pay_for_order=true&key=${encodeURIComponent(key)}`;
+    } catch {
+      // Try the next representation.
+    }
+  }
+
+  return undefined;
 }
 
 function stripBookingHtml(value: string) {
