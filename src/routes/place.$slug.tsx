@@ -852,6 +852,7 @@ function PlacePage() {
               return {
                 ok: result.ok,
                 paymentUrl: result.paymentUrl,
+                bookingUrl: result.bookingUrl,
                 successMessage: result.paymentUrl
                   ? "Your booking was submitted successfully. Continue to payment when you are ready."
                   : "Your booking was submitted successfully.",
