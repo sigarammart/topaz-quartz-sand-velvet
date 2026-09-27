@@ -676,7 +676,7 @@ function ConfirmStep({
     ([key, value]) =>
       key === "message" ||
       key === "lastName" ||
-      key === "password" && Boolean(signedInUser?.isWordPressSession) ||
+      (signedInUser && (key === "username" || key === "password")) ||
       value.trim().length > 0,
   );
 
@@ -708,15 +708,15 @@ function ConfirmStep({
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <Field label={signedInUser?.isWordPressSession ? "Account" : "Username *"}>
+        <Field label={signedInUser ? "Account" : "Username *"}>
           <Input
             value={details.username}
             onChange={(event) => onChange({ ...details, username: event.target.value })}
             autoComplete="username"
-            readOnly={Boolean(signedInUser?.isWordPressSession)}
+            readOnly={Boolean(signedInUser)}
           />
         </Field>
-        {!signedInUser?.isWordPressSession && (
+        {!signedInUser && (
           <Field label="Password *">
             <Input type="password" value={details.password} onChange={(event) => onChange({ ...details, password: event.target.value })} autoComplete="new-password" />
           </Field>
@@ -787,7 +787,7 @@ function BookingReviewStep({
         <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
           <h4 className="font-semibold">Your information</h4>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <ReviewValue label={signedInUser?.isWordPressSession ? "Account" : "Username"} value={details.username || signedInUser?.email || "—"} />
+            <ReviewValue label={signedInUser ? "Account" : "Username"} value={details.username || signedInUser?.email || "—"} />
             <ReviewValue label="First Name" value={details.firstName} />
             <ReviewValue label="Last Name" value={details.lastName || "—"} />
             <ReviewValue label="E-Mail Address" value={details.email} />
