@@ -63,7 +63,6 @@ type BookingPanelProps = {
   onContinue?: (selection: BookingSelection) => void;
   onConfirm?: (details: BookingDetails, selection: BookingSelection) => void | Promise<{ ok?: boolean; paymentUrl?: string; successMessage?: string } | void>;
   successMessage?: string;
-  successAction?: { label: string; url: string };
   externalBookingUrl?: string;
   minGuests?: number;
   maxGuests?: number;
@@ -142,6 +141,7 @@ export function BookingPanel({
   const [internalDate, setInternalDate] = useState(selectedDate ?? dates[0]?.value);
   const [internalSlot, setInternalSlot] = useState(selectedSlot);
   const [internalGuests, setInternalGuests] = useState<BookingGuestCounts>(guests);
+  const [successAction, setSuccessAction] = useState<{ label: string; url: string }>();
   const [details, setDetails] = useState<BookingDetails>({
     username: "",
     password: "",
