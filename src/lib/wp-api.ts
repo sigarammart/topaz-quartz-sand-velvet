@@ -123,31 +123,35 @@ export const fetchListeoBookingConfirmationUrl = createServerFn({ method: "POST"
   .validator(z.object({ listingUrl: z.string().url() }))
   .handler(async ({ data }) => {
     const listingUrl = new URL(data.listingUrl, WP_ORIGIN);
-    if (listingUrl.origin !== new URL(WP_ORIGIN).origin) throw new Error("Invalid Listeo listing origin");
-    const response = await fetch(listingUrl.toString(), { headers: WP_HTML_HEADERS, signal: AbortSignal.timeout(12000) });
+    if (listingUrl.origin !== new URL(WP_ORIGIN).origin) {
+      throw new Error("Invalid Listeo listing origin");
+    }
+
+    // Listeo 2.2.0 validates a nonce generated on the listing page. The
+    // listing HTML can be relatively slow on WordPress, so give it enough
+    // time to return instead of aborting during normal server load.
+    const response = await fetch(listingUrl.toString(), {
+      headers: WP_HTML_HEADERS,
+      signal: AbortSignal.timeout(30000),
+    });
     if (!response.ok) throw new Error("Listeo listing could not be loaded");
+
     const html = await response.text();
     const formMatch = html.match(/<form\b[^>]*\bid=["']form-booking["'][^>]*>[\s\S]*?<\/form>/i);
     const formHtml = formMatch?.[0] ?? "";
     const actionMatch = formHtml.match(/\baction=["']([^"']+)["']/i);
-    let actionUrl: URL | null = actionMatch?.[1] ? new URL(decodeHtml(actionMatch[1]), listingUrl) : null;
-    if (!actionUrl) {
-      const pagesResponse = await fetch(WP_ORIGIN + "/wp-json/wp/v2/pages?search=booking&per_page=100&_fields=link,slug,title,content", {
-        headers: { Accept: "application/json", "User-Agent": WP_HTML_HEADERS["User-Agent"] },
-        signal: AbortSignal.timeout(12000),
-      });
-      if (pagesResponse.ok) {
-        const pages = (await pagesResponse.json()) as Array<{ link?: string; slug?: string; title?: { rendered?: string }; content?: { rendered?: string } }>;
-        const candidate = pages.find((page) => {
-          const title = decodeHtml(page.title?.rendered ?? "").toLowerCase();
-          const slug = (page.slug ?? "").toLowerCase();
-          return title.includes("booking confirmation") || slug.includes("booking-confirmation") || /listeo_booking_confirmation/i.test(page.content?.rendered ?? "");
-        });
-        if (candidate?.link) actionUrl = new URL(candidate.link);
-      }
+
+    // Listeo's standard confirmation page is /booking-confirmation/.
+    // Prefer the actual form action when present, otherwise use the standard
+    // page directly. This avoids a second slow WordPress REST request.
+    const actionUrl = actionMatch?.[1]
+      ? new URL(decodeHtml(actionMatch[1]), listingUrl)
+      : new URL("/booking-confirmation/", WP_ORIGIN);
+
+    if (actionUrl.origin !== new URL(WP_ORIGIN).origin) {
+      throw new Error("Invalid Listeo booking confirmation origin");
     }
-    if (!actionUrl) throw new Error("Listeo booking confirmation page could not be resolved");
-    if (actionUrl.origin !== new URL(WP_ORIGIN).origin) throw new Error("Invalid Listeo booking confirmation origin");
+
     const hiddenFields: Record<string, string> = {};
     const hiddenSource = formHtml || html;
     for (const input of hiddenSource.matchAll(/<input\b[^>]*type=["']hidden["'][^>]*>/gi)) {
@@ -156,8 +160,14 @@ export const fetchListeoBookingConfirmationUrl = createServerFn({ method: "POST"
       if (!name) continue;
       hiddenFields[name] = decodeHtml(tag.match(/\bvalue=["']([^"']*)["']/i)?.[1] ?? "");
     }
+
+    if (!hiddenFields.listeo_booking_nonce) {
+      throw new Error("Listeo booking nonce was not found on the listing page");
+    }
+
     return { actionUrl: actionUrl.toString(), hiddenFields };
   });
+
 const WP_HTML_HEADERS = {
   Accept: "text/html",
   "User-Agent":
