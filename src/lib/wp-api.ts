@@ -85,6 +85,7 @@ async function resolveListeoPaymentUrlFromOrder(
           email: email.trim().toLowerCase(),
           created_after: createdAfter,
           listing_id: listingId,
+          product_id: submittedProductIds,
         }),
         signal: AbortSignal.timeout(12000),
       });
