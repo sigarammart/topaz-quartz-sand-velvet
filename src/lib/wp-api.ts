@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { setResponseHeader } from "@tanstack/react-start/server";
+import { getRequestHeader, setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
@@ -164,49 +164,161 @@ export const fetchListeoBookingAvailability = createServerFn({ method: "POST" })
     return { ok: true as const, dates };
   });
 
+async function loadListeoBookingConfirmationData(listingUrlValue: string) {
+  const listingUrl = new URL(listingUrlValue, WP_ORIGIN);
+  if (listingUrl.origin !== new URL(WP_ORIGIN).origin) {
+    throw new Error("Invalid Listeo listing origin");
+  }
+  const response = await fetch(listingUrl.toString(), {
+    headers: WP_HTML_HEADERS,
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!response.ok) throw new Error("Listeo listing could not be loaded");
+
+  const html = await response.text();
+  const formMatch = html.match(/<form\b[^>]*\bid=["']form-booking["'][^>]*>[\s\S]*?<\/form>/i);
+  const formHtml = formMatch?.[0] ?? "";
+  const actionMatch = formHtml.match(/\baction=["']([^"']+)["']/i);
+  const actionUrl = actionMatch?.[1]
+    ? new URL(decodeHtml(actionMatch[1]), listingUrl)
+    : new URL("/booking-confirmation/", WP_ORIGIN);
+
+  if (actionUrl.origin !== new URL(WP_ORIGIN).origin) {
+    throw new Error("Invalid Listeo booking confirmation origin");
+  }
+
+  const hiddenFields: Record<string, string> = {};
+  const hiddenSource = formHtml || html;
+  for (const input of hiddenSource.matchAll(/<input\b[^>]*type=["']hidden["'][^>]*>/gi)) {
+    const tag = input[0];
+    const name = tag.match(/\bname=["']([^"']+)["']/i)?.[1];
+    if (!name) continue;
+    hiddenFields[name] = decodeHtml(tag.match(/\bvalue=["']([^"']*)["']/i)?.[1] ?? "");
+  }
+
+  return { actionUrl: actionUrl.toString(), hiddenFields };
+}
+
 export const fetchListeoBookingConfirmationUrl = createServerFn({ method: "POST" })
   .validator(z.object({ listingUrl: z.string().url() }))
-  .handler(async ({ data }) => {
-    const listingUrl = new URL(data.listingUrl, WP_ORIGIN);
-    if (listingUrl.origin !== new URL(WP_ORIGIN).origin) {
-      throw new Error("Invalid Listeo listing origin");
-    }
+  .handler(async ({ data }) => loadListeoBookingConfirmationData(data.listingUrl));
 
-    // Listeo 2.2.0 validates a nonce generated on the listing page. The
-    // listing HTML can be relatively slow on WordPress, so give it enough
-    // time to return instead of aborting during normal server load.
-    const response = await fetch(listingUrl.toString(), {
-      headers: WP_HTML_HEADERS,
+export const submitListeoBooking = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      listingUrl: z.string().url(),
+      listingId: z.number().int().positive(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      slotStart: z.string().min(1),
+      slotEnd: z.string().min(1),
+      slotCapacity: z.number().int().positive(),
+      adults: z.number().int().min(0),
+      children: z.number().int().min(0),
+      infants: z.number().int().min(0),
+      username: z.string(),
+      password: z.string(),
+      firstName: z.string().min(1),
+      lastName: z.string(),
+      email: z.string().email(),
+      phone: z.string().min(1),
+      message: z.string(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const confirmation = await loadListeoBookingConfirmationData(data.listingUrl);
+    const value = JSON.stringify({
+      listing_id: data.listingId,
+      date_start: data.date,
+      date_end: data.date,
+      slot: JSON.stringify([
+        `${data.slotStart} - ${data.slotEnd}|${data.slotCapacity}`,
+      ]),
+      adults: data.adults,
+      children: data.children,
+      infants: data.infants,
+      animals: 0,
+      services: [],
+    });
+
+    const fields: Record<string, string> = {
+      ...confirmation.hiddenFields,
+      value,
+      confirmed: "yessir",
+      username: data.username,
+      password: data.password,
+      first_name: data.firstName,
+      last_name: data.lastName,
+      email: data.email,
+      phone: data.phone,
+      message: data.message,
+      privacy_policy: "on",
+    };
+
+    const cookie = getRequestHeader("cookie") ?? "";
+    let response = await fetch(confirmation.actionUrl, {
+      method: "POST",
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "User-Agent": WP_HTML_HEADERS["User-Agent"],
+        Referer: data.listingUrl,
+        ...(cookie ? { Cookie: cookie } : {}),
+      },
+      body: new URLSearchParams(fields),
+      redirect: "manual",
       signal: AbortSignal.timeout(30000),
     });
-    if (!response.ok) throw new Error("Listeo listing could not be loaded");
+
+    let redirectUrl: string | undefined;
+    let responseCookie = cookieHeader(
+      typeof response.headers.getSetCookie === "function"
+        ? response.headers.getSetCookie()
+        : [],
+    );
+
+    for (let hop = 0; hop < 4 && response.status >= 300 && response.status < 400; hop += 1) {
+      const location = response.headers.get("location");
+      if (!location) break;
+      redirectUrl = new URL(location, confirmation.actionUrl).toString();
+      const nextCookie = responseCookie || cookie;
+      response = await fetch(redirectUrl, {
+        headers: {
+          Accept: "text/html,application/xhtml+xml",
+          "User-Agent": WP_HTML_HEADERS["User-Agent"],
+          ...(nextCookie ? { Cookie: nextCookie } : {}),
+        },
+        redirect: "manual",
+        signal: AbortSignal.timeout(30000),
+      });
+      responseCookie = cookieHeader(
+        typeof response.headers.getSetCookie === "function"
+          ? response.headers.getSetCookie()
+          : [],
+      ) || responseCookie;
+    }
 
     const html = await response.text();
-    const formMatch = html.match(/<form\b[^>]*\bid=["']form-booking["'][^>]*>[\s\S]*?<\/form>/i);
-    const formHtml = formMatch?.[0] ?? "";
-    const actionMatch = formHtml.match(/\baction=["']([^"']+)["']/i);
-
-    // Listeo's standard confirmation page is /booking-confirmation/.
-    // Prefer the actual form action when present, otherwise use the standard
-    // page directly. This avoids a second slow WordPress REST request.
-    const actionUrl = actionMatch?.[1]
-      ? new URL(decodeHtml(actionMatch[1]), listingUrl)
-      : new URL("/booking-confirmation/", WP_ORIGIN);
-
-    if (actionUrl.origin !== new URL(WP_ORIGIN).origin) {
-      throw new Error("Invalid Listeo booking confirmation origin");
+    const combined = html.slice(0, 200000);
+    const errorText = combined.match(
+      /(?:An account exists with this email address|error[^<]{0,100}|invalid[^<]{0,100}|could not[^<]{0,100})/i,
+    )?.[0];
+    if (/An account exists with this email address/i.test(combined)) {
+      throw new Error("This email already has a WordPress account. Please sign in to Xplore Pondy before booking.");
+    }
+    if (response.status >= 400) {
+      throw new Error(errorText || `Listeo booking submission failed (HTTP ${response.status}).`);
     }
 
-    const hiddenFields: Record<string, string> = {};
-    const hiddenSource = formHtml || html;
-    for (const input of hiddenSource.matchAll(/<input\b[^>]*type=["']hidden["'][^>]*>/gi)) {
-      const tag = input[0];
-      const name = tag.match(/\bname=["']([^"']+)["']/i)?.[1];
-      if (!name) continue;
-      hiddenFields[name] = decodeHtml(tag.match(/\bvalue=["']([^"']*)["']/i)?.[1] ?? "");
-    }
+    const orderPayMatch = combined.match(
+      /https?:\/\/xplorepondy\.com\/checkout\/order-pay\/\d+\/\?pay_for_order=true&key=[^"'\s<]+/i,
+    );
+    const discoveredRedirect = orderPayMatch?.[0] || redirectUrl;
 
-    return { actionUrl: actionUrl.toString(), hiddenFields };
+    return {
+      ok: true as const,
+      paymentUrl: discoveredRedirect,
+      bookingUrl: redirectUrl,
+    };
   });
 
 const WP_HTML_HEADERS = {
