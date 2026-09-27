@@ -76,7 +76,7 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
 
   let lastStatus: number | undefined;
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
     try {
       const response = await fetch(WP_ORIGIN + "/wp-json/xplore/v1/pwa/latest-order", {
         method: "POST",
@@ -119,8 +119,8 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
       // The order may not be visible yet; retry briefly.
     }
 
-    if (attempt < 4) {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (attempt < 9) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
 
