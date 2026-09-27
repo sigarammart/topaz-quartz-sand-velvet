@@ -95,7 +95,7 @@ add_action('rest_api_init', function () {
              * lower bound instead of accidentally excluding a just-created
              * order because the two clocks differ.
              */
-            $created_after = max(0, $created_after - (30 * MINUTE_IN_SECONDS));
+            $created_after = max(0, $created_after - (2 * HOUR_IN_SECONDS));
 
             $user = get_user_by('email', $email);
             $queries = [];
@@ -103,11 +103,24 @@ add_action('rest_api_init', function () {
             // Query by billing/customer email first. This also finds guest
             // orders if Listeo created the order without a customer ID.
             $queries[] = [
-                'limit'        => 20,
+                'limit'        => 50,
                 'orderby'      => 'date',
                 'order'        => 'DESC',
                 'return'       => 'objects',
                 'customer'     => $email,
+                'date_created' => '>' . (int) $created_after,
+            ];
+
+            // Also fetch the newest orders without relying on WooCommerce's
+            // customer lookup argument. This is important with HPOS/custom
+            // Listeo order creation where the customer index can lag or the
+            // order may have been created as a guest before being associated
+            // with the WordPress account.
+            $queries[] = [
+                'limit'        => 50,
+                'orderby'      => 'date',
+                'order'        => 'DESC',
+                'return'       => 'objects',
                 'date_created' => '>' . (int) $created_after,
             ];
 
@@ -150,14 +163,18 @@ add_action('rest_api_init', function () {
                         continue;
                     }
 
-                    // Do not send the user to a payment page for an order
-                    // that is already paid or otherwise no longer needs payment.
-                    if (!$order->needs_payment()) {
+                    $order_email = strtolower(trim((string) $order->get_billing_email()));
+                    if ($order_email !== strtolower(trim($email))) {
                         continue;
                     }
 
-                    $order_email = strtolower(trim((string) $order->get_billing_email()));
-                    if ($order_email !== strtolower(trim($email))) {
+                    // Listeo normally leaves the booking order pending/on-hold
+                    // until payment. Keep the status guard explicit, but do not
+                    // rely on needs_payment(): some configured gateways/order
+                    // flows can report false while the native order-pay URL is
+                    // still the correct continuation URL.
+                    $status = (string) $order->get_status();
+                    if (!in_array($status, ['pending', 'on-hold', 'failed', 'processing'], true)) {
                         continue;
                     }
 
@@ -169,7 +186,7 @@ add_action('rest_api_init', function () {
                     return [
                         'ok' => true,
                         'order_id' => $order_id,
-                        'status' => (string) $order->get_status(),
+                        'status' => $status,
                         'payment_url' => esc_url_raw($payment_url),
                     ];
                 }
