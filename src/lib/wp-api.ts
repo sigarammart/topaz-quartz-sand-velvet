@@ -76,6 +76,7 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
 
   let lastStatus: number | undefined;
   let lastBridgeReason: string | undefined;
+  let lastBridgeVersion: string | undefined;
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
     try {
@@ -109,8 +110,9 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
 
       if (response.ok) {
         const body = (await response.json().catch(() => null)) as
-          | { ok?: boolean; payment_url?: string; reason?: string }
+          | { ok?: boolean; payment_url?: string; reason?: string; bridge_version?: string }
           | null;
+        if (body?.bridge_version) lastBridgeVersion = body.bridge_version;
         if (body?.ok && body.payment_url) return body.payment_url;
         if (body?.reason) {
           lastBridgeReason = body.reason;
@@ -134,6 +136,9 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
     );
   }
 
+  if (lastBridgeVersion !== "2026-09-27-order-lookup-v4") {
+    throw new Error("The live xplorepondy.com payment bridge is still running an older WPCode snippet. Replace the WPCode snippet with the latest repository version before testing again.");
+  }
   if (lastBridgeReason === "recent_orders_found_but_customer_did_not_match") {
     throw new Error("Listeo created the booking request, but the WooCommerce order is not linked to this WordPress customer/email.");
   }
