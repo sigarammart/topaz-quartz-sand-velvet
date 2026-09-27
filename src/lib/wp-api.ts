@@ -144,7 +144,7 @@ async function resolveListeoPaymentUrlFromOrder(
     );
   }
 
-  if (lastBridgeVersion !== "2026-09-27-order-lookup-v5") {
+  if (lastBridgeVersion !== "2026-09-27-order-lookup-v6") {
     throw new Error("The live xplorepondy.com payment bridge is still running an older WPCode snippet. Replace the WPCode snippet with the latest repository version before testing again.");
   }
   if (lastBridgeReason === "recent_orders_found_but_customer_did_not_match") {
@@ -399,7 +399,6 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
     if (!accountEmail) throw new Error("Your Xplore Pondy account does not have an email address available for booking.");
     const bookingEmail = accountEmail;
 
-    const bookingStartedAt = Math.floor(Date.now() / 1000);
     const confirmation = await loadListeoBookingConfirmationData(data.listingUrl);
     const value = JSON.stringify({
       listing_id: data.listingId,
@@ -443,6 +442,11 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
     message: data.message,
     privacy_policy: "on",
   };
+
+    // Start the freshness window immediately before the actual Listeo
+    // confirmation POST, not while loading the listing/session. This prevents
+    // an order from an earlier attempt from being treated as this booking.
+    const bookingStartedAt = Math.floor(Date.now() / 1000);
 
     let response = await fetch(confirmation.actionUrl, {
       method: "POST",
