@@ -161,10 +161,6 @@ export const fetchListeoBookingConfirmationUrl = createServerFn({ method: "POST"
       hiddenFields[name] = decodeHtml(tag.match(/\bvalue=["']([^"']*)["']/i)?.[1] ?? "");
     }
 
-    if (!hiddenFields.listeo_booking_nonce) {
-      throw new Error("Listeo booking nonce was not found on the listing page");
-    }
-
     return { actionUrl: actionUrl.toString(), hiddenFields };
   });
 
