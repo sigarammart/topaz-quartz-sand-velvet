@@ -291,7 +291,7 @@ export function BookingPanel({
         </header>
 
         {step !== "success" && (
-          <div className="grid shrink-0 grid-cols-2 gap-1 border-b border-border bg-muted/35 p-2 sm:hidden">
+          <div className="grid shrink-0 grid-cols-3 gap-1 border-b border-border bg-muted/35 p-2 sm:hidden">
             {[
               ["datetime", "Date & time"],
               ["confirm", "Personal details"],
@@ -731,7 +731,7 @@ function ConfirmStep({
         </Button>
         <Button type="button" className="h-12 flex-[1.6] rounded-full font-bold" disabled={loading || !requiredDetailsComplete} onClick={onConfirm}>
           {loading && <Loader2 className="size-4 animate-spin" />}
-          {externalBookingUrl ? "Continue to live booking" : "Confirm booking"}
+          "Continue to review"
         </Button>
       </div>
     </div>
