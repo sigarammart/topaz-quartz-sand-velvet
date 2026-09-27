@@ -2895,14 +2895,13 @@ export const wpLogin = createServerFn({ method: "POST" })
       // main xplorepondy.com site. The cookie is HttpOnly and scoped to the
       // parent domain, so Listeo can recognize the same authenticated browser
       // session when booking navigates to xplorepondy.com.
-      if (cookie) {
+      const loggedInCookie = cookie
+        .split("; ")
+        .find((pair) => pair.startsWith("wordpress_logged_in_="));
+      if (loggedInCookie) {
         setResponseHeader(
           "Set-Cookie",
-          cookie
-            .split("; ")
-            .filter(Boolean)
-            .map((pair) => `${pair}; Domain=.xplorepondy.com; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=1209600`)
-            .join(", "),
+          `${loggedInCookie}; Domain=.xplorepondy.com; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=1209600`,
         );
       }
     }
