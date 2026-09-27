@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { guides as localGuides } from "@/data/guides";
 import { listings as localListings } from "@/data/listings";
@@ -2889,6 +2890,21 @@ export const wpLogin = createServerFn({ method: "POST" })
       authHeaders = cookie
         ? { Cookie: cookie }
         : { Authorization: basic };
+
+      // Bridge a successful WordPress login from the PWA subdomain to the
+      // main xplorepondy.com site. The cookie is HttpOnly and scoped to the
+      // parent domain, so Listeo can recognize the same authenticated browser
+      // session when booking navigates to xplorepondy.com.
+      if (cookie) {
+        setResponseHeader(
+          "Set-Cookie",
+          cookie
+            .split("; ")
+            .filter(Boolean)
+            .map((pair) => `${pair}; Domain=.xplorepondy.com; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=1209600`)
+            .join(", "),
+        );
+      }
     }
 
     const user = mapUser(me);
