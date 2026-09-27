@@ -849,6 +849,12 @@ function PlacePage() {
                 },
               });
 
+              if (!result.paymentUrl) {
+                throw new Error(
+                  "The Listeo booking was created, but its WooCommerce payment URL was not returned. Please check the latest WooCommerce order before submitting again.",
+                );
+              }
+
               return {
                 ok: result.ok,
                 paymentUrl: result.paymentUrl,
