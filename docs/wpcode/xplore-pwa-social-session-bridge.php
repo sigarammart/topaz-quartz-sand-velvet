@@ -52,3 +52,79 @@ add_action('rest_api_init', function () {
         },
     ]);
 });
+
+/**
+ * Return the most recent unpaid WooCommerce order created for an email after
+ * a PWA booking submission. This is intentionally authenticated with the same
+ * server-to-server secret as the session bridge; it is not a public endpoint.
+ *
+ * The PWA uses this only when Listeo's booking confirmation response does not
+ * expose the native order-pay URL. WooCommerce's order API is the source of
+ * truth for the payment URL.
+ */
+add_action('rest_api_init', function () {
+    register_rest_route('xplore/v1', '/pwa/latest-order', [
+        'methods'  => 'POST',
+        'permission_callback' => function (WP_REST_Request $request) {
+            $expected = defined('XPLORE_PWA_SESSION_SECRET')
+                ? (string) XPLORE_PWA_SESSION_SECRET
+                : (string) get_option('xplore_pwa_session_secret', '');
+
+            $header = (string) $request->get_header('authorization');
+            return $expected !== '' && hash_equals('Bearer ' . $expected, $header);
+        },
+        'callback' => function (WP_REST_Request $request) {
+            if (!function_exists('wc_get_orders')) {
+                return new WP_Error('woocommerce_missing', 'WooCommerce is not loaded.', ['status' => 503]);
+            }
+
+            $email = sanitize_email((string) $request->get_param('email'));
+            if (!$email || !is_email($email)) {
+                return new WP_Error('invalid_email', 'A valid email address is required.', ['status' => 400]);
+            }
+
+            $created_after = absint($request->get_param('created_after'));
+            if (!$created_after) {
+                return new WP_Error('invalid_created_after', 'created_after is required.', ['status' => 400]);
+            }
+
+            // Keep this endpoint tightly scoped to the immediately-created order.
+            // The PWA sends its timestamp immediately before submitting the booking.
+            $created_after = max($created_after - 15, time() - (15 * MINUTE_IN_SECONDS));
+
+            $orders = wc_get_orders([
+                'limit'        => 5,
+                'orderby'      => 'date',
+                'order'        => 'DESC',
+                'return'       => 'objects',
+                'customer'     => $email,
+                'date_created' => '>' . $created_after,
+                'status'       => ['pending', 'on-hold'],
+            ]);
+
+            foreach ($orders as $order) {
+                if (!$order instanceof WC_Order) {
+                    continue;
+                }
+
+                $payment_url = $order->get_checkout_payment_url(false);
+                if (!$payment_url) {
+                    continue;
+                }
+
+                return [
+                    'ok' => true,
+                    'order_id' => (int) $order->get_id(),
+                    'status' => (string) $order->get_status(),
+                    'payment_url' => esc_url_raw($payment_url),
+                ];
+            }
+
+            return [
+                'ok' => false,
+                'order_id' => 0,
+                'payment_url' => '',
+            ];
+        },
+    ]);
+});
