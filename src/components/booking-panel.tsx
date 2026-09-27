@@ -271,7 +271,7 @@ export function BookingPanel({
       ([key, value]) =>
         key === "message" ||
         key === "lastName" ||
-        (key === "password" && Boolean(signedInUser?.isWordPressSession)) ||
+        (signedInUser && (key === "username" || key === "password")) ||
         value.trim().length > 0,
     );
   }
@@ -363,11 +363,24 @@ export function BookingPanel({
               details={details}
               onChange={setDetails}
               onBack={() => setStep("datetime")}
-              onConfirm={confirm}
+              onReview={review}
               loading={loading}
               currency={currency}
               reservationFee={reservationFee}
               externalBookingUrl={externalBookingUrl}
+              signedInUser={signedInUser}
+            />
+          )}
+
+          {step === "review" && selection && (
+            <BookingReviewStep
+              selection={selection}
+              details={details}
+              onBack={() => setStep("confirm")}
+              onConfirm={confirm}
+              loading={loading}
+              currency={currency}
+              reservationFee={reservationFee}
               signedInUser={signedInUser}
             />
           )}
@@ -652,7 +665,7 @@ function ConfirmStep({
   details,
   onChange,
   onBack,
-  onConfirm,
+  onReview,
   loading,
   currency,
   reservationFee,
@@ -663,7 +676,7 @@ function ConfirmStep({
   details: BookingDetails;
   onChange: (next: BookingDetails) => void;
   onBack: () => void;
-  onConfirm: () => void;
+  onReview: () => void;
   loading: boolean;
   currency: string;
   reservationFee: number;
@@ -746,9 +759,9 @@ function ConfirmStep({
           <ChevronLeft className="size-4" />
           Back
         </Button>
-        <Button type="button" className="h-12 flex-[1.6] rounded-full font-bold" disabled={loading || !requiredDetailsComplete} onClick={onConfirm}>
-          {loading && <Loader2 className="size-4 animate-spin" />}
-          "Continue to review"
+        <Button type="button" className="h-12 flex-[1.6] rounded-full font-bold" disabled={loading || !requiredDetailsComplete} onClick={onReview}>
+          <ChevronRight className="size-4" />
+          Continue to review
         </Button>
       </div>
     </div>
