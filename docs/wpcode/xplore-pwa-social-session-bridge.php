@@ -21,6 +21,16 @@ add_action('rest_api_init', function () {
         'callback' => function (WP_REST_Request $request) {
             $email = sanitize_email((string) $request->get_param('email'));
             $listing_id = absint($request->get_param('listing_id'));
+            $submitted_product_ids = [];
+            $submitted_product_param = $request->get_param('product_id');
+            $submitted_product_values = is_array($submitted_product_param) ? $submitted_product_param : [$submitted_product_param];
+            foreach ($submitted_product_values as $submitted_product_value) {
+                $submitted_product_id = absint($submitted_product_value);
+                if ($submitted_product_id > 0) {
+                    $submitted_product_ids[] = $submitted_product_id;
+                }
+            }
+            $submitted_product_ids = array_values(array_unique($submitted_product_ids));
             if (!$email || !is_email($email)) {
                 return new WP_Error('invalid_email', 'A valid email address is required.', ['status' => 400]);
             }
@@ -172,6 +182,7 @@ add_action('rest_api_init', function () {
             $identity_matches = 0;
             $unpaid_matches = 0;
             $product_matches = 0;
+            $diagnostic_product_mismatches = [];
 
             foreach ($queries as $query) {
                 $orders = wc_get_orders($query);
@@ -230,7 +241,20 @@ add_action('rest_api_init', function () {
                         ? true
                         : !empty(array_intersect($expected_product_ids, $order_product_ids));
 
-                    if (!$product_matches_listing) {
+                    $product_matches_submitted = empty($submitted_product_ids)
+                        ? true
+                        : !empty(array_intersect($submitted_product_ids, $order_product_ids));
+
+                    if (!$product_matches_listing || !$product_matches_submitted) {
+                        if (count($diagnostic_product_mismatches) < 10) {
+                            $diagnostic_product_mismatches[] = [
+                                'id' => $order_id,
+                                'status' => $status,
+                                'order_product_ids' => $order_product_ids,
+                                'expected_product_ids' => $expected_product_ids,
+                                'submitted_product_ids' => $submitted_product_ids,
+                            ];
+                        }
                         continue;
                     }
                     $product_matches++;
@@ -274,7 +298,7 @@ add_action('rest_api_init', function () {
                         'order_id' => $order_id,
                         'status' => $status,
                         'payment_url' => esc_url_raw($payment_url),
-                        'bridge_version' => '2026-09-27-order-lookup-v8',
+                        'bridge_version' => '2026-09-27-order-lookup-v9',
                     ];
                 }
             }
@@ -323,6 +347,8 @@ add_action('rest_api_init', function () {
             $reason = 'no_recent_matching_order';
             if ($listing_id > 0 && empty($expected_product_ids)) {
                 $reason = 'listing_product_id_missing';
+            } elseif (!empty($submitted_product_ids) && empty(array_intersect($submitted_product_ids, $expected_product_ids))) {
+                $reason = 'submitted_product_id_does_not_match_listing_product';
             } elseif ($orders_scanned > 0 && $identity_matches === 0) {
                 $reason = 'recent_orders_found_but_customer_did_not_match';
             } elseif ($identity_matches > 0 && $product_matches === 0) {
@@ -338,14 +364,16 @@ add_action('rest_api_init', function () {
                 'order_id' => 0,
                 'payment_url' => '',
                 'reason' => $reason,
-                'bridge_version' => '2026-09-27-order-lookup-v8',
+                'bridge_version' => '2026-09-27-order-lookup-v9',
                 'diagnostics' => [
                     'listing_id_requested' => $listing_id,
                     'expected_product_ids' => $expected_product_ids,
+                    'submitted_product_ids' => $submitted_product_ids,
                     'orders_scanned' => $orders_scanned,
                     'identity_matches' => $identity_matches,
                     'product_matches' => $product_matches,
                     'unpaid_matches' => $unpaid_matches,
+                    'product_mismatches' => $diagnostic_product_mismatches,
                     'recent_orders' => $recent_orders,
                 ],
             ];
