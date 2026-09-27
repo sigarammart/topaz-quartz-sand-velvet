@@ -145,7 +145,7 @@ async function resolveListeoPaymentUrlFromOrder(
     );
   }
 
-  if (lastBridgeVersion !== "2026-09-27-order-lookup-v7") {
+  if (lastBridgeVersion !== "2026-09-27-order-lookup-v8") {
     throw new Error("The live xplorepondy.com payment bridge is still running an older WPCode snippet. Replace the WPCode snippet with the latest repository version before testing again.");
   }
   if (lastBridgeReason === "recent_orders_found_but_customer_did_not_match") {
