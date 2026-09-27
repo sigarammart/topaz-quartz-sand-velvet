@@ -20,6 +20,7 @@ add_action('rest_api_init', function () {
         },
         'callback' => function (WP_REST_Request $request) {
             $email = sanitize_email((string) $request->get_param('email'));
+            $listing_id = absint($request->get_param('listing_id'));
             if (!$email || !is_email($email)) {
                 return new WP_Error('invalid_email', 'A valid email address is required.', ['status' => 400]);
             }
@@ -236,6 +237,50 @@ add_action('rest_api_init', function () {
                 }
             }
 
+            /*
+             * Diagnostic snapshot: return the newest identity-related orders
+             * so the PWA can distinguish "Listeo created nothing" from
+             * "Listeo created an order but our identity/order matching is
+             * wrong". This endpoint is protected by the private bridge secret.
+             */
+            $recent_orders = [];
+            foreach (array_slice($queries[1] ?? [], 0, 0) as $_unused) {
+                // Keep this block intentionally empty; diagnostics are built below.
+            }
+            $diagnostic_orders = wc_get_orders([
+                'limit'   => 10,
+                'orderby' => 'date',
+                'order'   => 'DESC',
+                'return'  => 'objects',
+            ]);
+            foreach ($diagnostic_orders as $diagnostic_order) {
+                if (!$diagnostic_order instanceof WC_Order) {
+                    continue;
+                }
+                $created = $diagnostic_order->get_date_created();
+                if (!$created || $created->getTimestamp() < $created_after) {
+                    continue;
+                }
+                $product_ids = [];
+                $product_names = [];
+                foreach ($diagnostic_order->get_items() as $item) {
+                    $product_id = (int) $item->get_product_id();
+                    if ($product_id > 0) {
+                        $product_ids[] = $product_id;
+                    }
+                    $product_names[] = (string) $item->get_name();
+                }
+                $recent_orders[] = [
+                    'id' => (int) $diagnostic_order->get_id(),
+                    'status' => (string) $diagnostic_order->get_status(),
+                    'created' => $created->date('c'),
+                    'customer_id' => (int) $diagnostic_order->get_customer_id(),
+                    'billing_email' => (string) $diagnostic_order->get_billing_email(),
+                    'product_ids' => array_values(array_unique($product_ids)),
+                    'product_names' => array_values(array_unique(array_filter($product_names))),
+                ];
+            }
+
             $reason = 'no_recent_matching_order';
             if ($orders_scanned > 0 && $identity_matches === 0) {
                 $reason = 'recent_orders_found_but_customer_did_not_match';
@@ -251,6 +296,13 @@ add_action('rest_api_init', function () {
                 'payment_url' => '',
                 'reason' => $reason,
                 'bridge_version' => '2026-09-27-order-lookup-v6',
+                'diagnostics' => [
+                    'listing_id_requested' => $listing_id,
+                    'orders_scanned' => $orders_scanned,
+                    'identity_matches' => $identity_matches,
+                    'unpaid_matches' => $unpaid_matches,
+                    'recent_orders' => $recent_orders,
+                ],
             ];
         },
     ]);
