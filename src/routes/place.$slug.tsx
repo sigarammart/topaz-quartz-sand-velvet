@@ -39,6 +39,7 @@ import { formatDistance, listingDistanceKm, haversineKm } from "@/lib/geo";
 import { decodeEntities, cn } from "@/lib/utils";
 import { preferListeoAddress, websiteHref } from "@/lib/listeo";
 import { filterListingGroups, orderListingGroups, profileFromSlugs } from "@/lib/listing-layouts";
+import { useSession } from "@/store/session";
 
 export const Route = createFileRoute("/place/$slug")({
   component: PlacePage,
@@ -140,6 +141,7 @@ function listingHasDetails(listing: Listing) {
 function PlacePage() {
   const { slug } = Route.useParams();
   const items = useCatalog((s) => s.items);
+  const wpUser = useSession((s) => s.user);
   const status = useCatalog((s) => s.status);
   const catalogHit = catalogListing(slug, items) ?? getListing(slug);
   const [fetched, setFetched] = useState<{ slug: string; listing: Listing | null | undefined }>(() => ({
@@ -756,6 +758,17 @@ function PlacePage() {
           minGuests={listing.bookingMinGuests ?? 1}
           maxGuests={listing.bookingMaxGuests ?? 10}
           externalBookingUrl={listing.siteUrl}
+          signedInUser={
+            wpUser
+              ? {
+                  username: wpUser.slug,
+                  firstName: wpUser.firstName,
+                  lastName: wpUser.lastName,
+                  email: wpUser.email,
+                  phone: wpUser.phone,
+                }
+              : undefined
+          }
           onConfirm={async (details, selection) => {
             setBookingSubmitLoading(true);
             setBookingError(undefined);
