@@ -811,6 +811,17 @@ function PlacePage() {
             setBookingError(undefined);
 
             try {
+              if (grokUser) {
+                const bridge = await ensureWpBookingSession();
+                if (!bridge.ok) {
+                  throw new Error(
+                    bridge.configured
+                      ? "Your Xplore Pondy social account could not be connected to its WordPress booking account."
+                      : "Social booking is not fully configured yet. Please use the WordPress login once, or contact the site administrator.",
+                  );
+                }
+              }
+
               const liveDate = bookingDates.find((date) => date.value === selection.date);
               const liveSlot =
                 liveDate?.slots.find((slot) => slot.id === selection.slot.id) ?? selection.slot;
