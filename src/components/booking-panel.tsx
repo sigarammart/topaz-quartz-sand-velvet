@@ -380,7 +380,7 @@ export function BookingPanel({
                 <span className="text-2xl">✓</span>
               </div>
               <h3 className="mt-5 font-display text-2xl font-semibold">Thank you for your booking!</h3>
-              <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{successMessage}</p>
+              <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{successAction ? "Your booking was submitted successfully. Continue to payment when you are ready." : successMessage}</p>
               <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
                 {successAction && (
                   <Button className="h-11 rounded-full px-6" asChild>
