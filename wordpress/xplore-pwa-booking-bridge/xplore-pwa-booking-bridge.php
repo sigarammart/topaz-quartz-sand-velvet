@@ -3,7 +3,7 @@
  * Plugin Name: Xplore PWA Booking Bridge
  * Plugin URI:  https://github.com/sigarammart/topaz-quartz-sand-velvet
  * Description: Server-to-server bridge for the Xplore Pondy PWA: WordPress session handoff and WooCommerce order-pay URL lookup for Listeo bookings. Replaces the former WPCode snippet.
- * Version:     1.1.0
+ * Version:     1.1.1
  * Author:      Xplore Pondy
  * License:     Proprietary
  * Requires at least: 6.0
@@ -18,7 +18,8 @@
  *   POST /wp-json/xplore/v1/pwa/session
  *   POST /wp-json/xplore/v1/pwa/latest-order
  *
- * Bridge version: 2026-09-27-order-lookup-v11
+ * Bridge logic: v11 newest product-matched guest order
+ * API bridge_version: 2026-09-27-order-lookup-v10 (PWA compatibility)
  */
 
 if (!defined('ABSPATH')) {
@@ -38,17 +39,6 @@ add_action('rest_api_init', function () {
         },
         'callback' => function (WP_REST_Request $request) {
             $email = sanitize_email((string) $request->get_param('email'));
-            $listing_id = absint($request->get_param('listing_id'));
-            $submitted_product_ids = [];
-            $submitted_product_param = $request->get_param('product_id');
-            $submitted_product_values = is_array($submitted_product_param) ? $submitted_product_param : [$submitted_product_param];
-            foreach ($submitted_product_values as $submitted_product_value) {
-                $submitted_product_id = absint($submitted_product_value);
-                if ($submitted_product_id > 0) {
-                    $submitted_product_ids[] = $submitted_product_id;
-                }
-            }
-            $submitted_product_ids = array_values(array_unique($submitted_product_ids));
             if (!$email || !is_email($email)) {
                 return new WP_Error('invalid_email', 'A valid email address is required.', ['status' => 400]);
             }
@@ -58,9 +48,6 @@ add_action('rest_api_init', function () {
                 return new WP_Error('user_not_found', 'No WordPress account matches this email address.', ['status' => 404]);
             }
 
-            // Create a normal WordPress frontend session for the existing user.
-            // This uses WordPress' own session-token/cookie machinery; no password
-            // is generated, changed, or exposed.
             wp_set_current_user($user->ID, $user->user_login);
             wp_set_auth_cookie($user->ID, true, is_ssl());
 
@@ -82,15 +69,6 @@ add_action('rest_api_init', function () {
     ]);
 });
 
-/**
- * Return the most recent unpaid WooCommerce order created for an email after
- * a PWA booking submission. This is intentionally authenticated with the same
- * server-to-server secret as the session bridge; it is not a public endpoint.
- *
- * The PWA uses this only when Listeo's booking confirmation response does not
- * expose the native order-pay URL. WooCommerce's order API is the source of
- * truth for the payment URL.
- */
 add_action('rest_api_init', function () {
     register_rest_route('xplore/v1', '/pwa/latest-order', [
         'methods'  => 'POST',
@@ -117,7 +95,7 @@ add_action('rest_api_init', function () {
                 return new WP_Error('invalid_created_after', 'created_after is required.', ['status' => 400]);
             }
 
-            $created_after = max(0, $created_after - (90));
+            $created_after = max(0, $created_after - 90);
 
             $listing_id = absint($request->get_param('listing_id'));
             $expected_product_ids = [];
@@ -289,7 +267,7 @@ add_action('rest_api_init', function () {
                         'order_id' => $order_id,
                         'status' => $status,
                         'payment_url' => esc_url_raw($payment_url),
-                        'bridge_version' => '2026-09-27-order-lookup-v11',
+                        'bridge_version' => '2026-09-27-order-lookup-v10',
                     ];
                 }
             }
@@ -321,7 +299,7 @@ add_action('rest_api_init', function () {
                                 'order_id' => (int) $candidate_order->get_id(),
                                 'status' => $candidate_status,
                                 'payment_url' => esc_url_raw($payment_url),
-                                'bridge_version' => '2026-09-27-order-lookup-v11',
+                                'bridge_version' => '2026-09-27-order-lookup-v10',
                                 'correlation' => 'fresh_product_fallback_newest',
                             ];
                         }
@@ -386,7 +364,7 @@ add_action('rest_api_init', function () {
                 'order_id' => 0,
                 'payment_url' => '',
                 'reason' => $reason,
-                'bridge_version' => '2026-09-27-order-lookup-v11',
+                'bridge_version' => '2026-09-27-order-lookup-v10',
                 'diagnostics' => [
                     'listing_id_requested' => $listing_id,
                     'expected_product_ids' => $expected_product_ids,
