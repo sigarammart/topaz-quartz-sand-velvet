@@ -294,6 +294,7 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
     });
 
     let redirectUrl: string | undefined;
+    const redirectUrls: string[] = [];
     let responseCookie = cookieHeader(
       typeof response.headers.getSetCookie === "function"
         ? response.headers.getSetCookie()
@@ -304,6 +305,8 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
       const location = response.headers.get("location");
       if (!location) break;
       redirectUrl = new URL(location, confirmation.actionUrl).toString();
+      redirectUrls.push(redirectUrl);
+
       const nextCookie = responseCookie || cookie;
       response = await fetch(redirectUrl, {
         headers: {
@@ -333,7 +336,8 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
       throw new Error(errorText || `Listeo booking submission failed (HTTP ${response.status}).`);
     }
 
-    const paymentUrl = [redirectUrl, combined]
+    const responseUrl = typeof response.url === "string" ? response.url : undefined;
+    const paymentUrl = [...redirectUrls, responseUrl, redirectUrl, combined]
       .map((value) => (value ? extractListeoPaymentUrl(value) : undefined))
       .find((value): value is string => Boolean(value));
 
