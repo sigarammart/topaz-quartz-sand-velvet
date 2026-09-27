@@ -68,7 +68,10 @@ function extractListeoPaymentUrl(value: string): string | undefined {
   return undefined;
 }
 
-async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: number): Promise<string | undefined> {
+async function resolveListeoPaymentUrlFromOrder(
+  email: string,
+  createdAfter: number,
+): Promise<{ orderId: number; paymentUrl: string } | undefined> {
   const secret = process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim();
   if (!secret) {
     throw new Error("The PWA booking bridge is not configured. Set WP_SOCIAL_SESSION_BRIDGE_SECRET on the PWA server.");
@@ -110,10 +113,15 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
 
       if (response.ok) {
         const body = (await response.json().catch(() => null)) as
-          | { ok?: boolean; payment_url?: string; reason?: string; bridge_version?: string }
+          | { ok?: boolean; order_id?: number; payment_url?: string; reason?: string; bridge_version?: string }
           | null;
         if (body?.bridge_version) lastBridgeVersion = body.bridge_version;
-        if (body?.ok && body.payment_url) return body.payment_url;
+        if (body?.ok && body.payment_url && Number(body.order_id) > 0) {
+          return {
+            orderId: Number(body.order_id),
+            paymentUrl: body.payment_url,
+          };
+        }
         if (body?.reason) {
           lastBridgeReason = body.reason;
         }
@@ -494,18 +502,32 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
     }
 
     const responseUrl = typeof response.url === "string" ? response.url : undefined;
-    let paymentUrl = [...redirectUrls, responseUrl, redirectUrl, combined]
-      .map((value) => (value ? extractListeoPaymentUrl(value) : undefined))
-      .find((value): value is string => Boolean(value));
 
-    if (!paymentUrl) {
-      paymentUrl = await resolveListeoPaymentUrlFromOrder(bookingEmail, bookingStartedAt);
+    /*
+     * Do not trust arbitrary HTML from the confirmation response for the
+     * payment URL. Listeo can render existing bookings/order links in that
+     * response, and scanning the whole document can accidentally select an
+     * older order that is already present in the user's booking list.
+     *
+     * The authoritative result is the WooCommerce order created during this
+     * booking attempt. The bridge returns its actual order ID and native
+     * order-pay URL.
+     */
+    const bookingOrder = await resolveListeoPaymentUrlFromOrder(bookingEmail, bookingStartedAt);
+
+    if (!bookingOrder) {
+      throw new Error(
+        "The Listeo booking confirmation did not produce a new WooCommerce order for this booking attempt.",
+      );
     }
 
     return {
       ok: true as const,
-      paymentUrl,
+      bookingId: bookingOrder.orderId,
+      orderId: bookingOrder.orderId,
+      paymentUrl: bookingOrder.paymentUrl,
       bookingUrl: redirectUrl,
+      confirmationUrl: redirectUrl || responseUrl,
     };
   });
 
