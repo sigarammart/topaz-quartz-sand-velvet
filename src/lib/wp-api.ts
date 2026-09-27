@@ -415,24 +415,26 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
   const username = wpSession?.username || data.username;
 
   const fields: Record<string, string> = {
-      ...confirmation.hiddenFields,
-      value,
-      confirmed: "yessir",
-      username,
-      password: data.password,
-      // Listeo's booking form has used both the legacy firstname/lastname
-      // names and the newer first_name/last_name names across versions.
-      // Send both so the confirmation handler receives the guest identity
-      // regardless of the installed Listeo template version.
-      firstname: data.firstName,
-      lastname: data.lastName,
-      first_name: data.firstName,
-      last_name: data.lastName,
-      email: bookingEmail,
-      phone: data.phone,
-      message: data.message,
-      privacy_policy: "on",
-    };
+    ...confirmation.hiddenFields,
+    value,
+    confirmed: "yessir",
+    // When the bridge has established a real WordPress session, let Listeo
+    // resolve the booking to that logged-in user. Supplying an empty password
+    // can make some Listeo versions fall back to the guest/registration path.
+    ...(wpSession ? {} : { username, password: data.password }),
+    // Listeo's booking form has used both the legacy firstname/lastname
+    // names and the newer first_name/last_name names across versions.
+    // Send both so the confirmation handler receives the guest identity
+    // regardless of the installed Listeo template version.
+    firstname: data.firstName,
+    lastname: data.lastName,
+    first_name: data.firstName,
+    last_name: data.lastName,
+    email: bookingEmail,
+    phone: data.phone,
+    message: data.message,
+    privacy_policy: "on",
+  };
 
     let response = await fetch(confirmation.actionUrl, {
       method: "POST",
