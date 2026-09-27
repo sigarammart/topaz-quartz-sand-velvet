@@ -66,6 +66,13 @@ type BookingPanelProps = {
   externalBookingUrl?: string;
   minGuests?: number;
   maxGuests?: number;
+  signedInUser?: {
+    username?: string;
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+  };
 };
 
 export type BookingDetails = {
@@ -125,6 +132,7 @@ export function BookingPanel({
   externalBookingUrl,
   minGuests = 1,
   maxGuests = 10,
+  signedInUser,
 }: BookingPanelProps) {
   const [step, setStep] = useState<BookingStep>("datetime");
   const [guestOpen, setGuestOpen] = useState(false);
@@ -302,6 +310,7 @@ export function BookingPanel({
               onNext={nextStep}
               onPreviousDate={() => moveDate(-1)}
               onNextDate={() => moveDate(1)}
+              signedInUser={signedInUser}
             />
           )}
 
@@ -359,6 +368,7 @@ function DateTimeStep({
   onPreviousDate,
   onNextDate,
   externalBookingUrl,
+  signedInUser,
 }: {
   dates: BookingDateOption[];
   slots: BookingSlot[];
@@ -381,6 +391,7 @@ function DateTimeStep({
   onPreviousDate?: () => void;
   onNextDate?: () => void;
   externalBookingUrl?: string;
+  signedInUser?: BookingPanelProps["signedInUser"];
 }) {
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-5 sm:px-6 sm:py-7">
@@ -603,7 +614,11 @@ function ConfirmStep({
   externalBookingUrl?: string;
 }) {
   const requiredDetailsComplete = Object.entries(details).every(
-    ([key, value]) => key === "message" || key === "lastName" || value.trim().length > 0,
+    ([key, value]) =>
+      key === "message" ||
+      key === "lastName" ||
+      key === "password" && signedInUser ||
+      value.trim().length > 0,
   );
 
   return (
@@ -634,12 +649,19 @@ function ConfirmStep({
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <Field label="Username *">
-          <Input value={details.username} onChange={(event) => onChange({ ...details, username: event.target.value })} autoComplete="username" />
+        <Field label={signedInUser ? "Account" : "Username *"}>
+          <Input
+            value={details.username}
+            onChange={(event) => onChange({ ...details, username: event.target.value })}
+            autoComplete="username"
+            readOnly={Boolean(signedInUser)}
+          />
         </Field>
-        <Field label="Password *">
-          <Input type="password" value={details.password} onChange={(event) => onChange({ ...details, password: event.target.value })} autoComplete="new-password" />
-        </Field>
+        {!signedInUser && (
+          <Field label="Password *">
+            <Input type="password" value={details.password} onChange={(event) => onChange({ ...details, password: event.target.value })} autoComplete="new-password" />
+          </Field>
+        )}
         <Field label="First name *">
           <Input value={details.firstName} onChange={(event) => onChange({ ...details, firstName: event.target.value })} autoComplete="given-name" />
         </Field>
