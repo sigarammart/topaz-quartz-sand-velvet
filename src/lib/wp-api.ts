@@ -75,6 +75,7 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
   }
 
   let lastStatus: number | undefined;
+  let lastBridgeReason: string | undefined;
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
     try {
@@ -108,9 +109,12 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
 
       if (response.ok) {
         const body = (await response.json().catch(() => null)) as
-          | { ok?: boolean; payment_url?: string }
+          | { ok?: boolean; payment_url?: string; reason?: string }
           | null;
         if (body?.ok && body.payment_url) return body.payment_url;
+        if (body?.reason) {
+          lastBridgeReason = body.reason;
+        }
       }
     } catch (error) {
       if (error instanceof Error && /booking bridge|payment-order bridge|WP_SOCIAL_SESSION_BRIDGE_SECRET|XPLORE_PWA_SESSION_SECRET/i.test(error.message)) {
@@ -130,6 +134,18 @@ async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: num
     );
   }
 
+  if (lastBridgeReason === "recent_orders_found_but_customer_did_not_match") {
+    throw new Error("Listeo created the booking request, but the WooCommerce order is not linked to this WordPress customer/email.");
+  }
+  if (lastBridgeReason === "matching_order_was_paid_or_terminal") {
+    throw new Error("Listeo found a matching WooCommerce order, but it is already paid or in a terminal status.");
+  }
+  if (lastBridgeReason === "matching_unpaid_order_has_no_payment_url") {
+    throw new Error("A matching unpaid WooCommerce order exists, but WooCommerce did not return its payment URL.");
+  }
+  if (lastBridgeReason === "no_recent_matching_order") {
+    throw new Error("Listeo accepted the booking request, but no recent WooCommerce order was created for this booking.");
+  }
   return undefined;
 }
 function stripBookingHtml(value: string) {
