@@ -30,7 +30,7 @@ import { Button } from "@/components/ui/button";
 import { getListing } from "@/data/listings";
 import { CATEGORY_META } from "@/lib/types";
 import type { Listing } from "@/lib/types";
-import { ensureWpBookingSession, fetchListeoBookingAvailability, fetchListeoBookingConfirmationUrl, fetchWpBookingProfile, fetchWpListing } from "@/lib/wp-api";
+import { ensureWpBookingSession, fetchListeoBookingAvailability, fetchWpBookingProfile, fetchWpListing, submitListeoBooking } from "@/lib/wp-api";
 import { exploreSearchForTerm } from "@/lib/filters";
 import { listingPhotos } from "@/lib/media";
 import { catalogListing, catalogNearby, useCatalog } from "@/store/catalog";
@@ -811,55 +811,48 @@ function PlacePage() {
             setBookingError(undefined);
 
             try {
-              const confirmation = await fetchListeoBookingConfirmationUrl({
-                data: { listingUrl: listing.siteUrl },
-              });
               const liveDate = bookingDates.find((date) => date.value === selection.date);
-              const liveSlot = liveDate?.slots.find((slot) => slot.id === selection.slot.id) ?? selection.slot;
+              const liveSlot =
+                liveDate?.slots.find((slot) => slot.id === selection.slot.id) ?? selection.slot;
               const slotCapacity = Math.max(1, liveSlot.availableCount ?? 1);
-              const value = JSON.stringify({
-                listing_id: listing.wpId,
-                date_start: selection.date,
-                date_end: selection.date,
-                slot: JSON.stringify([selection.slot.start + " - " + selection.slot.end + "|" + slotCapacity]),
-                adults: selection.guests.adults,
-                children: selection.guests.children,
-                infants: selection.guests.infants,
-                animals: 0,
-                services: [],
+
+              const result = await submitListeoBooking({
+                data: {
+                  listingUrl: listing.siteUrl,
+                  listingId: listing.wpId!,
+                  date: selection.date,
+                  slotStart: liveSlot.start,
+                  slotEnd: liveSlot.end,
+                  slotCapacity,
+                  adults: selection.guests.adults,
+                  children: selection.guests.children,
+                  infants: selection.guests.infants,
+                  username: details.username,
+                  password: details.password,
+                  firstName: details.firstName,
+                  lastName: details.lastName,
+                  email: details.email,
+                  phone: details.phone,
+                  message: details.message,
+                },
               });
 
-              const form = document.createElement("form");
-              form.method = "POST";
-              form.action = confirmation.actionUrl;
-              form.target = "_self";
-              form.style.display = "none";
-
-              const fields: Record<string, string> = {
-                ...confirmation.hiddenFields,
-                value,
-                confirmed: "yessir",
-                ...Object.fromEntries(
-                  Object.entries(details).map(([key, fieldValue]) => [key, String(fieldValue)]),
-                ),
-                // Listeo's confirmation form includes a required privacy
-                // checkbox on this site. Native browser submission sends "on".
-                privacy_policy: "on",
+              return {
+                ok: result.ok,
+                paymentUrl: result.paymentUrl,
+                successMessage: result.paymentUrl
+                  ? "Your booking was submitted successfully. Continue to payment when you are ready."
+                  : "Your booking was submitted successfully.",
               };
-
-              for (const [name, fieldValue] of Object.entries(fields)) {
-                const input = document.createElement("input");
-                input.type = "hidden";
-                input.name = name;
-                input.value = fieldValue;
-                form.appendChild(input);
-              }
-
-              document.body.appendChild(form);
-              form.submit();
             } catch (error) {
+              setBookingError(
+                error instanceof Error
+                  ? error.message
+                  : "Booking could not be submitted. Please try again.",
+              );
+              throw error;
+            } finally {
               setBookingSubmitLoading(false);
-              setBookingError(error instanceof Error ? error.message : "Booking could not be submitted. Please try again.");
             }
           }}
         />
