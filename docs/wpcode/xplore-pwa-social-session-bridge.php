@@ -232,7 +232,7 @@ add_action('rest_api_init', function () {
                         'order_id' => $order_id,
                         'status' => $status,
                         'payment_url' => esc_url_raw($payment_url),
-                        'bridge_version' => '2026-09-27-order-lookup-v6',
+                        'bridge_version' => '2026-09-27-order-lookup-v7',
                     ];
                 }
             }
@@ -244,9 +244,6 @@ add_action('rest_api_init', function () {
              * wrong". This endpoint is protected by the private bridge secret.
              */
             $recent_orders = [];
-            foreach (array_slice($queries[1] ?? [], 0, 0) as $_unused) {
-                // Keep this block intentionally empty; diagnostics are built below.
-            }
             $diagnostic_orders = wc_get_orders([
                 'limit'   => 10,
                 'orderby' => 'date',
@@ -295,7 +292,7 @@ add_action('rest_api_init', function () {
                 'order_id' => 0,
                 'payment_url' => '',
                 'reason' => $reason,
-                'bridge_version' => '2026-09-27-order-lookup-v6',
+                'bridge_version' => '2026-09-27-order-lookup-v7',
                 'diagnostics' => [
                     'listing_id_requested' => $listing_id,
                     'orders_scanned' => $orders_scanned,
