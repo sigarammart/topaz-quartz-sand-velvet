@@ -72,6 +72,7 @@ type BookingPanelProps = {
     lastName?: string;
     email?: string;
     phone?: string;
+    isWordPressSession?: boolean;
   };
 };
 
@@ -640,7 +641,7 @@ function ConfirmStep({
     ([key, value]) =>
       key === "message" ||
       key === "lastName" ||
-      key === "password" && Boolean(signedInUser) ||
+      key === "password" && Boolean(signedInUser?.isWordPressSession) ||
       value.trim().length > 0,
   );
 
@@ -672,15 +673,15 @@ function ConfirmStep({
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <Field label={signedInUser ? "Account" : "Username *"}>
+        <Field label={signedInUser?.isWordPressSession ? "Account" : "Username *"}>
           <Input
             value={details.username}
             onChange={(event) => onChange({ ...details, username: event.target.value })}
             autoComplete="username"
-            readOnly={Boolean(signedInUser)}
+            readOnly={Boolean(signedInUser?.isWordPressSession)}
           />
         </Field>
-        {!signedInUser && (
+        {!signedInUser?.isWordPressSession && (
           <Field label="Password *">
             <Input type="password" value={details.password} onChange={(event) => onChange({ ...details, password: event.target.value })} autoComplete="new-password" />
           </Field>
