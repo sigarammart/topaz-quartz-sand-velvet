@@ -324,7 +324,7 @@ export const fetchListeoBookingConfirmationUrl = createServerFn({ method: "POST"
   .validator(z.object({ listingUrl: z.string().url() }))
   .handler(async ({ data }) => loadListeoBookingConfirmationData(data.listingUrl));
 
-async function fetchWpBookingSessionCookie(email: string): Promise<string | undefined> {
+async function fetchWpBookingSessionCookie(email: string): Promise<{ cookie: string; username?: string } | undefined> {
   const secret = process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim();
   if (!secret) return undefined;
 
@@ -357,7 +357,10 @@ async function fetchWpBookingSessionCookie(email: string): Promise<string | unde
     throw new Error("Could not establish the WordPress booking session for this account.");
   }
 
-  return body.logged_in_cookie;
+  return {
+    cookie: body.logged_in_cookie,
+    username: typeof (body as { username?: unknown }).username === "string" ? String((body as { username?: string }).username).trim() : undefined,
+  };
 }
 
 export const submitListeoBooking = createServerFn({ method: "POST" })
@@ -404,12 +407,25 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
       services: [],
     });
 
-    const fields: Record<string, string> = {
+    const wpSession = await fetchWpBookingSessionCookie(bookingEmail).catch((error) => {
+    if (process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim()) throw error;
+    return undefined;
+  });
+  const cookie = wpSession?.cookie || getRequestHeader("cookie") || "";
+  const username = wpSession?.username || data.username;
+
+  const fields: Record<string, string> = {
       ...confirmation.hiddenFields,
       value,
       confirmed: "yessir",
-      username: data.username,
+      username,
       password: data.password,
+      // Listeo's booking form has used both the legacy firstname/lastname
+      // names and the newer first_name/last_name names across versions.
+      // Send both so the confirmation handler receives the guest identity
+      // regardless of the installed Listeo template version.
+      firstname: data.firstName,
+      lastname: data.lastName,
       first_name: data.firstName,
       last_name: data.lastName,
       email: bookingEmail,
@@ -417,13 +433,6 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
       message: data.message,
       privacy_policy: "on",
     };
-
-    const browserCookie = getRequestHeader("cookie") ?? "";
-    const wpBookingCookie = await fetchWpBookingSessionCookie(bookingEmail).catch((error) => {
-      if (process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim()) throw error;
-      return undefined;
-    });
-    const cookie = wpBookingCookie || browserCookie;
 
     let response = await fetch(confirmation.actionUrl, {
       method: "POST",
