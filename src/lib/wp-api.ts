@@ -48,18 +48,18 @@ function extractListeoPaymentUrl(value: string): string | undefined {
 
   for (const candidate of candidates) {
     const match = candidate.match(
-      /(?:https?:\\/\\/xplorepondy\\.com)?(\\/checkout\\/order-pay\\/\\d+\\/\\?[^"'<>\\s\\\\]+)/i,
+      /(?:https?:\/\/xplorepondy\.com)?(\/checkout\/order-pay\/\d+\/\?[^"'<>\s\\]+)/i,
     );
     if (!match?.[1]) continue;
 
     try {
       const url = new URL(match[1], WP_ORIGIN);
       if (url.origin !== new URL(WP_ORIGIN).origin) continue;
-      const orderId = url.pathname.match(/\\/order-pay\\/(\\d+)\\/?$/i)?.[1];
+      const orderId = url.pathname.match(/\/order-pay\/(\d+)\/?$/i)?.[1];
       const key = url.searchParams.get("key");
       if (!orderId || !key) continue;
 
-      return `${WP_ORIGIN}/checkout/order-pay/${orderId}/?pay_for_order=true&key=${encodeURIComponent(key)}`;
+      return \`\${WP_ORIGIN}/checkout/order-pay/\${orderId}/?pay_for_order=true&key=\${encodeURIComponent(key)}\`;
     } catch {
       // Try the next representation.
     }
