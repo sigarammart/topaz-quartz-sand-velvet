@@ -182,6 +182,7 @@ add_action('rest_api_init', function () {
             $identity_matches = 0;
             $unpaid_matches = 0;
             $product_matches = 0;
+            $unlinked_product_candidates = [];
             $diagnostic_product_mismatches = [];
 
             foreach ($queries as $query) {
@@ -218,6 +219,14 @@ add_action('rest_api_init', function () {
                     // order to the logged-in WordPress customer. Accept either
                     // identity signal, but never accept an unrelated order.
                     if (!$email_matches && !$customer_id_matches) {
+                        // Listeo can create a valid WooCommerce order before
+                        // populating billing_email/customer_id. Keep an exact
+                        // product + fresh timestamp candidate for the fallback
+                        // pass below instead of discarding it immediately.
+                        $unlinked_product_candidates[] = [
+                            'order' => $order,
+                            'order_id' => $order_id,
+                        ];
                         continue;
                     }
                     $identity_matches++;
@@ -298,8 +307,63 @@ add_action('rest_api_init', function () {
                         'order_id' => $order_id,
                         'status' => $status,
                         'payment_url' => esc_url_raw($payment_url),
-                        'bridge_version' => '2026-09-27-order-lookup-v9',
+                        'bridge_version' => '2026-09-27-order-lookup-v10',
                     ];
+                }
+            }
+
+            // Fallback for Listeo orders created as guests/unlinked customers.
+            // Only accept an exact product match within this booking's fresh
+            // timestamp window, and only when there is exactly one candidate.
+            // This prevents an older/unrelated order from being selected.
+            if ($unpaid_matches === 0 && count($unlinked_product_candidates) === 1) {
+                $candidate = $unlinked_product_candidates[0];
+                $candidate_order = $candidate['order'];
+                if ($candidate_order instanceof WC_Order) {
+                    $candidate_product_ids = [];
+                    foreach ($candidate_order->get_items() as $item) {
+                        if (!is_object($item) || !method_exists($item, 'get_product_id')) {
+                            continue;
+                        }
+                        $candidate_product_id = (int) $item->get_product_id();
+                        if ($candidate_product_id > 0) {
+                            $candidate_product_ids[] = $candidate_product_id;
+                        }
+                    }
+                    $candidate_product_ids = array_values(array_unique($candidate_product_ids));
+                    $candidate_matches_product = empty($expected_product_ids)
+                        ? false
+                        : !empty(array_intersect($expected_product_ids, $candidate_product_ids));
+                    $candidate_matches_submitted = empty($submitted_product_ids)
+                        ? true
+                        : !empty(array_intersect($submitted_product_ids, $candidate_product_ids));
+                    $candidate_status = (string) $candidate_order->get_status();
+                    if ($candidate_matches_product
+                        && $candidate_matches_submitted
+                        && !$candidate_order->is_paid()
+                        && !in_array($candidate_status, ['cancelled', 'refunded', 'completed'], true)
+                    ) {
+                        $candidate_user = get_user_by('email', $email);
+                        if ($candidate_user instanceof WP_User) {
+                            $candidate_order->set_customer_id((int) $candidate_user->ID);
+                            if (!$candidate_order->get_billing_email()) {
+                                $candidate_order->set_billing_email($email);
+                            }
+                            $candidate_order->save();
+                        }
+
+                        $payment_url = $candidate_order->get_checkout_payment_url(false);
+                        if ($payment_url) {
+                            return [
+                                'ok' => true,
+                                'order_id' => (int) $candidate_order->get_id(),
+                                'status' => $candidate_status,
+                                'payment_url' => esc_url_raw($payment_url),
+                                'bridge_version' => '2026-09-27-order-lookup-v10',
+                                'correlation' => 'fresh_product_fallback',
+                            ];
+                        }
+                    }
                 }
             }
 
@@ -349,6 +413,8 @@ add_action('rest_api_init', function () {
                 $reason = 'listing_product_id_missing';
             } elseif (!empty($submitted_product_ids) && empty(array_intersect($submitted_product_ids, $expected_product_ids))) {
                 $reason = 'submitted_product_id_does_not_match_listing_product';
+            } elseif ($orders_scanned > 0 && $identity_matches === 0 && count($unlinked_product_candidates) > 1) {
+                $reason = 'multiple_fresh_product_orders_without_customer_match';
             } elseif ($orders_scanned > 0 && $identity_matches === 0) {
                 $reason = 'recent_orders_found_but_customer_did_not_match';
             } elseif ($identity_matches > 0 && $product_matches === 0) {
@@ -374,6 +440,7 @@ add_action('rest_api_init', function () {
                     'product_matches' => $product_matches,
                     'unpaid_matches' => $unpaid_matches,
                     'product_mismatches' => $diagnostic_product_mismatches,
+                    'unlinked_product_candidates' => count($unlinked_product_candidates),
                     'recent_orders' => $recent_orders,
                 ],
             ];
