@@ -48,7 +48,18 @@ async function resolveListeoPaymentUrlFromOrder(
   let lastDiagnostics: {
     orders_scanned?: number;
     identity_matches?: number;
+    product_matches?: number;
     unpaid_matches?: number;
+    listing_id_requested?: number;
+    expected_product_ids?: number[];
+    submitted_product_ids?: number[];
+    product_mismatches?: Array<{
+      id?: number;
+      status?: string;
+      order_product_ids?: number[];
+      expected_product_ids?: number[];
+      submitted_product_ids?: number[];
+    }>;
     recent_orders?: Array<{
       id?: number;
       status?: string;
@@ -102,7 +113,18 @@ async function resolveListeoPaymentUrlFromOrder(
               diagnostics?: {
                 orders_scanned?: number;
                 identity_matches?: number;
+                product_matches?: number;
                 unpaid_matches?: number;
+                listing_id_requested?: number;
+                expected_product_ids?: number[];
+                submitted_product_ids?: number[];
+                product_mismatches?: Array<{
+                  id?: number;
+                  status?: string;
+                  order_product_ids?: number[];
+                  expected_product_ids?: number[];
+                  submitted_product_ids?: number[];
+                }>;
                 recent_orders?: Array<{
                   id?: number;
                   status?: string;
@@ -145,11 +167,18 @@ async function resolveListeoPaymentUrlFromOrder(
     );
   }
 
-  if (lastBridgeVersion !== "2026-09-27-order-lookup-v8") {
+  if (lastBridgeVersion !== "2026-09-27-order-lookup-v9") {
     throw new Error("The live xplorepondy.com payment bridge is still running an older WPCode snippet. Replace the WPCode snippet with the latest repository version before testing again.");
   }
+  if (lastBridgeReason === "submitted_product_id_does_not_match_listing_product") {
+    const expected = (lastDiagnostics?.expected_product_ids ?? []).join(",") || "none";
+    const submitted = (lastDiagnostics?.submitted_product_ids ?? []).join(",") || "none";
+    throw new Error(`Listeo submitted product ${submitted}, but the listing is linked to WooCommerce product ${expected}.`);
+  }
   if (lastBridgeReason === "recent_orders_found_but_customer_did_not_match") {
-    throw new Error("Listeo created the booking request, but the WooCommerce order is not linked to this WordPress customer/email.");
+    const submitted = (lastDiagnostics?.submitted_product_ids ?? []).join(",") || "none";
+    const expected = (lastDiagnostics?.expected_product_ids ?? []).join(",") || "none";
+    throw new Error(`Listeo created recent WooCommerce orders, but none matched the WordPress customer/email. Submitted product: ${submitted}; listing product: ${expected}.`);
   }
   if (lastBridgeReason === "matching_order_was_paid_or_terminal") {
     throw new Error("Listeo found a matching WooCommerce order, but it is already paid or in a terminal status.");
