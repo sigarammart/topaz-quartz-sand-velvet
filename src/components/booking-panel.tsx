@@ -63,6 +63,7 @@ type BookingPanelProps = {
   onContinue?: (selection: BookingSelection) => void;
   onConfirm?: (details: BookingDetails, selection: BookingSelection) => void;
   successMessage?: string;
+  successAction?: { label: string; url: string };
   externalBookingUrl?: string;
   minGuests?: number;
   maxGuests?: number;
@@ -130,6 +131,7 @@ export function BookingPanel({
   onContinue,
   onConfirm,
   successMessage = "Your booking has been confirmed.",
+  successAction,
   externalBookingUrl,
   minGuests = 1,
   maxGuests = 10,
@@ -373,9 +375,20 @@ export function BookingPanel({
               </div>
               <h3 className="mt-5 font-display text-2xl font-semibold">Thank you for your booking!</h3>
               <p className="mt-2 max-w-sm text-sm leading-relaxed text-muted-foreground">{successMessage}</p>
-              <Button className="mt-7 h-11 rounded-full px-6" onClick={onClose}>
-                Done
-              </Button>
+              <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
+                {successAction && (
+                  <Button className="h-11 rounded-full px-6" asChild>
+                    <a href={successAction.url} target="_blank" rel="noreferrer">{successAction.label}</a>
+                  </Button>
+                )}
+                <Button
+                  variant={successAction ? "outline" : "default"}
+                  className="h-11 rounded-full px-6"
+                  onClick={onClose}
+                >
+                  Done
+                </Button>
+              </div>
             </div>
           )}
         </div>
