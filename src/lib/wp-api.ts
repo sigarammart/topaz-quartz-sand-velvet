@@ -39,14 +39,14 @@ function extractListeoPaymentUrl(value: string): string | undefined {
     .replace(/&amp;/gi, "&");
 
   const match = normalized.match(
-    /(?:https?:\\/\\/xplorepondy\\.com)?(\\/checkout\\/order-pay\\/\\d+\\/\\?(?:[^"'<>\\s\\\\]+))/i,
+    /(?:https?:\/\/xplorepondy\.com)?(\/checkout\/order-pay\/\d+\/\?(?:[^"'<>\s\\]+))/i,
   );
   if (!match?.[1]) return undefined;
 
   try {
     const url = new URL(match[1], WP_ORIGIN);
     if (url.origin !== new URL(WP_ORIGIN).origin) return undefined;
-    const orderId = url.pathname.match(/\\/order-pay\\/(\\d+)\\/?$/i)?.[1];
+    const orderId = url.pathname.match(/\/order-pay\/(\d+)\/?$/i)?.[1];
     const key = url.searchParams.get("key");
     if (!orderId || !key) return undefined;
 
