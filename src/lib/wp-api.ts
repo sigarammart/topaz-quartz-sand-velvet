@@ -2354,6 +2354,65 @@ async function wpTripStoreRequest(
   };
 }
 
+export type WpBookingProfile = {
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+};
+
+function splitWpDisplayName(name: string) {
+  const parts = name.trim().split(/\\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] ?? "",
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+export const fetchWpBookingProfile = createServerFn({ method: "GET" })
+  .validator(z.object({ email: z.string().email() }))
+  .handler(async ({ data }) => {
+    const headers = await wpTripSyncCredentials();
+    if (!headers) return null;
+
+    const normalized = data.email.trim().toLowerCase();
+    const res = await wpGet<
+      Array<{
+        id?: number;
+        email?: string;
+        name?: string;
+        slug?: string;
+        meta?: Record<string, unknown>;
+      }>
+    >(
+      `/wp-json/wp/v2/users?search=${encodeURIComponent(normalized)}&per_page=100&_fields=id,email,name,slug,meta&context=edit`,
+      headers,
+      12000,
+    );
+    if (!res.ok || !Array.isArray(res.data)) return null;
+
+    const user = res.data.find(
+      (row) => String(row.email ?? "").trim().toLowerCase() === normalized,
+    );
+    if (!user) return null;
+
+    const names = splitWpDisplayName(String(user.name ?? ""));
+    const meta = user.meta ?? {};
+    const phoneKeys = ["phone", "_phone", "phone_number", "_phone_number", "billing_phone"];
+    const phone = phoneKeys
+      .map((key) => meta[key])
+      .find((value) => typeof value === "string" && value.trim()) as string | undefined;
+
+    return {
+      username: user.slug || undefined,
+      firstName: names.firstName || undefined,
+      lastName: names.lastName || undefined,
+      email: user.email || normalized,
+      phone: phone?.trim() || undefined,
+    } satisfies WpBookingProfile;
+  });
+
 export const fetchWpTripStore = createServerFn({ method: "GET" })
   .validator(z.object({ email: z.string().email() }))
   .handler(async ({ data }) => wpTripStoreRequest(data.email));
