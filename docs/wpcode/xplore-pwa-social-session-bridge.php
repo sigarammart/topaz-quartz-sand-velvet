@@ -95,7 +95,11 @@ add_action('rest_api_init', function () {
              * lower bound instead of accidentally excluding a just-created
              * order because the two clocks differ.
              */
-            $created_after = max(0, $created_after - (6 * HOUR_IN_SECONDS));
+            // The PWA timestamp is created immediately before the Listeo submission.
+            // Do not use a multi-hour window here: that can incorrectly return an
+            // older unpaid order when a new booking attempt failed to create an order.
+            // A small clock-skew tolerance is sufficient for the two servers.
+            $created_after = max(0, $created_after - (90));
 
             $user = get_user_by('email', $email);
             $queries = [];
@@ -227,7 +231,7 @@ add_action('rest_api_init', function () {
                         'order_id' => $order_id,
                         'status' => $status,
                         'payment_url' => esc_url_raw($payment_url),
-                        'bridge_version' => '2026-09-27-order-lookup-v4',
+                        'bridge_version' => '2026-09-27-order-lookup-v5',
                     ];
                 }
             }
@@ -246,7 +250,7 @@ add_action('rest_api_init', function () {
                 'order_id' => 0,
                 'payment_url' => '',
                 'reason' => $reason,
-                'bridge_version' => '2026-09-27-order-lookup-v4',
+                'bridge_version' => '2026-09-27-order-lookup-v5',
             ];
         },
     ]);
