@@ -324,6 +324,42 @@ export const fetchListeoBookingConfirmationUrl = createServerFn({ method: "POST"
   .validator(z.object({ listingUrl: z.string().url() }))
   .handler(async ({ data }) => loadListeoBookingConfirmationData(data.listingUrl));
 
+async function fetchWpBookingSessionCookie(email: string): Promise<string | undefined> {
+  const secret = process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim();
+  if (!secret) return undefined;
+
+  const response = await fetch(`${WP_ORIGIN}/wp-json/xplore/v1/pwa/session`, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${secret}`,
+    },
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+    signal: AbortSignal.timeout(12000),
+  });
+
+  const body = (await response.json().catch(() => null)) as
+    | { ok?: boolean; logged_in_cookie?: string }
+    | null;
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error(
+      "The WordPress booking bridge rejected the PWA secret. WP_SOCIAL_SESSION_BRIDGE_SECRET and XPLORE_PWA_SESSION_SECRET must contain the same value.",
+    );
+  }
+  if (response.status === 404) {
+    throw new Error(
+      "The WordPress booking session bridge is not installed. Update the xplore-pwa-social-session-bridge.php WPCode snippet on xplorepondy.com.",
+    );
+  }
+  if (!response.ok || !body?.logged_in_cookie) {
+    throw new Error("Could not establish the WordPress booking session for this account.");
+  }
+
+  return body.logged_in_cookie;
+}
+
 export const submitListeoBooking = createServerFn({ method: "POST" })
   .validator(
     z.object({
@@ -376,7 +412,13 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
       privacy_policy: "on",
     };
 
-    const cookie = getRequestHeader("cookie") ?? "";
+    const browserCookie = getRequestHeader("cookie") ?? "";
+    const wpBookingCookie = await fetchWpBookingSessionCookie(data.email).catch((error) => {
+      if (process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim()) throw error;
+      return undefined;
+    });
+    const cookie = wpBookingCookie || browserCookie;
+
     let response = await fetch(confirmation.actionUrl, {
       method: "POST",
       headers: {
