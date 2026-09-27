@@ -256,7 +256,11 @@ export function BookingPanel({
     if (!selection || !onConfirm) return;
     const result = await onConfirm(details, selection);
     if (result?.ok !== false) {
-      setSuccessAction(result?.paymentUrl ? { label: "Continue to payment", url: result.paymentUrl } : undefined);
+      if (result?.paymentUrl) {
+        window.location.assign(result.paymentUrl);
+        return;
+      }
+      setSuccessAction(undefined);
       setStep("success");
     }
   }
