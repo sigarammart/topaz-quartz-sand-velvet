@@ -68,6 +68,43 @@ function extractListeoPaymentUrl(value: string): string | undefined {
   return undefined;
 }
 
+async function resolveListeoPaymentUrlFromOrder(email: string, createdAfter: number): Promise<string | undefined> {
+  const secret = process.env.WP_SOCIAL_SESSION_BRIDGE_SECRET?.trim();
+  if (!secret) return undefined;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      const response = await fetch(WP_ORIGIN + "/wp-json/xplore/v1/pwa/latest-order", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + secret,
+        },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          created_after: createdAfter,
+        }),
+        signal: AbortSignal.timeout(12000),
+      });
+
+      if (response.ok) {
+        const body = (await response.json().catch(() => null)) as
+          | { ok?: boolean; payment_url?: string }
+          | null;
+        if (body?.ok && body.payment_url) return body.payment_url;
+      }
+    } catch {
+      // The order may not be visible yet; retry briefly.
+    }
+
+    if (attempt < 4) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    }
+  }
+
+  return undefined;
+}
 function stripBookingHtml(value: string) {
   return decodeHtml(value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
 }
@@ -261,6 +298,7 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
     }),
   )
   .handler(async ({ data }) => {
+    const bookingStartedAt = Math.floor(Date.now() / 1000);
     const confirmation = await loadListeoBookingConfirmationData(data.listingUrl);
     const value = JSON.stringify({
       listing_id: data.listingId,
@@ -349,9 +387,13 @@ export const submitListeoBooking = createServerFn({ method: "POST" })
     }
 
     const responseUrl = typeof response.url === "string" ? response.url : undefined;
-    const paymentUrl = [...redirectUrls, responseUrl, redirectUrl, combined]
+    let paymentUrl = [...redirectUrls, responseUrl, redirectUrl, combined]
       .map((value) => (value ? extractListeoPaymentUrl(value) : undefined))
       .find((value): value is string => Boolean(value));
+
+    if (!paymentUrl) {
+      paymentUrl = await resolveListeoPaymentUrlFromOrder(data.email, bookingStartedAt);
+    }
 
     return {
       ok: true as const,
