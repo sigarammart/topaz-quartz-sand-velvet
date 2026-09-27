@@ -224,6 +224,7 @@ function PlacePage() {
     void fetchListeoBookingAvailability({
       data: {
         listingId: listing.wpId,
+        listingUrl: listing.siteUrl,
         dates: bookingDateValues,
       },
     })
