@@ -114,7 +114,7 @@ export function AddToTrip({
   }
 
   return (
-    <Button className={cn("flex-1", className)} onClick={() => void onClick()}>
+    <Button size="sm" className={cn("flex-1 h-10", className)} onClick={() => void onClick()}>
       {active ? <CalendarCheck /> : <CalendarPlus />}
       {active ? "In trip list" : "Add to trip"}
     </Button>
